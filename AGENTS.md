@@ -1,6 +1,12 @@
+# 本机测试流程
+
+- 验证二改运行 `target\x86_64-pc-windows-msvc\release\daozai.exe`（快速迭代可用 `target\debug\daozai.exe`），不要用桌面快捷方式或安装目录的旧版。
+- 重新编译前先退出正在运行的岛仔；编译后启动新 exe 并核对进程路径。
+- 桌面快捷方式「岛仔」指向安装目录 `D:\Program Files\Daozai\daozai.exe`，不是测试构建；二改全部确认前不覆盖安装目录。
+
 # 本机修复版交付
 
-修复验证通过后，统一覆盖桌面「岛仔－当前测试版」快捷方式指向的 `target/x86_64-pc-windows-msvc/release/daozai.exe`。交付前核对快捷方式目标和文件哈希。如果岛仔正在运行，切换到更新后的程序并核对进程路径。后续修复沿用同一入口，不另建临时交付目录。
+二改全部验证通过后，覆盖安装目录的 `D:\Program Files\Daozai\daozai.exe`（桌面「岛仔」快捷方式指向此处）。交付前核对快捷方式目标、文件哈希和运行中的进程路径。
 
 # Git 分支约定
 

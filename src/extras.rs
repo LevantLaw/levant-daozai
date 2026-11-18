@@ -1417,12 +1417,14 @@ fn settings_tab_title(tab:usize)->&'static str{
 pub(crate) fn settings_tab_group_for_tests(tab:usize)->&'static str{settings_tab_title(tab)}
 
 impl App {
-    /// 功能页顶部卡片：名称、说明和开启状态。开关统一在「页面管理」；关闭时这里给出「开启」入口。
+    /// 功能页顶部卡片：名称、说明和开关。开关按钮与「页面管理」是同一个状态，点一下即切换。
     /// 返回功能是否开启，调用方据此把下面的设置置灰。
-    fn settings_feature_header(&mut self,ui:&mut egui::Ui,page:usize,description:&str,extra:impl FnOnce(&mut Self,&mut egui::Ui))->bool{
+    fn settings_feature_header(&mut self,ui:&mut egui::Ui,page:usize,description:&str)->bool{
         let ctx=&ui.ctx().clone();
         let on=self.module_on(page);
-        let (mut enable,mut open)=(false,false);
+        // 和「页面管理」一致：只剩最后一个功能页时不允许关闭。
+        let can_change=!on || self.settings.visible_pages.iter().filter(|enabled|**enabled).count()>1;
+        let mut toggle=None;
         settings_card(ui,|ui|{
             ui.horizontal(|ui|{
                 ui.add(egui::Image::new(settings_page_icon(page)).fit_to_exact_size(egui::vec2(36.0,36.0)));
@@ -1433,8 +1435,8 @@ impl App {
                     ui.label(egui::RichText::new(description).size(11.5).color(settings_color(ctx,Color32::from_gray(175),Color32::from_gray(90))));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-                    // 每个功能卡片同一个位置：开着时「打开」跳到岛上对应页面，关着时「开启」。
-                    if on {open=ui.button("打开").on_hover_text(format!("在岛上打开「{}」",PAGE_NAMES[page])).clicked();extra(self,ui);} else {enable=ui.button("开启").clicked();}
+                    // 开着时「关闭」，关着时「开启」，和页面管理里的开关同步。
+                    if ui.add_enabled(can_change,egui::Button::new(if on{"关闭"}else{"开启"})).clicked(){toggle=Some(!on);}
                     settings_state_chip(ui,on);
                 });
             });
@@ -1442,12 +1444,7 @@ impl App {
                 ui.label(egui::RichText::new(format!("「{}」已关闭，不会在后台同步或提醒",PAGE_NAMES[page])).size(12.0).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12))));
             }
         });
-        if enable {self.set_page_visible(page,true);}
-        if open {
-            self.settings_open=false;
-            if page==crate::app::CALENDAR_PAGE {self.open_calendar(None);}
-            else {if page==crate::app::SHELF_PAGE {self.shelf_tab=0;} self.show_page(page);}
-        }
+        if let Some(enabled)=toggle {self.set_page_visible(page,enabled);}
         self.module_on(page)
     }
     pub fn settings_ui(&mut self,ctx:&egui::Context,autostart:bool){
@@ -1533,12 +1530,12 @@ impl App {
                     ui.set_width((ui.available_width()-12.0).max(240.0));
                     match tab {
                     12=>{
-                        let on=self.settings_feature_header(ui,crate::app::WEATHER_PAGE,"当地天气与七日预报",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::WEATHER_PAGE,"当地天气与七日预报");
                         ui.add_space(4.0);
                         ui.add_enabled_ui(on,|ui|self.weather_settings(ui));
                     }
                     11=>{
-                        let on=self.settings_feature_header(ui,crate::app::QUOTA_PAGE,"每 3 分钟自动更新剩余额度",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::QUOTA_PAGE,"每 3 分钟自动更新剩余额度");
                         ui.add_space(4.0);
                         ui.add_enabled_ui(on,|ui|self.quota_settings(ui));
                     }
@@ -1749,7 +1746,7 @@ impl App {
                         });
                     }
                     1=>{
-                        let on=self.settings_feature_header(ui,crate::app::MUSIC_PAGE,"播放控制与同步歌词",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::MUSIC_PAGE,"播放控制与同步歌词");
                         ui.add_enabled_ui(on,|ui|{
                             settings_label(ui,"歌词");
                             settings_card(ui,|ui|{
@@ -1765,7 +1762,7 @@ impl App {
                         });
                     }
                     2=>{
-                        let on=self.settings_feature_header(ui,crate::app::FOCUS_PAGE,"番茄钟与休息计时",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::FOCUS_PAGE,"番茄钟与休息计时");
                         ui.add_enabled_ui(on,|ui|{
                             settings_card(ui,|ui|{
                                 setting_number(ui,"专注",&mut self.settings.focus_minutes,1,180," 分钟",1.0);
@@ -1775,7 +1772,7 @@ impl App {
                             });
                         });
                         ui.add_space(12.0);
-                        let on=self.settings_feature_header(ui,crate::app::WATER_PAGE,"喝水与久坐提醒",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::WATER_PAGE,"喝水与久坐提醒");
                         ui.add_enabled_ui(on,|ui|{
                             settings_card(ui,|ui|{
                                 // 喝水：开关一行，数量与间隔紧随其后。
@@ -1827,10 +1824,10 @@ impl App {
                         });
                     }
                     4=>{
-                        let on=self.settings_feature_header(ui,crate::app::TODO_PAGE,"任务清单与到期提醒",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::TODO_PAGE,"任务清单与到期提醒");
                         let _=on;
                         ui.add_space(12.0);
-                        let on=self.settings_feature_header(ui,crate::app::SHELF_PAGE,"临时收纳文件与剪贴板",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::SHELF_PAGE,"临时收纳文件与剪贴板");
                         ui.add_enabled_ui(on,|ui|{
                             settings_card(ui,|ui|{
                                 ui.label(egui::RichText::new(format!("当前 {} 项 · 移除条目不会删除原文件",self.shelf.items.len())).size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
@@ -1940,7 +1937,7 @@ impl App {
                     }
                     7=>{
                         let mut add_mail=false;
-                        let on=self.settings_feature_header(ui,crate::app::MAIL_PAGE,"新邮件提醒与验证码；岛上歌词模式显示右侧图标",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::MAIL_PAGE,"新邮件提醒与验证码；岛上歌词模式显示右侧图标");
                         ui.add_enabled_ui(on,|ui|{
                         settings_label(ui,"设置");
                         settings_card(ui,|ui|{
@@ -2099,7 +2096,7 @@ impl App {
                     8=>{
                         ui.spacing_mut().item_spacing.y=4.0;
                         let mut open_add=false;
-                        let on=self.settings_feature_header(ui,crate::app::CALENDAR_PAGE,"月历、邮件邀请与工作日程",|_,_|{});
+                        let on=self.settings_feature_header(ui,crate::app::CALENDAR_PAGE,"月历、邮件邀请与工作日程");
                         ui.add_enabled_ui(on,|ui|{
                         settings_label(ui,"设置");
                         settings_card(ui,|ui|{
