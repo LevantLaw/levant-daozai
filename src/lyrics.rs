@@ -901,6 +901,7 @@ mod tests {
             let (mut recovered,_)=listener.accept().unwrap();
             recovered.read(&mut buffer).unwrap();
             write!(recovered,"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
+            crate::test_support::settle(&mut recovered);
         });
         let started=std::time::Instant::now();
         assert!(request_json_with_retry(&url,&url,true).is_ok());
@@ -1017,6 +1018,7 @@ mod tests {
             let (mut stream,_)=listener.accept().unwrap();
             let mut buf=[0;4096];let _=stream.read(&mut buf).unwrap();
             write!(stream,"HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+            crate::test_support::settle(&mut stream);
         });
         (base,worker)
     }
@@ -1139,6 +1141,7 @@ mod tests {
                 let request=String::from_utf8_lossy(&buf[..n]);
                 assert!(request.contains("track_name=Track%20Name&artist_name=Artist"));
                 write!(stream,"HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+            crate::test_support::settle(&mut stream);
             });
             let result=fetch_from(&base,"Track Name","Artist",120.0);
             worker.join().unwrap();

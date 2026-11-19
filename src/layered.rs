@@ -403,7 +403,10 @@ mod tests {
     }
 
     /// 兼容渲染每帧都会走这里：连续提交几千帧不同画面，进程内存和 GDI 对象都不能随帧数增长。
+    /// 统计的是进程级计数，并行跑其他用例时会被它们的临时对象污染，需单独运行：
+    /// `cargo test --lib -- presenting_many_frames_does_not_leak --ignored`
     #[test]
+    #[ignore = "进程级内存/GDI 计数在并行测试下不稳定，需单独运行"]
     fn presenting_many_frames_does_not_leak() {
         unsafe {
             use windows::Win32::System::Threading::{GetCurrentProcess, GetGuiResources, GR_GDIOBJECTS, GR_USEROBJECTS};

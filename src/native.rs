@@ -842,6 +842,7 @@ mod tests {
     /// 现在要切到分层窗口，并按岛体轮廓补出带过渡的边缘 alpha。
     #[test]
     fn opaque_readback_uses_outline_alpha_instead_of_jagged_clip(){
+        let _guard=NATIVE_STATE_LOCK.lock().unwrap_or_else(|e|e.into_inner());
         use crate::app::GlassShape;
         use eframe::egui::{pos2,Rect};
         use windows::Win32::Graphics::Gdi::{CreateRectRgn,DeleteObject,GetWindowRgn,PtInRegion};

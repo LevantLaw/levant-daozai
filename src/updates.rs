@@ -609,11 +609,14 @@ mod tests {
             let start = std::time::Instant::now();
             loop {
                 if let Ok((mut stream, _)) = listener.accept() {
+                    // Windows 上 accept 出的连接会继承监听套接字的非阻塞标志，请求未到时读会直接 WouldBlock。
+                    stream.set_nonblocking(false).unwrap();
                     stream.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
                     let mut request = [0; 4096];
                     let n = stream.read(&mut request).unwrap();
                     assert!(String::from_utf8_lossy(&request[..n]).starts_with("GET http://127.0.0.1:1/update.zip"));
                     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok").unwrap();
+                    crate::test_support::settle(&mut stream);
                     return;
                 }
                 if start.elapsed() > Duration::from_secs(3) { return; }

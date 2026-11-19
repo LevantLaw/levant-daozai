@@ -151,6 +151,7 @@ fn server(status: &str, extra_headers: &str, body: &str) -> (String, std::thread
             }
         }
         let _ = stream.write_all(response.as_bytes());
+        crate::test_support::settle(&mut stream);
         String::from_utf8(bytes).unwrap()
     });
     (url,task)
@@ -191,6 +192,7 @@ fn http_errors_redirects_and_limits_are_bounded_and_private() {
 }
 
 fn with_data_dir(run: impl FnOnce()) {
+    let _guard = crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let root = std::env::temp_dir().canonicalize().unwrap();
     let dir = root.join(format!("daozai-doubao-tests-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
     fs::create_dir(&dir).unwrap();

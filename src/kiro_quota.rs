@@ -336,7 +336,8 @@ mod tests{
             loop{let n=stream.read(&mut buf).unwrap();if n==0{break;}raw.extend_from_slice(&buf[..n]);if let Some(end)=raw.windows(4).position(|b|b==b"\r\n\r\n"){
                 let head=String::from_utf8_lossy(&raw[..end]);let size=head.lines().find_map(|s|s.to_ascii_lowercase().strip_prefix("content-length:").and_then(|v|v.trim().parse::<usize>().ok())).unwrap_or(0);if raw.len()>=end+4+size{break;}
             }}
-            let response=format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n",body.len());stream.write_all(response.as_bytes()).unwrap();let _=stream.write_all(&body);String::from_utf8(raw).unwrap()
+            let response=format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n",body.len());stream.write_all(response.as_bytes()).unwrap();let _=stream.write_all(&body);
+            crate::test_support::settle(&mut stream);String::from_utf8(raw).unwrap()
         });(url,task)
     }
     fn test_agent()->ureq::Agent{ureq::AgentBuilder::new().redirects(0).timeout(std::time::Duration::from_secs(3)).build()}

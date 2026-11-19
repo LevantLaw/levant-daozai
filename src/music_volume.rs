@@ -163,6 +163,8 @@ mod tests {
     }
     #[test]
     fn stuck_audio_driver_does_not_block_song_sampling(){
+        // 全局音量工作线程是单线程的，两个占住它的用例必须串行。
+        let _serial=crate::test_support::serial();
         let (release,wait)=mpsc::channel::<()>();let (entered,started)=mpsc::channel();
         assert!(submit(Box::new(move||{let _=entered.send(());let _=wait.recv_timeout(Duration::from_secs(10));})));
         started.recv_timeout(Duration::from_secs(2)).unwrap();
@@ -174,6 +176,7 @@ mod tests {
 
     #[test]
     fn expired_write_is_discarded_when_the_worker_resumes(){
+        let _serial=crate::test_support::serial();
         let (release,wait)=mpsc::channel::<()>();
         assert!(submit(Box::new(move||{let _=wait.recv_timeout(Duration::from_secs(10));})));
         let (ran,observed)=mpsc::channel();

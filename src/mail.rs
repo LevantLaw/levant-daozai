@@ -1128,7 +1128,7 @@ mod service {
                         if uids.is_empty(){write!(socket,"* SEARCH\r\n{tag} OK search\r\n").unwrap();}
                         else{write!(socket,"* SEARCH {uids}\r\n{tag} OK search\r\n").unwrap();}
                     }else if command.starts_with("UID FETCH ") {
-                        if matches!(scenario,Scenario::BrokenHistory){write!(socket,"* BYE connection lost\r\n").unwrap();break;}
+                        if matches!(scenario,Scenario::BrokenHistory){write!(socket,"* BYE connection lost\r\n").unwrap();crate::test_support::settle(&mut socket);break;}
                         let uid=command.split_whitespace().nth(2).unwrap();
                         let header=format!("From: sender@example.com\r\nSubject: mail-{uid}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n");
                         let body="ordinary message";
@@ -1145,16 +1145,16 @@ mod service {
                             write!(socket,"{tag} NO IDLE unavailable\r\n").unwrap();
                         }else if matches!(scenario,Scenario::SupportedIdle|Scenario::EmptyIdle|Scenario::CooldownMail){
                             write!(socket,"+ idling\r\n* 1 EXISTS\r\n").unwrap();
-                        }else{write!(socket,"* BYE connection lost\r\n").unwrap();break;}
+                        }else{write!(socket,"* BYE connection lost\r\n").unwrap();crate::test_support::settle(&mut socket);break;}
                     }else if command=="NOOP" {
                         if matches!(scenario,Scenario::RefusedNoop){write!(socket,"{tag} BAD unavailable\r\n").unwrap();continue;}
-                        if matches!(scenario,Scenario::BrokenNoop){write!(socket,"* BYE closing\r\n").unwrap();break;}
+                        if matches!(scenario,Scenario::BrokenNoop){write!(socket,"* BYE closing\r\n").unwrap();crate::test_support::settle(&mut socket);break;}
                         if matches!(scenario,Scenario::PollKeepalive){
                             write!(socket,"* 1 EXISTS\r\n* 1 FETCH (FLAGS (\\Seen))\r\n").unwrap();
                         }else{server_stop.store(true,Ordering::Relaxed);}
                         write!(socket,"{tag} OK noop\r\n").unwrap();
                     }else if command=="LOGOUT" {
-                        write!(socket,"* BYE logout\r\n{tag} OK logout\r\n").unwrap();break;
+                        write!(socket,"* BYE logout\r\n{tag} OK logout\r\n").unwrap();crate::test_support::settle(&mut socket);break;
                     }else{panic!("意外的收信命令：{command}");}
                 }
                 commands
@@ -1168,6 +1168,7 @@ mod service {
 
         #[test]
         fn polling_keepalives_do_not_fetch_until_the_configured_deadline(){
+            let _serial=crate::test_support::serial();
             for (secs,steps) in [(60,vec![45,60]),(120,vec![45,90,120]),(300,vec![45,90,135,180,225,270,300])] {
                 let (mut session,_,server)=inbox(Scenario::PollKeepalive);
                 let start=Instant::now();
@@ -1184,6 +1185,7 @@ mod service {
         }
         #[test]
         fn rejected_keepalive_keeps_polling_without_repeated_noops(){
+            let _serial=crate::test_support::serial();
             let (mut session,_,server)=inbox(Scenario::RefusedNoop);
             let mut allow_noop=true;
             let (tx,_)=channel();let mut last=40;
@@ -1200,6 +1202,7 @@ mod service {
 
         #[test]
         fn polling_stops_before_sending_or_after_a_broken_keepalive(){
+            let _serial=crate::test_support::serial();
             for cancel in [true,false]{
                 let (mut session,_,server)=inbox(Scenario::BrokenNoop);
                 let result=wait_for_poll(&mut session,Instant::now(),120,&mut true,|_|cancel);

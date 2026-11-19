@@ -102,11 +102,12 @@ mod tests {
     }
     #[test]
     fn cover_waits_for_a_free_worker_without_spending_an_attempt(){
+        let _serial=crate::test_support::serial();
         let media=NowPlaying{title:"晚风".into(),artist:"示例歌手".into(),playback_type:MediaKind::Music,..Default::default()};
         let now=Instant::now();
         let mut cache=CoverSearch::default();
         cache.fill_with(&media,now,|_,_,_|None);
-        let busy=[crate::resources::COVER.acquire().unwrap(),crate::resources::COVER.acquire().unwrap()];
+        let busy=crate::test_support::acquire_pair(&crate::resources::COVER);
         cache.fill_with(&media,now+WAIT,|_,_,_|panic!("工作线程已占满"));
         drop(busy);
         let image=Arc::new(ColorImage::new([1,1],eframe::egui::Color32::RED));

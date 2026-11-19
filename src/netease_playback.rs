@@ -209,6 +209,7 @@ fn detail_response_fills_metadata_only_for_the_same_song(){
 
 #[test]
 fn detail_lookup_runs_in_background_retries_then_stops(){
+    let _serial=crate::test_support::serial();
     use std::sync::{Arc as A,atomic::{AtomicUsize,Ordering}};
     let calls=A::new(AtomicUsize::new(0));
     let mut cache=DetailCache::default();
@@ -221,7 +222,7 @@ fn detail_lookup_runs_in_background_retries_then_stops(){
         assert_eq!(calls.load(Ordering::SeqCst),round+1,"未到重试时间不重复请求");
         if round<2 {cache.retry_at=Some(Instant::now());}
         if round==0 {
-            let busy=[crate::resources::COVER.acquire().unwrap(),crate::resources::COVER.acquire().unwrap()];
+            let busy=crate::test_support::acquire_pair(&crate::resources::COVER);
             cache.get_with(7,|_|panic!("已有两个后台请求"));
             drop(busy);
         }

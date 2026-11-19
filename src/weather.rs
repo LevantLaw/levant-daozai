@@ -759,7 +759,9 @@ mod tests {
                     stream.set_nonblocking(false).unwrap();
                     stream.set_read_timeout(Some(Duration::from_secs(12))).unwrap();
                     if !matches!(stream.read(&mut [0;4096]),Ok(n) if n>0){return false;}
-                    return stream.write_all(response.as_bytes()).is_ok();
+                    let ok = stream.write_all(response.as_bytes()).is_ok();
+                    crate::test_support::settle(&mut stream);
+                    return ok;
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
@@ -911,6 +913,7 @@ mod tests {
                     let mut request=[0;4096];let n=stream.read(&mut request).unwrap();
                     let request=String::from_utf8_lossy(&request[..n]).into_owned();
                     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}").unwrap();
+                    crate::test_support::settle(&mut stream);
                     return request;
                 }
                 std::thread::sleep(Duration::from_millis(10));

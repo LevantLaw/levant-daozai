@@ -93,7 +93,7 @@ fn cdp_handles_events_and_fragmented_responses_without_exposing_remote_errors() 
     for failure in [false, true] {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap(); let port = listener.local_addr().unwrap().port();
         let worker = std::thread::spawn(move || {
-            let (stream, _) = listener.accept().unwrap(); let mut socket = tungstenite::accept(stream).unwrap();
+            let (stream, _) = listener.accept().unwrap(); let mut settle_stream = stream.try_clone().unwrap(); let mut socket = tungstenite::accept(stream).unwrap();
             let request: Value = serde_json::from_str(socket.read().unwrap().to_text().unwrap()).unwrap();
             assert_eq!(request["method"], "Storage.getCookies");
             socket.send(Message::Text(r#"{"method":"event"}"#.into())).unwrap();
@@ -102,6 +102,7 @@ fn cdp_handles_events_and_fragmented_responses_without_exposing_remote_errors() 
                 socket.send(Message::Frame(Frame::message(b"{\"id\":1,".to_vec(), OpCode::Data(Data::Text), false))).unwrap();
                 socket.send(Message::Frame(Frame::message(b"\"result\":{\"cookies\":[]}}".to_vec(), OpCode::Data(Data::Continue), true))).unwrap();
             }
+            crate::test_support::settle(&mut settle_stream);
         });
         let result = cdp(port, &format!("ws://127.0.0.1:{port}/devtools/browser/test"), "Storage.getCookies");
         if failure { assert!(!result.unwrap_err().contains("private-secret")); }

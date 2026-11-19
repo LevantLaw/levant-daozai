@@ -440,7 +440,7 @@ mod tests {
             let (mut stream,_)=listener.accept().unwrap();stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
             let mut request=Vec::new();let mut byte=[0u8;1];
             while request.len()<8192 && !request.ends_with(b"\r\n\r\n"){stream.read_exact(&mut byte).unwrap();request.push(byte[0]);}
-            std::thread::sleep(delay);let _=stream.write_all(&response);String::from_utf8(request).unwrap()
+            std::thread::sleep(delay);let _=stream.write_all(&response);crate::test_support::settle(&mut stream);String::from_utf8(request).unwrap()
         });(url,worker)
     }
     #[test]
@@ -459,11 +459,13 @@ mod tests {
     }
     #[test]
     fn oversized_and_slow_responses_are_bounded(){
-        let agent=ureq::AgentBuilder::new().try_proxy_from_env(false).redirects(0).timeout(std::time::Duration::from_millis(150)).build();
+        // 过大响应的判定要等正文读完，给足时间；慢响应单独用短超时验证。
+        let agent=ureq::AgentBuilder::new().try_proxy_from_env(false).redirects(0).timeout(std::time::Duration::from_secs(5)).build();
         let mut response=format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",1024*1024+1).into_bytes();response.resize(response.len()+1024*1024+1,b' ');
         let (url,worker)=serve_once(response,std::time::Duration::ZERO);let error=get(&agent,&url,"synthetic").unwrap_err().0;worker.join().unwrap();assert!(error.contains("过大"));
+        let slow=ureq::AgentBuilder::new().try_proxy_from_env(false).redirects(0).timeout(std::time::Duration::from_millis(150)).build();
         let (url,worker)=serve_once(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".to_vec(),std::time::Duration::from_millis(350));
-        assert!(get(&agent,&url,"synthetic").is_err());worker.join().unwrap();
+        assert!(get(&slow,&url,"synthetic").is_err());worker.join().unwrap();
     }
     #[test] fn cancelled_validation_makes_no_request(){
         let agent=ureq::AgentBuilder::new().redirects(0).build();
