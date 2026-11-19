@@ -48,9 +48,9 @@ try {
     } catch { $info.ScreensQuery = '无法读取显示器信息' }
     $settingsPath = Join-Path $DataDirectory 'settings.txt'
     if (Test-Path -LiteralPath $settingsPath) {
-        $info.DisplaySettings = @([IO.File]::ReadAllLines($settingsPath) | Where-Object { $_ -match '^(skin|island_shape|dock|glass_blur|island_size|island_offset|settings_theme|minimal|pet)=' })
+        $info.DisplaySettings = @([IO.File]::ReadAllLines($settingsPath) | Where-Object { $_ -match '^(skin|island_shape|dock|glass_blur|island_size|island_offset|settings_theme|browser_minimal|pet)=' })
         # 功能开关（只有开 / 关和页面顺序，不含账号、密码或内容）：用于判断「开关没开」一类问题。
-        $info.FeatureSettings = @([IO.File]::ReadAllLines($settingsPath) | Where-Object { $_ -match '^(notifications|wechat_notifications|wechat_tray_open|wecom_notifications|feishu_notifications|dingtalk_notifications|read_notifications|qq_only|visible_pages|page_order|lyrics_enabled|island_lyrics|render_compat|calendar_auto_sync|mail_enabled)=' })
+        $info.FeatureSettings = @([IO.File]::ReadAllLines($settingsPath) | Where-Object { $_ -match '^(notifications|wechat_notifications|wechat_tray_open|wecom_notifications|feishu_notifications|dingtalk_notifications|read_notifications|qq_only|qq_notifications|visible_pages|page_order|lyrics_enabled|island_lyrics|render_compat|calendar_auto_sync|mail_enabled)=' })
     }
     try {
         Add-Type -TypeDefinition 'public static class DaozaiDiagnosticGui { [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern uint GetGuiResources(System.IntPtr process, uint flags); }'

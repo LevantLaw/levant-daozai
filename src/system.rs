@@ -657,6 +657,61 @@ fn channel_status(client:crate::messenger::Messenger)->String{
     }
 }
 
+/// Windows 通知设置中已登记且开启、能解析出名称的应用。
+#[cfg(windows)]
+pub fn notification_apps_enabled()->Vec<(String,String)>{
+    use windows::core::{w,GUID,Interface};
+    use windows::Win32::System::Com::{CoInitializeEx,CoTaskMemFree,COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::{IEnumShellItems,IShellItem2,SHCreateItemFromParsingName,BHID_EnumItems,SIGDN_NORMALDISPLAY};
+    use windows::Win32::UI::Shell::PropertiesSystem::PROPERTYKEY;
+    const PKEY_APP_USER_MODEL_ID:PROPERTYKEY=PROPERTYKEY{fmtid:GUID::from_u128(0x9f4c2855_9f79_4b39_a8d0_e1d42de1d5f3),pid:5};
+    let mut apps=Vec::new();
+    unsafe {
+        let _=CoInitializeEx(None,COINIT_APARTMENTTHREADED);
+        let Ok(folder)=SHCreateItemFromParsingName::<_,_,IShellItem2>(w!("shell:AppsFolder"),None) else{return apps};
+        let Ok(items)=folder.BindToHandler::<_,IEnumShellItems>(None,&BHID_EnumItems) else{return apps};
+        let mut batch=[const { None };32];
+        loop {
+            if items.Next(&mut batch,None).is_err(){break;}
+            let mut any=false;
+            for item in batch.iter_mut().filter_map(Option::take) {
+                any=true;
+                let Ok(item)=item.cast::<IShellItem2>() else{continue};
+                let Ok(raw_id)=item.GetString(&PKEY_APP_USER_MODEL_ID) else{continue};
+                let id=raw_id.to_string().unwrap_or_default();
+                CoTaskMemFree(Some(raw_id.0 as _));
+                if id.is_empty()||notification_enabled(&id)!=Some(true){continue;}
+                let Ok(raw_name)=item.GetDisplayName(SIGDN_NORMALDISPLAY) else{continue};
+                let name=raw_name.to_string().unwrap_or_default().trim().to_string();
+                CoTaskMemFree(Some(raw_name.0 as _));
+                if name.is_empty()||crate::messenger::Messenger::from_notification_id(&id).is_some(){continue;}
+                if crate::messenger::taskbar_client(&name,&id).is_some(){continue;}
+                apps.push((id,name));
+            }
+            if !any{break;}
+        }
+    }
+    apps.sort_by(|a,b|a.1.cmp(&b.1));
+    apps.dedup_by(|a,b|a.1==b.1);
+    apps
+}
+
+/// 应用在 Windows 通知设置里的开关：`None` 表示没有登记，不会出现在通知设置列表里。
+#[cfg(windows)]
+pub(crate) fn notification_enabled(id:&str)->Option<bool>{
+    use windows::core::{w,HSTRING};
+    use windows::Win32::System::Registry::{RegCloseKey,RegOpenKeyExW,RegQueryValueExW,HKEY,HKEY_CURRENT_USER,KEY_QUERY_VALUE};
+    let path=HSTRING::from(format!("Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings\\{id}"));
+    unsafe {
+        let mut key=HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER,&path,0,KEY_QUERY_VALUE,&mut key).0!=0{return None;}
+        let mut value=1u32;let mut size=4u32;
+        let rc=RegQueryValueExW(key,w!("Enabled"),None,None,Some(&mut value as *mut u32 as *mut u8),Some(&mut size));
+        let _=RegCloseKey(key);
+        Some(rc.0!=0||value!=0)
+    }
+}
+
 /// 必须由窗口线程发起权限请求，后台仅读取新增或更新的通知。
 pub fn connect(ctx:eframe::egui::Context,filter:crate::messenger::NotificationFilter) -> Result<Notifications> {
     connect_inner(ctx,filter,crate::messenger::toast_suppression(&crate::model::Settings::default()))

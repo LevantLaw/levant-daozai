@@ -355,7 +355,7 @@ impl App {
     pub fn quota_event(&mut self,event:quota::Event){self.quota.receive(event);}
     pub fn quota_set_source(&mut self,path:std::path::PathBuf){self.quota.source=path.to_string_lossy().into_owned();}
     pub(crate) fn quota_bar_indices(&self)->Vec<usize>{
-        if !self.quota.config.enabled || !self.quota.config.compact || !self.settings.visible_pages[6] || self.settings.minimal || self.t<self.notification_bell_until{return vec![];}
+        if !self.quota.config.enabled || !self.quota.config.compact || !self.settings.visible_pages[6] || self.browser_minimal_active || self.t<self.notification_bell_until{return vec![];}
         self.quota.config.pinned_indices()
     }
     /// 常驻胶囊里每个额度槽的实际宽度：图标右侧跟数字的账号需要额外占位。
@@ -578,7 +578,7 @@ impl App {
     }
     pub(crate) fn quota_settings(&mut self,ui:&mut egui::Ui){
         let before=self.quota.config.clone();
-        // 「开启 AI 额度」并入页面管理的模块开关；「收起时显示常驻账号」在页面管理的岛上显示里。
+        // 「开启 AI 额度」并入功能页面的模块开关；「收起时显示常驻账号」在岛体页的岛上显示里。
         ui.horizontal_wrapped(|ui|{
             if ui.button("＋ 添加账号").clicked(){self.quota_open_connection(None);}
             if ui.button("识别本机账号").clicked(){self.quota.note=self.quota.config.discover().message();}

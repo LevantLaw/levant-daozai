@@ -1,6 +1,6 @@
 //! 自动避让设置与正在运行的应用选择。
 use eframe::egui::{self,Color32,Rect,Vec2};
-use crate::{extras::{settings_card,settings_label,setting_row},model::Settings};
+use crate::{extras::setting_row,model::Settings};
 use std::sync::mpsc::{self,Receiver};
 
 #[derive(Clone,Debug)]
@@ -40,11 +40,10 @@ impl Picker {
             ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,name.chars().next().unwrap_or('▦'),crate::theme::font(17.0,crate::theme::W::Semibold),ui.visuals().text_color());
         }
     }
-    pub(crate) fn settings(&mut self,ui:&mut egui::Ui,settings:&mut Settings) {
-        settings_label(ui,"自动避让");
-        settings_card(ui,|ui|{
-            setting_row(ui,"自动避让","下列应用遮住岛时，岛会收成细线",&mut settings.browser_minimal);
-            ui.add_enabled_ui(settings.browser_minimal,|ui|{
+    /// 渲染「避让」卡片里的自动避让部分；外层的卡片和分区标题由调用方提供。
+    pub(crate) fn rows(&mut self,ui:&mut egui::Ui,settings:&mut Settings) {
+        setting_row(ui,"自动避让","下列应用遮住岛时，岛会收成细线",&mut settings.browser_minimal);
+        ui.add_enabled_ui(settings.browser_minimal,|ui|{
                 ui.separator();
                 setting_row(ui,"常用浏览器","前台浏览器窗口遮住岛时避让",&mut settings.avoid_browsers);
                 ui.separator();
@@ -80,7 +79,6 @@ impl Picker {
                 if let Some(index)=remove{settings.avoid_apps.remove(index);}
                 ui.add_space(5.0);
                 ui.label(egui::RichText::new("切到插件浮窗时，宿主窗口仍遮住岛就会继续避让。").size(11.0).weak());
-            });
         });
     }
     fn reason(app:&Candidate,settings:&Settings)->Option<&'static str> {

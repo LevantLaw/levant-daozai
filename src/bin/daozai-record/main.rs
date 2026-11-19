@@ -548,7 +548,7 @@ fn gallery() {
             if scene==9 && frame==0 {app.alert("喝水时间到了","休息一下，喝 250 ml 水吧",2,false);}
             if scene==14 && frame==0 {app.alert("专注计时","该休息了",1,false);}
             if scene==15 && frame==0 {app.alert("系统音量","音量 67%",5,false);}
-            if scene==16 {app.settings.minimal=true;}
+            if scene==16 {app.set_minimal(true);}
             if scene==17 && frame==0 {app.receive_notification("聊天应用".into(),"whatsapp.preview".into(),"你好，下午见".into());}
             if scene==18 && frame>0 {app.show_sit_view(42.0);}
             if scene==19 && frame==0 {app.alert(daozai::app::SIT_TITLE,"已连续坐了 60 分钟",2,false);}

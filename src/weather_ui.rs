@@ -856,7 +856,7 @@ impl App {
     /// 常驻天气开关开启、有快照、天气页可见且非极简时才占位。
     pub(crate) fn weather_pill(&self) -> Option<&crate::weather::Snapshot> {
         self.weather.snapshot.as_ref()
-            .filter(|_| self.settings.show_weather && self.module_on(WEATHER_PAGE) && !self.effective_minimal())
+            .filter(|_| self.settings.show_weather && self.module_on(WEATHER_PAGE) && !self.browser_minimal_active)
     }
 
     /// 温度文字比基础槽宽时需要补的宽度（负数会被调用方忽略）。
@@ -1107,12 +1107,6 @@ impl App {
         let applied=self.weather_source.displayed==self.weather_source.selected;
         if applied {
             self.weather_settings_hero(ui);
-            ui.add_space(5.0);
-            ui.horizontal_wrapped(|ui|{
-                ui.label(egui::RichText::new("天气数据来自").size(11.5).color(ui.visuals().weak_text_color()));
-                let source=self.weather_source.displayed;ui.hyperlink_to(source.name(),source.url());
-                ui.label(egui::RichText::new("· 离线时保留上次天气，温度转灰提示").size(11.5).color(ui.visuals().weak_text_color()));
-            });
             ui.add_space(8.0);
         }
         let selected_before=self.weather_source.selected;

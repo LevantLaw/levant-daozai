@@ -817,7 +817,7 @@ pub struct App {
     settings_window:std::sync::Arc<std::sync::Mutex<crate::settings_window::State>>,
     pub displays:Vec<crate::display_layout::Display>,
     browser_at_top:bool,
-    browser_minimal_active:bool,
+    pub(crate) browser_minimal_active:bool,
     /// 毛玻璃着色量（平滑过渡，避免背景变化时闪烁）；0 表示尚未初始化。
     glass_tint:f32,
     pub(crate) fluid:crate::fluid::Fluid,
@@ -828,6 +828,8 @@ pub struct App {
     pub(crate) settings_focus_requested:bool,
     pub(crate) settings_tab:usize,
     pub(crate) settings_category:usize,
+    /// 功能页面拖动后的草稿顺序；点「保存」才写入设置。
+    pub(crate) pending_page_order:Option<[usize;10]>,
     pub messenger_statuses:std::collections::HashMap<Messenger,String>,
     pub(crate) notification_apps:model::NotificationApps,
     pub(crate) subpage:Option<usize>,
@@ -910,7 +912,7 @@ impl App {
         });
         let settings = model::Settings::load();
         let clipboard_on = settings.clipboard_history;
-        let (bw, bh) = if settings.minimal { (BAR_W_MIN, BAR_H_MIN) } else { (BAR_W, BAR_H) };
+        let (bw, bh) = (BAR_W, BAR_H);
         let focus_seconds=settings.focus_minutes as f32*60.0;
         let initial_lyrics=settings.lyrics_enabled;
         let initial_page=settings.page_order.iter().copied().find(|page|settings.visible_pages[*page]).unwrap_or(0);
@@ -996,7 +998,7 @@ impl App {
             media_anchor: (String::new(), 0.0, 0.0, false),
             media: NowPlaying::default(),
             music_artwork: None,
-            forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, settings_focus_requested:false, settings_tab:0, settings_category:0, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
+            forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, settings_focus_requested:false, settings_tab:0, settings_category:0, pending_page_order:None, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
             listener_status: "尚未连接".into(),
             notification_bell_until: 0.0, notification_bell_at: -10.0, notice: None, hud_notice: None, hud_alpha: 0.0, notice_width:Spring::new(0.0,CLOSE.0,CLOSE.1), notice_details:false, pending_messengers:Vec::new(), messenger_scroll:0.0, alerts: Default::default(), history: Default::default(), pending: vec![],
             todo_first: 0, todo_choosing: false, pet: Default::default(), last_drink: None,
@@ -1534,10 +1536,13 @@ impl App {
         }
         self.notice=None;
         self.go(page,1.0);
-        self.open=true; self.forced_open_until=self.t+4.0;
-        self.w.tune(OPEN_W.0,OPEN_W.1);self.h.tune(OPEN_H.0,OPEN_H.1);
+        self.open=true; self.forced_open_until=self.t+self.settings.page_hold_secs;
+        let k=self.settings.motion_speed.factor().powi(2);
+        self.w.tune(OPEN_W.0*k,OPEN_W.1);self.h.tune(OPEN_H.0*k,OPEN_H.1);
         self.w.target=PW;self.h.target=self.expanded_height();
     }
+    #[cfg(test)]
+    pub(crate) fn forced_open_until_for_tests(&self)->f64{self.forced_open_until}
     pub(crate) fn window_layout(&self)->std::sync::MutexGuard<'_,crate::settings_window::State>{
         self.settings_window.lock().unwrap_or_else(|e|e.into_inner())
     }
@@ -1577,7 +1582,7 @@ impl App {
 
     // ---------- 功能模块：页面开关即模块开关，关闭后页面隐藏、后台同步和提醒一并停止 ----------
 
-    /// 模块是否开启（与「页面管理」里的页面开关一致）。
+    /// 模块是否开启（与「功能页面」里的页面开关一致）。
     pub fn module_on(&self,page:usize)->bool {self.settings.visible_pages.get(page).copied().unwrap_or(false)}
     /// 按 AI 模块与总开关启停会话监控；关闭时移除桥接并清空会话。
     pub fn reconcile_agent_monitor(&mut self,ctx:&egui::Context){
@@ -1590,7 +1595,7 @@ impl App {
     pub fn clipboard_active(&self)->bool {self.module_on(SHELF_PAGE) && self.settings.clipboard_history}
     /// 额度查询是否应运行：AI 额度模块开启且打开了「开启 AI 额度」。
     pub fn quota_active(&self)->bool {self.module_on(QUOTA_PAGE) && self.quota.config.enabled}
-    /// 旧版设置页里「新邮件提醒」「开启 AI 额度」与页面管理的模块开关是两层开关。
+    /// 旧版设置页里「新邮件提醒」「开启 AI 额度」与功能页面的模块开关是两层开关。
     /// 合并后只保留模块开关：旧的内部开关关着时，迁移为模块关闭，内部开关恢复为开。
     /// 只剩这一个页面、模块关不掉时保持原样，不改变已有行为。
     pub fn migrate_merged_switches(&mut self){
@@ -1774,8 +1779,7 @@ impl App {
         self.island_lyric_layout=Some(galley);
     }
 
-    pub(crate) fn effective_minimal(&self)->bool {self.settings.minimal || self.browser_minimal_active}
-    pub(crate) fn pet_enabled(&self)->bool {self.settings.pet && !self.effective_minimal() && !self.side()}
+    pub(crate) fn pet_enabled(&self)->bool {self.settings.pet && !self.browser_minimal_active && !self.side()}
     pub(crate) fn pet_space(&self)->f32 {if self.pet_enabled(){44.0}else{0.0}}
     fn lyric_focus_space(&self)->f32 {if self.pomo.running{crate::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
     fn lyric_bar_width(&self)->f32 {LYRIC_BAR_W+if self.pet_enabled(){48.0}else{0.0}+self.lyric_focus_space()}
@@ -1784,10 +1788,13 @@ impl App {
         (width,height)
     }
     pub fn set_pet(&mut self,enabled:bool) {
-        self.settings.pet=enabled;if enabled {self.settings.minimal=false;}self.settings.save();
+        self.settings.pet=enabled;self.settings.save();
     }
-    pub fn set_minimal(&mut self,enabled:bool) {
-        self.settings.minimal=enabled;if enabled {self.settings.pet=false;}self.settings.save();
+    /// 直接进入或退出自动避让的细线状态，不需要模拟浏览器窗口。
+    pub fn set_minimal(&mut self,on:bool) {
+        self.settings.browser_minimal=on;
+        self.browser_at_top=on;
+        self.browser_minimal_active=on;
     }
     fn base_size(&self) -> (f32, f32) {
         if !self.compact_notices()&&!self.open {
@@ -1795,11 +1802,11 @@ impl App {
         }
         if self.side() {
             // 左右停靠：竖向胶囊（通知仍是贴边滑出的横向卡片，见上）。
-            return self.side_base_size(self.effective_minimal()&&self.t>=self.notification_bell_until);
+            return self.side_base_size(self.browser_minimal_active&&self.t>=self.notification_bell_until);
         }
         if self.island_lyrics_active() {
             (self.lyric_bar_width(),BAR_H)
-        } else if self.effective_minimal()&&self.t>=self.notification_bell_until {
+        } else if self.browser_minimal_active&&self.t>=self.notification_bell_until {
             (BAR_W_MIN, BAR_H_MIN)
         } else {
             (self.resident.target.width.min(WIN_W-32.0), BAR_H)
@@ -1825,12 +1832,12 @@ impl App {
         if self.page==CALENDAR_PAGE {CALENDAR_H}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6 {176.0}else if self.page==AI_PAGE {self.agent_page_height()}else if self.page==5&&self.mail.open_uid.is_some(){236.0}else{PH}
     }
 
-    /// AI 会话页按卡片数增高；详情页按「最近消息行数」增高，审批/问答沿用原高度。
+    /// AI 会话页按卡片数增高；详情页按最近回复行数增高，审批/问答沿用原高度。
     fn agent_page_height(&self)->f32 {
         if self.agent.detail {
             let lines=self.agent.config.display.recent_lines.clamp(1,3) as f32;
             match self.agent.selected_session() {
-                Some(session) if session.pending.is_none() => 176.0+(lines-1.0)*28.0,
+                Some(session) if session.pending.is_none() => 138.0+(lines-1.0)*14.0,
                 _ => 176.0,
             }
         } else {
@@ -1893,6 +1900,7 @@ impl App {
         if hud_active.is_none() && self.hud_alpha<0.003 {self.hud_notice=None;}
         let notice_target=if !self.notice.as_ref().is_some_and(|a|a.messenger().is_some()) && self.compact_notices()&&(self.notice.is_some()||self.t<self.notification_bell_until) {44.0}else{0.0};
         self.notice_width.target=notice_target;
+        self.notice_width.tune(CLOSE.0*self.settings.motion_speed.factor().powi(2),CLOSE.1);
         if self.compact_notices(){self.notice_width.step(dt);}else{self.notice_width.snap(0.0);self.notice_details=false;}
         self.update_media(env,&ctx);
         let bell=self.t<self.notification_bell_until&&!self.compact_notices();
@@ -2044,7 +2052,7 @@ impl App {
         let notice_shape=notice_rect.map(|r|Rect::from_min_max(Pos2::new(r.left()-36.0,r.top()),r.max));
         let body=messenger_rect.filter(|_|outside_badge.is_none()).map_or(panel,|badge|panel.union(badge));
         let body=notice_shape.map_or(body,|notice|body.union(notice));
-        let minimal_strip = self.effective_minimal() && !self.island_lyrics_active() && self.notice.is_none() && self.t>=self.notification_bell_until;
+        let minimal_strip = self.browser_minimal_active && !self.island_lyrics_active() && self.notice.is_none() && self.t>=self.notification_bell_until;
         let minimal_pill = minimal_strip && pc < 0.02;
         let flare = if minimal_pill || pill { 0.0 } else { lerp(5.0, FLARE, pc) };
         let k = (w / PW).clamp(0.3, 1.1);
@@ -2320,7 +2328,7 @@ impl App {
     }
 
     fn hit_rect_base(&self, cx: f32, top: f32, p: f32) -> Rect {
-        if self.effective_minimal() && !self.open {
+        if self.browser_minimal_active && !self.open {
             let (width,height)=self.base_size();
             let width=self.w.pos.min(width);
             let height=self.h.pos.min(height);
@@ -2395,8 +2403,8 @@ impl App {
             let x=if left {panel.left()-UNREAD_GAP*appear-width}else{panel.right()+UNREAD_GAP*appear};
             return Some(Rect::from_min_size(Pos2::new(x,panel.top()+inset),Vec2::new(width,height*appear)));
         }
-        // 极简刘海：横幅照常弹出，收起后只留细线，未读不常挂在线条上；展开岛体时在面板旁出现。
-        if self.effective_minimal(){return None;}
+        // 自动避让的细线：横幅照常弹出，收起后只留细线，未读不常挂在线条上；展开岛体时在面板旁出现。
+        if self.browser_minimal_active{return None;}
         let scale=self.messenger_stack_appear();
         if scale<0.02 || self.open && (self.calendar.draft.is_some() || self.task_dialog.is_some()){return None;}
         let side_column=self.side() && self.notice.is_none();
@@ -2499,8 +2507,9 @@ impl App {
     /// 展开面板，让旁边的未读胶囊露出来。
     pub(crate) fn reveal_unread(&mut self){
         self.notice=None;
-        self.open=true; self.forced_open_until=self.t+4.0;
-        self.w.tune(OPEN_W.0,OPEN_W.1);self.h.tune(OPEN_H.0,OPEN_H.1);
+        self.open=true; self.forced_open_until=self.t+self.settings.page_hold_secs;
+        let k=self.settings.motion_speed.factor().powi(2);
+        self.w.tune(OPEN_W.0*k,OPEN_W.1);self.h.tune(OPEN_H.0*k,OPEN_H.1);
         self.w.target=PW;self.h.target=self.expanded_height();
     }
     fn notice_rect(&self,cx:f32,top:f32)->Option<Rect>{
@@ -2816,6 +2825,7 @@ impl App {
     /// 悬停状态机：意图缓冲 → 弹簧展开 → 离开延迟 → 临界阻尼收起；全程可打断。
     fn morph(&mut self, want: bool, inside: bool, t: f64, dt: f32) {
         let (bw, bh) = self.base_size();
+        let k=self.settings.motion_speed.factor().powi(2);
         if self.position_drag.is_some() {
             // 拿起后面板快速收成常驻形态；放大效果由 `drag_scale` 叠加在外形上。
             self.open=false;
@@ -2824,18 +2834,18 @@ impl App {
             self.leave_since=None;
             self.forced_open_until=0.0;
             self.music_volume_open=false;
-            self.w.tune(CLOSE.0, CLOSE.1);
-            self.h.tune(CLOSE.0, CLOSE.1);
+            self.w.tune(CLOSE.0*k, CLOSE.1);
+            self.h.tune(CLOSE.0*k, CLOSE.1);
             self.w.target=bw;
             self.h.target=bh;
         } else if want {
             self.leave_since = None;
             let since = *self.hover_since.get_or_insert(t);
-            let intent=if self.effective_minimal() {MINIMAL_HOVER_INTENT}else{HOVER_INTENT};
+            let intent=if self.browser_minimal_active {MINIMAL_HOVER_INTENT}else{HOVER_INTENT};
             if !self.open && (self.drag_hot || t - since >= intent) {
                 self.open = true;
-                self.w.tune(OPEN_W.0, OPEN_W.1);
-                self.h.tune(OPEN_H.0, OPEN_H.1);
+                self.w.tune(OPEN_W.0*k, OPEN_W.1);
+                self.h.tune(OPEN_H.0*k, OPEN_H.1);
                 self.w.target = PW;
                 self.h.target = self.expanded_height();
                 if self.drag_hot {
@@ -2844,8 +2854,8 @@ impl App {
                     self.h.vel = self.h.vel.max(260.0);
                 }
             } else if !self.open {
-                self.w.tune(SWELL_K.0, SWELL_K.1);
-                self.h.tune(SWELL_K.0, SWELL_K.1);
+                self.w.tune(SWELL_K.0*k, SWELL_K.1);
+                self.h.tune(SWELL_K.0*k, SWELL_K.1);
                 // 悬停时轻微胀大：厚度方向胀得多一点（侧边停靠时厚度是宽度）。
                 let (sw,sh)=if self.side(){(SWELL.1,SWELL.0)}else{SWELL};
                 self.w.target = bw * sw;
@@ -2859,16 +2869,16 @@ impl App {
                     self.open = false;
                     self.music_volume_open=false;
                     self.leave_since = None;
-                    self.w.tune(CLOSE.0, CLOSE.1);
-                    self.h.tune(CLOSE.0, CLOSE.1);
+                    self.w.tune(CLOSE.0*k, CLOSE.1);
+                    self.h.tune(CLOSE.0*k, CLOSE.1);
                     self.w.target = bw;
                     self.h.target = bh;
                     self.cancel_edit();
                     self.confirm_clear = None;
                 }
             } else {
-                self.w.tune(CLOSE.0, CLOSE.1);
-                self.h.tune(CLOSE.0, CLOSE.1);
+                self.w.tune(CLOSE.0*k, CLOSE.1);
+                self.h.tune(CLOSE.0*k, CLOSE.1);
                 self.w.target = bw;
                 self.h.target = bh;
             }
@@ -2954,7 +2964,7 @@ impl App {
         let pb=(local_cx+layout.x[bar::BATTERY].unwrap_or(0.0),15.0);
         let pcx=layout.x[bar::CLOCK].map_or(hc,|x|local_cx+x-paint::clock_width(base,&clock,size::PILL_CLOCK)/2.0);
 
-        if self.effective_minimal() && self.t>=self.notification_bell_until && p < 0.02 { return; }
+        if self.browser_minimal_active && self.t>=self.notification_bell_until && p < 0.02 { return; }
         // 电池：位置/大小连续插值
         let bk = lerp(1.0, 0.8, m);
         let bpos = (lerp(pb.0, hb.0, m), lerp(pb.1, hb.1, m));
@@ -3049,7 +3059,7 @@ impl App {
     fn resident_header(&mut self, base: &Card, panel: Rect, cx: f32, p: f32, reveal: f32, env: &Env) {
         if !self.side() {self.shared_header(base,cx,p,reveal,env);return;}
         let bar_alpha=1.0-smoothstep(0.0,0.3,p);
-        let minimal=self.effective_minimal()&&self.t>=self.notification_bell_until;
+        let minimal=self.browser_minimal_active&&self.t>=self.notification_bell_until;
         if bar_alpha>0.004 && !minimal {
             let c=base.shifted(panel.min.x-base.origin.x,panel.min.y-base.origin.y).faded(bar_alpha);
             let c=if bar_alpha<0.8 {c.ghost()} else {c};

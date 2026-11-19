@@ -236,8 +236,72 @@ pub fn prompt_text(payload: &serde_json::Value) -> String {
 
 /// `Stop` 可带最后一轮回复（Claude Code 的 `last_assistant_message`），详情页只展示摘要。
 fn stop_message(payload: &serde_json::Value) -> Option<String> {
-    let text = string_field(payload, &["last_assistant_message", "lastMessage", "last_message"]);
+    let raw = string_field(payload, &["last_assistant_message", "lastMessage", "last_message"]);
+    let text = markdown_text(&raw);
+    let text = if text.is_empty() { raw } else { text };
     (!text.is_empty()).then(|| text.chars().take(400).collect())
+}
+
+/// 把常见 Markdown 标记转成适合岛上窄行显示的纯文本。
+fn markdown_text(text: &str) -> String {
+    let mut lines = Vec::new();
+    for raw in text.lines() {
+        let mut line = raw.trim();
+        if line.is_empty() || line.starts_with("```") || line.starts_with("~~~") { continue; }
+        // 表格分隔线和水平线。
+        if line.starts_with('|') && line.ends_with('|') && line.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ')) { continue; }
+        if line.chars().all(|c| matches!(c, '-' | '*' | '_' | ' ')) { continue; }
+        while let Some(rest) = line.strip_prefix('>') { line = rest.trim_start(); }
+        if line.starts_with('#') { line = line.trim_start_matches('#').trim_start(); }
+        if let Some(rest) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")).or_else(|| line.strip_prefix("+ ")) {
+            line = rest;
+        } else if let Some((number, rest)) = line.split_once(". ") {
+            if !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) { line = rest; }
+        }
+        let line = if line.starts_with('|') && line.ends_with('|') {
+            line.trim_matches('|').split('|').map(str::trim).filter(|cell| !cell.is_empty()).collect::<Vec<_>>().join(" · ")
+        } else {
+            line.to_owned()
+        };
+        let line = strip_links(&line).replace("**", "").replace("__", "").replace("~~", "").replace('`', "");
+        let line = line.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !line.is_empty() { lines.push(line); }
+    }
+    lines.join("\n")
+}
+
+/// `[文字](地址)` 只保留文字；图片同样只保留替代文字。
+fn strip_links(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '[' {
+            if let Some(close) = chars[index + 1..].iter().position(|c| *c == ']').map(|offset| index + 1 + offset) {
+                if close + 1 < chars.len() && chars[close + 1] == '(' {
+                    if let Some(paren) = chars[close + 2..].iter().position(|c| *c == ')').map(|offset| close + 2 + offset) {
+                        out.extend(&chars[index + 1..close]);
+                        index = paren + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push(chars[index]);
+        index += 1;
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::markdown_text;
+
+    #[test]
+    fn markdown_reply_is_plain_text() {
+        let text = markdown_text("## 标题\n\n**完成**：`cargo test` 通过\n- [链接](https://example.com)\n| 项 | 值 |\n|---|---|\n| 结果 | 成功 |\n```\ncode\n```");
+        assert_eq!(text, "标题\n完成：cargo test 通过\n链接\n项 · 值\n结果 · 成功\ncode");
+    }
 }
 
 fn string_field(payload: &serde_json::Value, keys: &[&str]) -> String {

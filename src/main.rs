@@ -93,7 +93,7 @@ struct Shell {
     quota_at: PollClock,
 }
 
-const MODULE_OFF:&str="该功能已在「页面管理」中关闭";
+const MODULE_OFF:&str="该功能已在「功能页面」中关闭";
 
 impl Shell {
     /// 按模块开关启停后台服务：关闭的模块不保留任何线程，重新开启时从头对齐配置。
@@ -163,7 +163,6 @@ impl Shell {
         #[cfg(windows)]
         let tray = app.start_tray(daozai::tray::State {
             pet: app.settings.pet,
-            minimal: app.settings.minimal,
             autostart,
         });
         diagnostics::startup("初始化通知监听");
@@ -246,10 +245,6 @@ impl Shell {
                     self.app.set_pet(!self.app.settings.pet);
                     self.app.say(if self.app.settings.pet { "吉祥物已打开" } else { "吉祥物已关闭" });
                 }
-                Event::ToggleMinimal => {
-                    self.app.set_minimal(!self.app.settings.minimal);
-                    self.app.say(if self.app.settings.minimal { "极简刘海已打开" } else { "极简刘海已关闭" });
-                }
                 Event::ToggleAutostart => {
                     let want = !self.autostart;
                     match tray::set_autostart(want) {
@@ -263,7 +258,7 @@ impl Shell {
             }
         }
         if let Some(t) = &self.tray {
-            t.sync(tray::State { pet: self.app.settings.pet, minimal: self.app.settings.minimal, autostart: self.autostart });
+            t.sync(tray::State { pet: self.app.settings.pet, autostart: self.autostart });
         }
     }
 
@@ -280,7 +275,7 @@ impl Shell {
         // 电量变化很慢，每 5 秒读一次就够
         if self.sys.2.ready(Duration::from_secs(5)) {
             let (b, c) = read_power();
-            if self.app.settings.show_battery && self.sys.0.is_some() && self.sys.1!=c && self.app.settings.system_hud {self.app.alert(if c {"电源已连接"}else{"已切换电池供电"},b.map(|v|format!("当前电量 {v}%")).unwrap_or_else(||"桌面电源状态已更新".into()),5,false);}
+            if self.app.settings.show_battery && self.sys.0.is_some() && self.sys.1!=c && self.app.settings.hud_power {self.app.alert(if c {"电源已连接"}else{"已切换电池供电"},b.map(|v|format!("当前电量 {v}%")).unwrap_or_else(||"桌面电源状态已更新".into()),5,false);}
             if self.app.settings.show_battery && b.is_some_and(|v|v<=20) && !c && self.sys.0.is_some_and(|v|v>20) {self.app.alert("电量偏低",format!("剩余 {}% · 请连接电源",b.unwrap()),5,true);}
             self.sys = (b, c, PollClock::now());
         }
@@ -435,13 +430,20 @@ impl eframe::App for Shell {
                 let manual=next.is_some_and(|state|self.input_keys.as_ref().is_some_and(|keys|keys.allows(state.context)));
                 if let Some(label)=self.input_state.observe(next,manual){
                     if let Some(keys)=&self.input_keys{keys.clear();}
-                    if self.app.settings.system_hud{self.app.alert("键盘输入语言",label,5,false);}
+                    if self.app.settings.hud_keyboard{self.app.alert("键盘输入语言",label,5,false);}
                 }
                 let new=observation.system;
                 // 切换输出设备时，系统会恢复该设备的音量；等待它稳定后再提示调节。
                 if new.audio_endpoint!=self.system_state.audio_endpoint {self.volume_quiet=PollClock::now();}
-                if self.system_ready && self.app.settings.system_hud {
+                if self.system_ready {
                     for (title,body) in new.changes(&self.system_state) {
+                        let enabled=match title.as_str() {
+                            "系统音量"=>self.app.settings.hud_volume,
+                            "网络连接"=>self.app.settings.hud_network,
+                            "大写锁定"=>self.app.settings.hud_keyboard,
+                            _=>false,
+                        };
+                        if !enabled { continue; }
                         // 拖动音量条刚改过音量时，系统回声不再单独弹一条。
                         if title=="系统音量" && !self.volume_quiet.ready(Duration::from_millis(900)) { continue; }
                         self.app.alert(title,body,5,false);

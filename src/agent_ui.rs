@@ -23,7 +23,8 @@ impl App {
             let finished = matches!(notice.kind, NoticeKind::Done | NoticeKind::Failed | NoticeKind::Interrupted);
             let enabled = match notice.kind {
                 NoticeKind::Approval | NoticeKind::Question => self.agent.config.notify.waiting,
-                NoticeKind::Done | NoticeKind::Interrupted => self.agent.config.notify.done,
+                NoticeKind::Done => self.agent.config.notify.done,
+                NoticeKind::Interrupted => self.agent.config.notify.interrupted(),
                 NoticeKind::Failed => self.agent.config.notify.failed,
                 NoticeKind::Stale => self.agent.config.notify.stale,
             };
@@ -177,7 +178,7 @@ impl App {
             };
             c.fill(40.0, top, 320.0, 38.0, 9.0, fill);
             agent_icon(c, session.agent, 58.0, top + 19.0, 17.0);
-            let title = if self.agent.config.display.show_title { session.title.as_str() } else { session.agent.display() };
+            let title = session.title.as_str();
             c.text(72.0, top + 12.0, &c.fit(title, 11.5, W::Semibold, 248.0), 11.5, W::Semibold, theme::WHITE, H::Left);
             let state = state_text(session);
             let preview = card_preview(session);
@@ -213,7 +214,6 @@ impl App {
         let title = session.title.clone();
         let hosts = session.hosts.clone();
         let state = state_text(session);
-        let prompt = session.prompt.clone();
         let reply = session.reply.clone();
         let since = session.since;
         let approval = match session.pending.as_ref().map(|pending| &pending.kind) {
@@ -253,18 +253,9 @@ impl App {
         }
 
         if questions.is_empty() {
-            // 只展示最近一问一答的摘要，行数在设置里调整。
+            // 只展示最近回复，行数在设置里调整。
             let lines = self.agent.config.display.recent_lines.clamp(1, 3);
             let mut y = 64.0;
-            c.text(15.0, y, "最近提问", 9.0, W::Regular, theme::GRAY, H::Left);
-            y += 14.0;
-            let prompt = prompt.unwrap_or_default();
-            let prompt = if prompt.is_empty() { "—".to_owned() } else { prompt };
-            for line in c.wrap(&prompt, 10.0, W::Regular, 386.0, lines) {
-                c.text(15.0, y, &line, 10.0, W::Regular, theme::WHITE, H::Left);
-                y += 14.0;
-            }
-            y += 4.0;
             c.text(15.0, y, "最近回复", 9.0, W::Regular, theme::GRAY, H::Left);
             y += 14.0;
             let reply = reply.unwrap_or_default();
@@ -321,7 +312,7 @@ impl App {
 
     pub(crate) fn agent_settings(&mut self, ui: &mut egui::Ui) {
         let statuses = self.agent.status.clone();
-        settings_label(ui, "接入 AI 工具");
+        settings_label(ui, "Hooks");
         settings_card(ui, |ui| {
             for (index, agent) in AgentId::ALL.iter().enumerate() {
                 if index > 0 { ui.separator(); }
@@ -358,9 +349,9 @@ impl App {
                 });
             }
             ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button("重新扫描").clicked() { self.agent.rescan(); }
-                if ui.button("清理旧 Hook").clicked() {
+            crate::extras::settings_action_row(ui,|ui|{
+                if ui.add(crate::extras::settings_primary_button("重新扫描")).clicked() { self.agent.rescan(); }
+                if ui.add(crate::extras::settings_danger_button("清理旧 Hook")).clicked() {
                     let changed = crate::agent::hooks::cleanup_legacy();
                     self.agent.rescan();
                     self.say(if changed { "已清理 Fly Island / 提示音 Hook，备份已保留" } else { "没有发现需要清理的旧 Hook" });
@@ -369,27 +360,70 @@ impl App {
             settings_hint(ui, "关闭监控不会删除 Hook；需要干净配置时点「移除」。");
         });
 
-        settings_label(ui, "提醒");
+        settings_label(ui, "提醒事件");
         settings_card(ui, |ui| {
             let mut waiting = self.agent.config.notify.waiting;
-            setting_row(ui, "等待确认 / 回答", "在岛上弹出横幅，并自动展开详情", &mut waiting);
+            setting_row(ui, "等待用户选择", "等待审批或回答时在岛上提醒", &mut waiting);
             if waiting != self.agent.config.notify.waiting { self.agent.config.notify.waiting = waiting; self.agent.config.save(); }
             ui.separator();
             let mut done = self.agent.config.notify.done;
-            setting_row(ui, "完成 / 中断", "岛体收起时自动展开；否则横幅约 3 秒收起，同时播放提示音", &mut done);
+            setting_row(ui, "完成", "会话完成时在岛上提醒", &mut done);
             if done != self.agent.config.notify.done { self.agent.config.notify.done = done; self.agent.config.save(); }
             ui.separator();
+            let mut interrupted = self.agent.config.notify.interrupted();
+            let before = interrupted;
+            setting_row(ui, "中断", "会话中断时在岛上提醒", &mut interrupted);
+            if interrupted != before {
+                self.agent.config.notify.interrupted = Some(interrupted);
+                self.agent.config.save();
+            }
+            ui.separator();
             let mut failed = self.agent.config.notify.failed;
-            setting_row(ui, "失败", "岛体收起时自动展开；否则横幅约 3 秒收起，同时播放提示音", &mut failed);
+            setting_row(ui, "失败", "会话失败时在岛上提醒", &mut failed);
             if failed != self.agent.config.notify.failed { self.agent.config.notify.failed = failed; self.agent.config.save(); }
             ui.separator();
             let mut stale = self.agent.config.notify.stale;
-            setting_row(ui, "可能中断", "运行中超过 10 分钟没有事件", &mut stale);
+            setting_row(ui, "闲置", "运行中超过 10 分钟没有事件时提醒", &mut stale);
             if stale != self.agent.config.notify.stale { self.agent.config.notify.stale = stale; self.agent.config.save(); }
-            ui.separator();
+        });
+
+        settings_label(ui, "提示音");
+        settings_card(ui, |ui| {
+            let mut changed = false;
+            {
+                let sound = &mut self.agent.config.sound;
+                let rows = [
+                    ("开始", "Agent 会话开始"),
+                    ("提交", "发送新任务"),
+                    ("审批", "等待确认或回答"),
+                    ("完成", "会话完成"),
+                    ("错误", "会话失败"),
+                ];
+                let mut values = [sound.start, sound.submit, sound.approval, sound.complete, sound.error];
+                for (index, (label, description)) in rows.iter().enumerate() {
+                    if index > 0 { ui.separator(); }
+                    setting_row(ui, label, description, &mut values[index]);
+                }
+                if values != [sound.start, sound.submit, sound.approval, sound.complete, sound.error] {
+                    sound.start = values[0];
+                    sound.submit = values[1];
+                    sound.approval = values[2];
+                    sound.complete = values[3];
+                    sound.error = values[4];
+                    changed = true;
+                }
+            }
+            if changed { self.agent.config.save(); }
+            settings_hint(ui, "按事件选择提示音；关闭的事件不会播放声音。");
+        });
+    }
+
+    pub(crate) fn agent_reminder_settings(&mut self, ui: &mut egui::Ui) {
+        settings_card(ui, |ui| {
             let mut auto_expand = self.agent.config.notify.auto_expand;
             setting_row(ui, "自动展开", "等待确认或回答时打开详情；完成或中断时打开列表", &mut auto_expand);
             if auto_expand != self.agent.config.notify.auto_expand { self.agent.config.notify.auto_expand = auto_expand; self.agent.config.save(); }
+            ui.separator();
             settings_control_row_right(ui, "重复提醒", |ui| {
                 let mut repeat = match self.agent.config.notify.repeat.as_str() { "30s" => 1, "1m" => 2, "5m" => 3, _ => 0 };
                 if settings_segmented(ui, &mut repeat, &[(0, "不提醒"), (1, "30 秒"), (2, "1 分钟"), (3, "5 分钟")], 56.0) {
@@ -397,20 +431,15 @@ impl App {
                     self.agent.config.save();
                 }
             });
-        });
-
-        settings_label(ui, "显示");
-        settings_card(ui, |ui| {
-            let mut show_title = self.agent.config.display.show_title;
-            setting_row(ui, "显示会话标题", "关闭后只显示 Agent 名称", &mut show_title);
-            if show_title != self.agent.config.display.show_title { self.agent.config.display.show_title = show_title; self.agent.config.save(); }
-            settings_control_row_right(ui, "列表行数", |ui| {
+            ui.separator();
+            settings_control_row_right(ui, "会话数", |ui| {
                 let mut rows = self.agent.config.display.rows;
-                if settings_segmented(ui, &mut rows, &[(3, "3 行"), (4, "4 行"), (5, "5 行")], 52.0) {
+                if settings_segmented(ui, &mut rows, &[(3, "3 个"), (4, "4 个"), (5, "5 个")], 52.0) {
                     self.agent.config.display.rows = rows;
                     self.agent.config.save();
                 }
             });
+            ui.separator();
             settings_control_row_right(ui, "最近消息行数", |ui| {
                 let mut lines = self.agent.config.display.recent_lines;
                 if settings_segmented(ui, &mut lines, &[(1, "1 行"), (2, "2 行"), (3, "3 行")], 52.0) {
@@ -418,6 +447,7 @@ impl App {
                     self.agent.config.save();
                 }
             });
+            ui.separator();
             settings_control_row_right(ui, "会话记录保留", |ui| {
                 ui.horizontal(|ui| {
                     let mut value = self.agent.config.retention_minutes;
@@ -428,42 +458,7 @@ impl App {
                     if value != before { self.agent.config.retention_minutes = value; self.agent.config.save(); }
                 });
             });
-            settings_hint(ui, "已激活的会话保留卡片，到保留时间后清理；可能中断的会话提醒后隐藏。");
-        });
-
-        settings_label(ui, "声音");
-        settings_card(ui, |ui| {
-            let mut enabled = self.agent.config.sound.enabled;
-            setting_row(ui, "提示音", "由岛仔直接播放，不再调用 PowerShell", &mut enabled);
-            if enabled != self.agent.config.sound.enabled { self.agent.config.sound.enabled = enabled; self.agent.config.save(); }
-            let sound_enabled = self.agent.config.sound.enabled;
-            ui.add_enabled_ui(sound_enabled, |ui| {
-                let mut changed = false;
-                {
-                    let sound = &mut self.agent.config.sound;
-                    let rows = [
-                        ("开始", "Agent 会话开始"),
-                        ("提交", "发送新任务"),
-                        ("审批", "等待确认或回答"),
-                        ("完成", "会话完成"),
-                        ("错误", "会话失败"),
-                    ];
-                    let mut values = [sound.start, sound.submit, sound.approval, sound.complete, sound.error];
-                    for (index, (label, description)) in rows.iter().enumerate() {
-                        ui.separator();
-                        setting_row(ui, label, description, &mut values[index]);
-                    }
-                    if values != [sound.start, sound.submit, sound.approval, sound.complete, sound.error] {
-                        sound.start = values[0];
-                        sound.submit = values[1];
-                        sound.approval = values[2];
-                        sound.complete = values[3];
-                        sound.error = values[4];
-                        changed = true;
-                    }
-                }
-                if changed { self.agent.config.save(); }
-            });
+            settings_hint(ui, "会话到保留时间后清理；事件与提示音在「AI 会话」页设置。");
         });
     }
 }

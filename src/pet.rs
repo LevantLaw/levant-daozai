@@ -106,7 +106,7 @@ mod tests {
         std::fs::create_dir_all(&dest).unwrap();
         std::env::set_var("DAOZAI_DATA_DIR",std::env::temp_dir().join(format!("daozai-listening-{}",std::process::id())));
         let ctx=egui::Context::default();let mut app=App::new(&ctx,Options{fetch_lyrics:false,pet_idle:1e9});
-        app.settings.pet=true;app.settings.minimal=false;app.settings.island_lyrics=false;
+        app.settings.pet=true;app.settings.island_lyrics=false;
         let mut scenes=Vec::new();let mut start=0.0;
         for (index,expression) in MUSIC_EXPRESSIONS.into_iter().enumerate() {
             if [0,2].contains(&index) {scenes.push((format!("演唱动作 {}",index+1),start));}

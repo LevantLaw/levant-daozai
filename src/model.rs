@@ -2,7 +2,7 @@
 //!
 //! 文件布局与原工具同名同结构（原工具字符串中可见的路径与键名），但默认目录
 //! 用独立的 `%APPDATA%\Daozai`，避免与原工具的 `%APPDATA%\Nusa` 互相覆盖：
-//!   %APPDATA%\Daozai\settings.txt   -> pet=0/1, minimal=0/1
+//!   %APPDATA%\Daozai\settings.txt   -> pet=0/1, browser_minimal=0/1
 //!   %APPDATA%\Daozai\todo.txt
 //!   %APPDATA%\Daozai\water.txt      -> bottle=<ml> / goal=<ml> / start=YYYY-MM-DD
 //!   %APPDATA%\Daozai\shelf.txt      -> 置物清单（每行一个绝对路径）
@@ -196,6 +196,42 @@ pub fn island_size_value(value: u32) -> u32 {
     (value + ISLAND_SIZE_STEP / 2) / ISLAND_SIZE_STEP * ISLAND_SIZE_STEP
 }
 
+/// 岛体展开、收起与悬停胀大的弹簧速度档位。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MotionSpeed {
+    Slow,
+    #[default]
+    Normal,
+    Fast,
+}
+
+impl MotionSpeed {
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "slow" => Self::Slow,
+            "fast" => Self::Fast,
+            _ => Self::Normal,
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Slow => "slow",
+            Self::Normal => "normal",
+            Self::Fast => "fast",
+        }
+    }
+
+    /// 刚度倍率；阻尼比保持不变。
+    pub fn factor(self) -> f32 {
+        match self {
+            Self::Slow => 0.7,
+            Self::Normal => 1.0,
+            Self::Fast => 1.4,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Settings {
     pub display_id: String,
@@ -212,7 +248,6 @@ pub struct Settings {
     pub dock: Dock,
     pub settings_theme: crate::settings_theme::SettingsTheme,
     pub pet: bool,
-    pub minimal: bool,
     pub browser_minimal: bool,
     pub avoid_browsers: bool,
     pub avoid_apps: Vec<(String,String)>,
@@ -225,7 +260,11 @@ pub struct Settings {
     pub clock_period: u8,
     pub clock_seconds: bool,
     pub resident_order: Vec<usize>,
-    pub system_hud: bool,
+    /// 系统状态提醒按类别独立开关。
+    pub hud_volume: bool,
+    pub hud_power: bool,
+    pub hud_network: bool,
+    pub hud_keyboard: bool,
     pub bluetooth_notifications: bool,
     pub read_notifications:bool,
     pub wechat_notifications:bool,
@@ -235,8 +274,16 @@ pub struct Settings {
     /// 微信缩在托盘时，点提醒通过系统托盘按钮唤起微信（默认关闭）。
     pub wechat_tray_open:bool,
     pub qq_only:bool,
+    /// QQ 的 Windows 通知提醒；需要先连接 Windows 通知监听。
+    pub qq_notifications:bool,
     pub notification_preview:bool,
     pub notifications: bool,
+    /// 聊天与外部通知横幅停留秒数。
+    pub notice_hold_secs: f64,
+    /// 打开功能页、展开未读胶囊后的停留秒数。
+    pub page_hold_secs: f64,
+    /// 岛体展开、收起与悬停胀大的弹簧速度。
+    pub motion_speed: MotionSpeed,
     /// 岛上提醒的同时发一条 Windows 系统通知（默认开启）；关闭后只在岛上提醒。
     pub system_notify: bool,
     /// 系统通知的提示音；岛上提醒本身不发声。
@@ -289,7 +336,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 10], page_order: [0,1,2,3,4,5,6,7,8,9], show_clock: true, show_battery: true, show_weather: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 10], page_order: [0,1,2,3,4,5,6,7,8,9], show_clock: true, show_battery: true, show_weather: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), hud_volume: true, hud_power: true, hud_network: true, hud_keyboard: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, qq_notifications:true, notification_preview:false, notifications: true, notice_hold_secs: 4.5, page_hold_secs: 4.0, motion_speed: MotionSpeed::Normal, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -338,7 +385,6 @@ impl Settings {
                 "island_offset" => s.island_offset = v.parse::<i32>().unwrap_or(0).clamp(-ISLAND_OFFSET_MAX, ISLAND_OFFSET_MAX),
                 "oled_shift" => s.oled_shift = v != "0",
                 "pet" => s.pet = v == "1" || v.eq_ignore_ascii_case("true"),
-                "minimal" => s.minimal = v == "1" || v.eq_ignore_ascii_case("true"),
                 "browser_minimal" => s.browser_minimal = v == "1",
                 "avoid_browsers" => s.avoid_browsers = v != "0",
                 "avoid_apps" => s.avoid_apps = serde_json::from_str(&v).unwrap_or_default(),
@@ -388,10 +434,22 @@ impl Settings {
                 "dingtalk_notifications" => s.dingtalk_notifications=v=="1",
                 "wechat_tray_open" => s.wechat_tray_open=v=="1",
                 "qq_only" => s.qq_only=v=="1",
+                "qq_notifications" => s.qq_notifications=v!="0",
                 "notification_preview" => s.notification_preview=v=="1",
-                "system_hud" => s.system_hud = v != "0",
+                // 旧版总开关：四类系统提醒一起开关。
+                "system_hud" => {
+                    let on=v!="0";
+                    s.hud_volume=on;s.hud_power=on;s.hud_network=on;s.hud_keyboard=on;
+                }
+                "hud_volume" => s.hud_volume = v != "0",
+                "hud_power" => s.hud_power = v != "0",
+                "hud_network" => s.hud_network = v != "0",
+                "hud_keyboard" => s.hud_keyboard = v != "0",
                 "bluetooth_notifications" => s.bluetooth_notifications = v != "0",
                 "notifications" => s.notifications = v != "0",
+                "notice_hold_secs" => s.notice_hold_secs = v.parse::<f64>().ok().filter(|value|value.is_finite()).unwrap_or(4.5).clamp(1.0, 15.0),
+                "page_hold_secs" => s.page_hold_secs = v.parse::<f64>().ok().filter(|value|value.is_finite()).unwrap_or(4.0).clamp(1.0, 15.0),
+                "motion_speed" => s.motion_speed = MotionSpeed::parse(&v),
                 "system_notify" => s.system_notify = v != "0",
                 "sound" => s.sound = v == "1",
                 "lyrics_enabled" => s.lyrics_enabled=v!="0",
@@ -439,6 +497,8 @@ impl Settings {
     }
 
     pub fn save(&self) {
+        let notice_hold=if self.notice_hold_secs.is_finite() {self.notice_hold_secs.clamp(1.0,15.0)}else{4.5};
+        let page_hold=if self.page_hold_secs.is_finite() {self.page_hold_secs.clamp(1.0,15.0)}else{4.0};
         let _ = write_kv(
             &config_dir().join("settings.txt"),
             &[
@@ -452,7 +512,6 @@ impl Settings {
                 ("oled_shift".into(),(self.oled_shift as u8).to_string()),
                 ("settings_theme".into(),self.settings_theme.key().into()),
                 ("pet".into(), if self.pet { "1".to_string() } else { "0".to_string() }),
-                ("minimal".into(), if self.minimal { "1".to_string() } else { "0".to_string() }),
                 ("browser_minimal".into(), (self.browser_minimal as u8).to_string()),
                 ("avoid_browsers".into(), (self.avoid_browsers as u8).to_string()),
                 ("avoid_apps".into(), serde_json::to_string(&self.avoid_apps).unwrap_or_default()),
@@ -472,10 +531,17 @@ impl Settings {
                 ("dingtalk_notifications".into(),(self.dingtalk_notifications as u8).to_string()),
                 ("wechat_tray_open".into(),(self.wechat_tray_open as u8).to_string()),
                 ("qq_only".into(),(self.qq_only as u8).to_string()),
+                ("qq_notifications".into(),(self.qq_notifications as u8).to_string()),
                 ("notification_preview".into(),(self.notification_preview as u8).to_string()),
-                ("system_hud".into(), (self.system_hud as u8).to_string()),
+                ("hud_volume".into(), (self.hud_volume as u8).to_string()),
+                ("hud_power".into(), (self.hud_power as u8).to_string()),
+                ("hud_network".into(), (self.hud_network as u8).to_string()),
+                ("hud_keyboard".into(), (self.hud_keyboard as u8).to_string()),
                 ("bluetooth_notifications".into(), (self.bluetooth_notifications as u8).to_string()),
                 ("notifications".into(), (self.notifications as u8).to_string()),
+                ("notice_hold_secs".into(), notice_hold.to_string()),
+                ("page_hold_secs".into(), page_hold.to_string()),
+                ("motion_speed".into(), self.motion_speed.key().into()),
                 ("system_notify".into(), (self.system_notify as u8).to_string()),
                 ("sound".into(), (self.sound as u8).to_string()),
                 ("lyrics_enabled".into(),(self.lyrics_enabled as u8).to_string()),

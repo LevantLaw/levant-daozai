@@ -19,27 +19,31 @@ pub struct AgentConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DisplayConfig {
     #[serde(default = "yes")] pub bar_indicator: bool,
-    #[serde(default = "yes")] pub show_title: bool,
     #[serde(default = "default_rows")] pub rows: usize,
-    /// 详情页「最近提问 / 最近回复」各显示的行数。
+    /// 详情页「最近回复」显示的行数。
     #[serde(default = "default_recent_lines")] pub recent_lines: usize,
 }
 impl Default for DisplayConfig {
-    fn default() -> Self { Self { bar_indicator: true, show_title: true, rows: 3, recent_lines: 1 } }
+    fn default() -> Self { Self { bar_indicator: true, rows: 3, recent_lines: 1 } }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NotifyConfig {
     #[serde(default = "yes")] pub waiting: bool,
     #[serde(default = "yes")] pub done: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub interrupted: Option<bool>,
     #[serde(default = "yes")] pub failed: bool,
     #[serde(default = "yes")] pub stale: bool,
     #[serde(default = "yes")] pub auto_expand: bool,
     #[serde(default = "repeat_never")] pub repeat: String,
 }
 fn repeat_never() -> String { "never".into() }
+impl NotifyConfig {
+    /// 旧配置没有单独的「中断」开关，沿用「完成」的旧值。
+    pub fn interrupted(&self) -> bool { self.interrupted.unwrap_or(self.done) }
+}
 impl Default for NotifyConfig {
-    fn default() -> Self { Self { waiting: true, done: true, failed: true, stale: true, auto_expand: true, repeat: repeat_never() } }
+    fn default() -> Self { Self { waiting: true, done: true, interrupted: None, failed: true, stale: true, auto_expand: true, repeat: repeat_never() } }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,6 +85,15 @@ impl Config {
         config.retention_minutes = snap_retention(config.retention_minutes);
         config.display.rows = config.display.rows.clamp(3, 5);
         config.display.recent_lines = config.display.recent_lines.clamp(1, 3);
+        // 「提示音」总开关已移除：旧配置关闭时把各事件一并关掉，保持原来的静音结果。
+        if !config.sound.enabled {
+            config.sound.enabled = true;
+            config.sound.start = false;
+            config.sound.submit = false;
+            config.sound.approval = false;
+            config.sound.complete = false;
+            config.sound.error = false;
+        }
         config
     }
 
