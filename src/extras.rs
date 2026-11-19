@@ -283,6 +283,20 @@ impl App {
         };
         self.enqueue_alert(a, false);
     }
+    /// AI 会话的岛内横幅：自动收起，不拦截操作。
+    pub(crate) fn agent_alert(&mut self, title: impl Into<String>, body: impl Into<String>, duration: f64) {
+        self.enqueue_alert(Alert {
+            source: AlertSource::Internal,
+            title: title.into(),
+            body: body.into(),
+            page: crate::app::AI_PAGE,
+            at: self.t,
+            duration,
+            bluetooth: None,
+            meeting: None,
+            unread: None,
+        }, false);
+    }
     fn enqueue_alert(&mut self, a: Alert, system: bool) {
         // 通知仅保存在本次运行的内存中。
         if a.source==AlertSource::Internal {self.history.push_front(a.clone());}
@@ -1259,6 +1273,7 @@ fn settings_page_icon(page:usize)->egui::ImageSource<'static>{
         TODO_PAGE=>("tasks",include_bytes!("../assets/settings-icons/system/tasks.svg")),
         MAIL_PAGE=>("mail",include_bytes!("../assets/settings-icons/system/mail.svg")),
         QUOTA_PAGE=>("quota",include_bytes!("../assets/settings-icons/system/quota.svg")),
+        AI_PAGE=>("sessions",include_bytes!("../assets/settings-icons/system/sessions.svg")),
         CALENDAR_PAGE=>("calendar",include_bytes!("../assets/settings-icons/system/calendar.svg")),
         _=>("weather",include_bytes!("../assets/settings-icons/system/weather.svg")),
     };
@@ -1269,7 +1284,7 @@ fn settings_page_icon(page:usize)->egui::ImageSource<'static>{
 #[cfg_attr(not(test),allow(dead_code))]
 pub(crate) fn settings_tab_module(tab:usize)->Option<usize>{
     use crate::app::*;
-    match tab {1=>Some(MUSIC_PAGE),2=>Some(FOCUS_PAGE),3=>Some(WATER_PAGE),4=>Some(TODO_PAGE),5=>Some(SHELF_PAGE),7=>Some(MAIL_PAGE),8=>Some(CALENDAR_PAGE),11=>Some(QUOTA_PAGE),12=>Some(WEATHER_PAGE),_=>None}
+    match tab {1=>Some(MUSIC_PAGE),2=>Some(FOCUS_PAGE),3=>Some(WATER_PAGE),4=>Some(TODO_PAGE),5=>Some(SHELF_PAGE),7=>Some(MAIL_PAGE),8=>Some(CALENDAR_PAGE),11=>Some(QUOTA_PAGE),12=>Some(WEATHER_PAGE),15=>Some(AI_PAGE),_=>None}
 }
 
 pub(crate) fn settings_label(ui:&mut egui::Ui,text:&str){
@@ -1404,9 +1419,9 @@ pub(crate) const SETTINGS_TAB_APPEARANCE: usize = 13;
 pub(crate) const SETTINGS_TAB_POSITION: usize = 14;
 /// 侧栏：一项就是一页，不再有页内子标签。专注与健康（2、3）、待办与置物（4、5）各合成一页；关于固定左下角。
 /// 第四列是这一项之前的分组标题。
-const SETTINGS_GROUPS: [(&str,usize,usize,&str);13] = [
+const SETTINGS_GROUPS: [(&str,usize,usize,&str);14] = [
     ("通用",0,0,"岛仔"), ("外观",SETTINGS_TAB_APPEARANCE,SETTINGS_TAB_APPEARANCE,""), ("位置",SETTINGS_TAB_POSITION,SETTINGS_TAB_POSITION,""), ("页面管理",10,10,""),
-    ("音乐",1,1,"功能"), ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("AI 额度",11,11,""), ("天气",12,12,""),
+    ("音乐",1,1,"功能"), ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("AI 额度",11,11,""), ("AI 会话",15,15,""), ("天气",12,12,""),
     ("关于",9,9,""),
 ];
 /// 分页标题；合并页（3→2、5→4）显示合并后的名字。
@@ -1419,7 +1434,7 @@ pub(crate) fn settings_tab_group_for_tests(tab:usize)->&'static str{settings_tab
 impl App {
     /// 功能页顶部卡片：名称、说明和开关。开关按钮与「页面管理」是同一个状态，点一下即切换。
     /// 返回功能是否开启，调用方据此把下面的设置置灰。
-    fn settings_feature_header(&mut self,ui:&mut egui::Ui,page:usize,description:&str)->bool{
+    pub(crate) fn settings_feature_header(&mut self,ui:&mut egui::Ui,page:usize,description:&str)->bool{
         let ctx=&ui.ctx().clone();
         let on=self.module_on(page);
         // 和「页面管理」一致：只剩最后一个功能页时不允许关闭。
@@ -1509,6 +1524,7 @@ impl App {
                         12=>egui::include_image!("../assets/settings-icons/system/weather.svg"),
                         7=>egui::include_image!("../assets/settings-icons/system/mail.svg"),
                         8=>egui::include_image!("../assets/settings-icons/system/calendar.svg"),
+                        15=>egui::include_image!("../assets/settings-icons/system/sessions.svg"),
                         SETTINGS_TAB_APPEARANCE=>egui::include_image!("../assets/settings-icons/system/appearance.svg"),
                         SETTINGS_TAB_POSITION=>egui::include_image!("../assets/settings-icons/system/position.svg"),
                         _=>egui::include_image!("../assets/settings-icons/system/about.svg"),
@@ -1529,6 +1545,11 @@ impl App {
                     // 右侧给滚动条留出空隙，卡片和开关不会被它压住。
                     ui.set_width((ui.available_width()-12.0).max(240.0));
                     match tab {
+                    15=>{
+                        let on=self.settings_feature_header(ui,crate::app::AI_PAGE,"监控本机 Agent 会话，在岛上审批与回答");
+                        ui.add_space(4.0);
+                        ui.add_enabled_ui(on,|ui|self.agent_settings(ui));
+                    }
                     12=>{
                         let on=self.settings_feature_header(ui,crate::app::WEATHER_PAGE,"当地天气与七日预报");
                         ui.add_space(4.0);
@@ -1555,10 +1576,14 @@ impl App {
                             let before=self.quota.config.compact;
                             setting_row(ui,"AI 额度","常驻账号；WorkBuddy 积分在前，DeepSeek 余额在最后",&mut self.quota.config.compact);
                             if before!=self.quota.config.compact {self.quota.config.save();}
+                            ui.separator();
+                            let before=self.agent.config.display.bar_indicator;
+                            setting_row(ui,"AI 会话","运行、等待、可能中断的状态灯",&mut self.agent.config.display.bar_indicator);
+                            if before!=self.agent.config.display.bar_indicator {self.agent.config.save();}
                         });
                         settings_label(ui,"功能页面");
                         settings_card(ui,|ui|{
-                            let descriptions=["播放控制与同步歌词","番茄钟与休息计时","喝水与久坐提醒","临时收纳文件位置","任务清单与到期提醒","邮件摘要与验证码","Agent 剩余额度和账号切换","月历、邮件邀请与工作日程","当地天气与七日预报"];
+                            let descriptions=["播放控制与同步歌词","番茄钟与休息计时","喝水与久坐提醒","临时收纳文件位置","任务清单与到期提醒","邮件摘要与验证码","Agent 剩余额度和账号切换","月历、邮件邀请与工作日程","当地天气与七日预报","Agent 会话、审批与提示音"];
                             ui.label(egui::RichText::new("拖动左侧手柄调整顺序；关闭的功能不在后台运行，不同步也不提醒，已有数据保留。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             #[derive(Clone)]
                             struct PageDrag(usize);

@@ -106,6 +106,7 @@ impl Shell {
         if clipboard_on!=self.clipboard_watch.is_some() {
             self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
         }
+        self.app.reconcile_agent_monitor(ctx);
     }
 
     #[cfg(windows)]
@@ -1039,6 +1040,10 @@ mod open_path_tests {
 }
 
 fn main() -> std::process::ExitCode {
+    // Agent Hook 中继：在单实例检查、创建窗口之前处理，岛仔没运行也能快速返回。
+    if let Some((agent, event)) = daozai::agent::bridge::requested(std::env::args()) {
+        return std::process::ExitCode::from(daozai::agent::bridge::run_relay(agent, &event) as u8);
+    }
     diagnostics::install();
     // 收集诊断：在单实例检查、创建窗口和初始化显卡之前处理，岛仔启动即崩溃、卡死时也能用。
     #[cfg(windows)]

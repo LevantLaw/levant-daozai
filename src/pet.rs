@@ -218,6 +218,10 @@ pub(crate) struct Pet {
     pub hovered: bool,
     pub worried: bool,
     pub expressions: crate::pet_expressions::Expressions,
+    /// 吉祥物自己的动画时钟：只在悬停或事件动画期间前进，空闲时冻结。
+    pub clock: f64,
+    /// 事件动画的截止时间，使用 App 时间。
+    pub anim_until: f64,
     age: f32,
     music_age:f32,
     eyes: [Eye; 2],
@@ -228,7 +232,8 @@ pub(crate) struct Pet {
 impl Default for Pet {
     fn default() -> Self {
         Self { state: PetState::Awake, reaction: None, waking_until: 0.0, last_idle: 0.0,
-            hovered: false, worried: false, expressions:Default::default(), age: 0.0, music_age:0.0, eyes: [Eye::open(4.4); 2], gaze: [0.0; 2], y: 0.0 }
+            hovered: false, worried: false, expressions:Default::default(), clock: 0.0, anim_until: 0.0,
+            age: 0.0, music_age:0.0, eyes: [Eye::open(4.4); 2], gaze: [0.0; 2], y: 0.0 }
     }
 }
 

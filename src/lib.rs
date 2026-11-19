@@ -14,6 +14,11 @@ pub mod resources;
 pub mod anim;
 pub mod oled_shift;
 pub mod app;
+pub mod agent;
+mod agent_sound;
+mod agent_ui;
+#[cfg(test)]
+mod test_support;
 pub mod messenger;
 pub mod child_process;
 mod settings_window;

@@ -34,6 +34,7 @@ pub const MAIL_PAGE: usize = 5;
 pub const QUOTA_PAGE: usize = 6;
 pub const CALENDAR_PAGE: usize = 7;
 pub const WEATHER_PAGE: usize = 8;
+pub const AI_PAGE: usize = 9;
 pub(crate) const WEATHER_H: f32 = 232.0;
 pub(crate) const CALENDAR_H: f32 = 216.0;
 pub const BAR_W: f32 = 163.0; // 收起药丸宽
@@ -78,8 +79,8 @@ fn pill_shadow(painter:&egui::Painter,rect:Rect,radius:f32,strength:f32){
         painter.rect_filled(r,radius+grow*0.8,Color32::from_black_alpha((255.0*a*strength) as u8));
     }
 }
-pub(crate) const PAGE_NAMES: [&str; 9] = ["音乐", "专注", "健康", "置物架", "待办", "邮箱", "AI 额度", "日程", "天气"];
-pub(crate) const PAGE_SETTINGS_TABS: [usize; 9] = [1,2,3,5,4,7,11,8,12];
+pub(crate) const PAGE_NAMES: [&str; 10] = ["音乐", "专注", "健康", "置物架", "待办", "邮箱", "AI 额度", "日程", "天气", "AI 会话"];
+pub(crate) const PAGE_SETTINGS_TABS: [usize; 10] = [1,2,3,5,4,7,11,8,12,15];
 
 // ---------- 动效参数 ----------
 /// 悬停意图缓冲：光标停留这么久才真正展开（期间药丸轻微胀大作为反馈），防误触。
@@ -744,7 +745,7 @@ pub struct App {
     page_dir: f32,
     page_t0: f64,
     slide: Spring,
-    dots: [Spring; 9],
+    dots: [Spring; 10],
     wheel_delta: f32,
     wheel_at: f64,
     wheel_page_at: f64,
@@ -886,6 +887,8 @@ pub struct App {
     /// v0.5.6：日历（CalDAV）配置、未来 24 小时事件与设置表单。
     pub(crate) calendar: CalendarState,
     pub(crate) quota: crate::quota_ui::State,
+    /// AI 会话：Agent 状态、Hook 与本地中继。
+    pub(crate) agent: crate::agent::AgentState,
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
     pub(crate) weather_source: crate::weather_source_ui::State,
@@ -914,6 +917,8 @@ impl App {
         let weather_source=crate::weather_source_ui::State::load();
         let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
         if weather_source.displayed==crate::weather_source_ui::Provider::Qweather {weather.snapshot=weather_source.runtime.snapshot();}
+        let mut agent=crate::agent::AgentState::load();
+        if settings.visible_pages.get(AI_PAGE).copied().unwrap_or(false) && agent.config.enabled { agent.start(ctx); }
         Self {
             opts,
             render_compat_running: settings.render_compat,
@@ -1020,6 +1025,7 @@ impl App {
             mail_lines_cache: Vec::new(),
             calendar: CalendarState::load(),
             quota: crate::quota_ui::State::load(),
+            agent,
             weather,
             weather_source,
             updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
@@ -1573,6 +1579,11 @@ impl App {
 
     /// 模块是否开启（与「页面管理」里的页面开关一致）。
     pub fn module_on(&self,page:usize)->bool {self.settings.visible_pages.get(page).copied().unwrap_or(false)}
+    /// 按 AI 模块与总开关启停会话监控；关闭时移除桥接并清空会话。
+    pub fn reconcile_agent_monitor(&mut self,ctx:&egui::Context){
+        let on=self.module_on(AI_PAGE)&&self.agent.config.enabled;
+        if on!=self.agent.active {self.agent.set_active(on,ctx);}
+    }
     /// 收信线程是否应运行：邮箱模块开启且打开了「新邮件提醒」。
     pub fn mail_active(&self)->bool {self.module_on(MAIL_PAGE) && self.settings.mail_enabled}
     /// 剪贴板监听是否应运行：置物架模块开启且打开了「记录剪贴板」。
@@ -1633,7 +1644,7 @@ impl App {
     }
 
     pub fn is_editing(&self) -> bool {
-        self.adding || self.editing.is_some() || self.todo_choosing || self.task_dialog.is_some() || self.calendar.draft.is_some() || self.settings_editing
+        self.adding || self.editing.is_some() || self.todo_choosing || self.task_dialog.is_some() || self.calendar.draft.is_some() || self.settings_editing || self.agent.free_focus
     }
 
     pub fn filter_todo_input(&mut self,input:&mut egui::RawInput) {
@@ -1695,6 +1706,8 @@ impl App {
         self.todo_input_focused=false;
         self.todo_ime_active=false;
         self.todo_ime_frame=false;
+        self.agent.free.clear();
+        self.agent.free_focus=false;
     }
 
     /// 外壳据此调整音乐采样频率：看着音乐页时最快，收起显示歌词次之，其余只需跟上歌名和播放状态。
@@ -1809,7 +1822,21 @@ impl App {
     }
 
     pub(crate) fn expanded_height(&self)->f32 {
-        if self.page==CALENDAR_PAGE {CALENDAR_H}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6{176.0}else if self.page==5&&self.mail.open_uid.is_some(){236.0}else{PH}
+        if self.page==CALENDAR_PAGE {CALENDAR_H}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6 {176.0}else if self.page==AI_PAGE {self.agent_page_height()}else if self.page==5&&self.mail.open_uid.is_some(){236.0}else{PH}
+    }
+
+    /// AI 会话页按卡片数增高；详情页按「最近消息行数」增高，审批/问答沿用原高度。
+    fn agent_page_height(&self)->f32 {
+        if self.agent.detail {
+            let lines=self.agent.config.display.recent_lines.clamp(1,3) as f32;
+            match self.agent.selected_session() {
+                Some(session) if session.pending.is_none() => 176.0+(lines-1.0)*28.0,
+                _ => 176.0,
+            }
+        } else {
+            let rows=self.agent.config.display.rows.clamp(3,5) as f32;
+            52.0+rows*38.0+(rows-1.0)*4.0+14.0
+        }
     }
 
     // ---------------------------------------------------------------
@@ -1826,6 +1853,7 @@ impl App {
         self.t = env.t;
         self.fullscreen_hidden=env.fullscreen_hidden;
         self.quota_tick();
+        self.agent_tick(&ctx);
         self.weather_tick();
         self.current_hour=env.hour();
         self.system_idle=env.idle_seconds;
@@ -1869,7 +1897,7 @@ impl App {
         self.update_media(env,&ctx);
         let bell=self.t<self.notification_bell_until&&!self.compact_notices();
         self.resident_power=(env.battery,env.charging);
-        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),self.quota_bar_indices().len(),self.media.is_music()&&!bell,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some());
+        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),self.quota_bar_indices().len(),self.media.is_music()&&!bell,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some(),self.agent_bar_visible());
         layout.reorder(&self.settings.resident_order);
         for (position,extra) in self.quota_balance_layout(&ctx){layout.balance_tail(position,extra);}
         if self.settings.clock_period!=0 { layout.widen_clock(40.0); }
@@ -2136,7 +2164,7 @@ impl App {
             let y=(h.min(self.base_size().1)-BAR_H).max(0.0)/2.0;
             // 吉祥物跟随皮肤换色：浅色底上变成深色版本，保持清晰。
             let fit=if self.island_lyrics_active()||self.notice.is_some(){1.0}else{((WIN_W-32.0)/self.resident.target.width).min(1.0)};
-            self.pet.draw(&base.scaled(cx-origin.x,15.0,fit).shifted(0.0,y).faded(pet_alpha),cx-origin.x+self.resident.position(bar::PET),self.t,self.skin_palette());
+            self.pet.draw(&base.scaled(cx-origin.x,15.0,fit).shifted(0.0,y).faded(pet_alpha),cx-origin.x+self.resident.position(bar::PET),self.pet.clock,self.skin_palette());
         }
         let mut page_transition=false;
         if reveal > 0.004 && !banner && !restoring_lyrics {
@@ -2156,6 +2184,9 @@ impl App {
         }else{None};
         if (self.adding||self.editing.is_some()) && reveal > 0.9 && self.page == 4 && self.page_e() > 0.25 {
             self.input_field(ui, origin, &mut cmds);
+        }
+        if reveal > 0.9 && self.page == AI_PAGE && self.agent_free_row().is_some() {
+            self.agent_free_input(ui, origin, &mut cmds);
         }
 
         if self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(ui,origin,&mut cmds);}
@@ -2240,12 +2271,14 @@ impl App {
             || self.hud_alpha > 0.003 && self.hud_alpha < 0.997
             || !self.notice_width.settled(1.0);
         let pet_visible=self.pet_a>0.01 && !self.open && !minimal_pill;
+        let pet_moving=pet_visible && (self.pet.hovered || self.pet.reaction.is_some() || self.pet.waking_until > self.t
+            || self.pet.expressions.current().is_some() || self.t < self.pet.anim_until || self.pet.state==PetState::Music);
         let ambient=self.settings.skin==model::Skin::Fluid && self.fluid.animating() || self.pomo.running && (self.open && self.page==1 || !self.open && !minimal_pill && self.notice.is_none() && bar::animations_enabled())
             || self.media.playing && (self.open && self.page==0 || !self.open && !minimal_pill && self.notice.is_none() && self.media.is_music())
             || self.notice.as_ref().is_some_and(|notice|notice.meeting.is_some());
-        let animating=transitioning || ambient || pet_visible && self.pet.state!=PetState::Sleeping;
-        // 交互形变保持 60 帧，媒体 30 帧；小表情 20 帧，睡眠 10 帧，静态界面每秒核对提醒。
-        let repaint_after=std::time::Duration::from_secs_f64(if transitioning{1.0/60.0}else if ambient{1.0/30.0}else if pet_visible{if self.pet.state==PetState::Sleeping{0.1}else{0.05}}else{1.0});
+        let animating=transitioning || ambient || pet_moving;
+        // 交互形变保持 60 帧，媒体 30 帧；吉祥物只在悬停/事件时动，空闲停在静态姿势。
+        let repaint_after=std::time::Duration::from_secs_f64(if transitioning{1.0/60.0}else if ambient{1.0/30.0}else if pet_moving{0.1}else{1.0});
         cmds.append(&mut self.pending);
         let next_hit=if side {self.side_hit_rect(win,self.progress())} else {self.hit_rect(cx,top,self.progress())};
         if page_before!=self.page && self.open {
@@ -2992,6 +3025,19 @@ impl App {
             let c=base.faded(compact_alpha);let c=if compact_alpha<0.8{c.ghost()}else{c};
             self.draw_quota_bar(&c,local_cx,&layout);
             if let Some(x)=layout.x[bar::WEATHER] { self.draw_pill_weather(&c,local_cx+x,&layout); }
+            if let Some(x)=layout.x[bar::AGENT] {
+                let x=local_cx+x;
+                self.draw_agent_light(&c,x,15.0);
+                if self.open && reveal>0.6 {
+                    let hint={
+                        let active=self.agent.store.active();
+                        let waiting=active.iter().filter(|session|session.waiting()).count();
+                        active.first().map(|session|format!("{} · {} 个活跃会话 · {} 个等待你",session.agent.display(),active.len(),waiting)).unwrap_or_default()
+                    };
+                    if base.hit(x-10.0,3.0,20.0,24.0,"agent-pill").on_hover_text(hint)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand).clicked(){self.show_page(AI_PAGE);}
+                }
+            }
         }
         if self.pomo.running && compact_alpha>0.004 {
             crate::focus_bar::draw(&base.faded(compact_alpha),local_cx+layout.x[bar::FOCUS].unwrap(),15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
@@ -3020,19 +3066,36 @@ impl App {
             self.pet.waking_until = self.t + 2.2;
         }
         self.pet.last_idle = idle;
+        let was_hovered = self.pet.hovered;
         self.pet.hovered = env.cursor.is_some_and(|p| (p.x-cx).abs() <= BAR_W/2.0+24.0 && (0.0..70.0).contains(&p.y));
+        if self.pet.hovered || was_hovered {
+            // 悬停时跟随指针；离开后再留半秒把眼神收回，然后停在静态姿势。
+            self.pet.anim_until = self.t + 0.4;
+        }
         self.pet.worried = self.settings.show_battery && env.battery.is_some_and(|v|v<=20) && !env.charging || env.network == Some(false);
         let allowed = self.pet_enabled();
-        if !allowed { self.pet.reaction = None; self.pet.waking_until = 0.0; self.pet.expressions.clear(); }
+        if !allowed { self.pet.reaction = None; self.pet.waking_until = 0.0; self.pet.expressions.clear(); self.pet.anim_until = 0.0; }
         let available = allowed && !self.open && !self.drag_hot;
-        let shown = available;
-        self.pet_a = anim::approach(self.pet_a, if shown {1.0}else{0.0}, 9.0, self.dt);
-        let visible = available && self.pet_a > 0.7 && self.progress() < 0.1;
-        self.pet.advance(self.dt, visible);
+        self.pet_a = anim::approach(self.pet_a, if available {1.0}else{0.0}, 9.0, self.dt);
+        // 面板展开时吉祥物不可见，冻结状态和动画；收起后从当前状态重新过渡。
+        if !available { return; }
+        if self.pet_a < 0.7 { self.pet.anim_until = self.t + 1.2; }
+        let visible = self.pet_a > 0.7 && self.progress() < 0.1;
         let state = self.pet_state();
-        let gaze = env.cursor.map(|p| [((p.x-cx)/28.0).clamp(-3.0,3.0), ((p.y-15.0)/40.0).clamp(-1.0,1.5)])
-            .unwrap_or([(self.t as f32 * 0.35).sin()*0.8, 0.0]);
-        self.pet.step(state, self.t, self.dt, gaze, visible);
+        if state != self.pet.state { self.pet.anim_until = self.t + 1.2; }
+        // 空闲时不推进吉祥物时钟：没有悬停、表情或状态过渡就保持当前帧。
+        let moving = self.pet_a > 0.01
+            && (self.pet.hovered || self.pet.reaction.is_some() || self.pet.waking_until > self.t
+                || self.pet.expressions.current().is_some() || self.t < self.pet.anim_until
+                || state == PetState::Music);
+        if moving { self.pet.clock += self.dt as f64; }
+        let dt = if moving { self.dt } else { 0.0 };
+        let gaze = if moving {
+            env.cursor.map(|p| [((p.x-cx)/28.0).clamp(-3.0,3.0), ((p.y-15.0)/40.0).clamp(-1.0,1.5)])
+                .unwrap_or([0.0, 0.0])
+        } else { [0.0, 0.0] };
+        self.pet.advance(dt, visible);
+        self.pet.step(state, self.pet.clock, dt, gaze, visible);
     }
 
     // ---------------------------------------------------------------
@@ -3094,6 +3157,7 @@ impl App {
             4 => ("待办", "清单", theme::GREEN),
             5 => ("邮箱", "", theme::CYAN),
             6 => ("AI", "额度", theme::SOFT_GREEN),
+            AI_PAGE => ("AI", "会话", theme::BLUE),
             8 if self.weather.solar_open => ("日出", "日落", theme::YELLOW),
             8 => ("当地", "天气", theme::CYAN),
             _ => ("岛仔", "设置", theme::WHITE),
@@ -3107,15 +3171,18 @@ impl App {
     fn nav(&mut self, c: &Card) {
         let pages: Vec<_>=self.settings.page_order.iter().copied().filter(|page|self.settings.visible_pages[*page]).collect();
         if pages.len()<2 { return; }
-        let arrow_y=if self.page==6||self.page==8{88.0}else{68.0};
-        let l = c.hit(8.0, arrow_y-13.0, 26.0, 26.0, "nav-l");
-        let r = c.hit(385.0, arrow_y-13.0, 26.0, 26.0, "nav-r");
-        let (lh, lp) = c.hover_t(&l);
-        let (rh, rp) = c.hover_t(&r);
-        paint::chevron(c, 21.0, arrow_y, -1.0, lh, lp);
-        paint::chevron(c, 398.0, arrow_y, 1.0, rh, rp);
-        if l.clicked() { self.navigate_page(false); }
-        if r.clicked() { self.navigate_page(true); }
+        // AI 详情子页的按钮和选项占满整行，箭头会盖住内容；先返回列表再翻页。
+        if !(self.page==AI_PAGE && self.agent.detail) {
+            let arrow_y=if self.page==6||self.page==8||self.page==AI_PAGE{88.0}else{68.0};
+            let l = c.hit(8.0, arrow_y-13.0, 26.0, 26.0, "nav-l");
+            let r = c.hit(385.0, arrow_y-13.0, 26.0, 26.0, "nav-r");
+            let (lh, lp) = c.hover_t(&l);
+            let (rh, rp) = c.hover_t(&r);
+            paint::chevron(c, 21.0, arrow_y, -1.0, lh, lp);
+            paint::chevron(c, 398.0, arrow_y, 1.0, rh, rp);
+            if l.clicked() { self.navigate_page(false); }
+            if r.clicked() { self.navigate_page(true); }
+        }
         // 页码豆：宽度由弹簧驱动，整行实时居中；当前页是白色长条
         let gap = 4.0;
         let dot_y=self.expanded_height()-7.2;
@@ -3154,6 +3221,7 @@ impl App {
             5 => self.page_mail(c, env, cmds),
             6 => self.page_quota(c),
             8 => self.page_weather(c,env,cmds),
+            AI_PAGE => self.page_agent(c),
             CALENDAR_PAGE => self.page_calendar(c,env),
             _ => self.page_settings(c),
         }
