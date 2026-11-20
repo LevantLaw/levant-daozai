@@ -166,32 +166,6 @@ fn sun_at(c: &Card, cx: f32, cy: f32, s: f32, spin: f32, detail: bool) {
     if detail { c.glow(cx - s * 0.14, cy - s * 0.14, s * 0.26, Color32::from_white_alpha(110)); }
 }
 
-/// 弯月：外圆与偏右内圆之间的三角带，保留透明月牙缺口。
-fn crescent(c: &Card, cx: f32, cy: f32, s: f32, color: Color32) {
-    let (outer, inner, offset) = (0.62 * s, 0.55 * s, 0.30 * s);
-    let x = (offset * offset + outer * outer - inner * inner) / (2.0 * offset);
-    let y = (outer * outer - x * x).max(0.0).sqrt();
-    let (outer_top, inner_top) = (y.atan2(x), y.atan2(x - offset));
-    let mut mesh = egui::Mesh::default();
-    let steps = 24;
-    for i in 0..=steps {
-        let t = i as f32 / steps as f32;
-        let a = outer_top + (TAU - 2.0 * outer_top) * t;
-        let b = inner_top + (TAU - 2.0 * inner_top) * t;
-        mesh.colored_vertex(c.pos(cx + a.cos() * outer, cy + a.sin() * outer), color);
-        mesh.colored_vertex(c.pos(cx + offset + b.cos() * inner, cy + b.sin() * inner), color);
-        if i > 0 { let n = i * 2; mesh.add_triangle(n - 2, n, n + 1); mesh.add_triangle(n - 2, n + 1, n - 1); }
-    }
-    // 网格本身没有抗锯齿，小尺寸时边缘发毛；沿内外两条弧各描一道约一像素的同色细线补出平滑边缘。
-    // 两条弧分开画、不闭合：月牙尖角极锐，闭合折线在尖角处的斜接会拉出长尖刺。
-    let outer_arc: Vec<_> = mesh.vertices.iter().step_by(2).map(|v| v.pos).collect();
-    let inner_arc: Vec<_> = mesh.vertices.iter().skip(1).step_by(2).map(|v| v.pos).collect();
-    c.painter.add(egui::Shape::mesh(mesh));
-    let stroke = egui::Stroke::new(1.0 / c.ui.ctx().pixels_per_point(), color);
-    c.painter.add(egui::Shape::line(outer_arc, stroke));
-    c.painter.add(egui::Shape::line(inner_arc, stroke));
-}
-
 /// 四角星：夜空点缀。
 fn sparkle(c: &Card, x: f32, y: f32, r: f32, color: Color32) {
     c.poly(&[(x, y - r), (x + r * 0.28, y), (x, y + r), (x - r * 0.28, y)], color);
@@ -201,7 +175,7 @@ fn sparkle(c: &Card, x: f32, y: f32, r: f32, color: Color32) {
 /// 月亮：淡月光 + 月牙；大尺寸时旁边点两颗会闪的星。
 fn moon_at(c: &Card, cx: f32, cy: f32, s: f32, t: f32, detail: bool) {
     if detail { c.glow(cx, cy, s * 1.25, paint::alpha(NIGHT, 0.20)); }
-    crescent(c, cx - s * 0.06, cy, s, MOON);
+    paint::moon(c, cx - s * 0.06, cy, s, MOON);
     if detail {
         let twinkle = |k: f32| 0.55 + 0.45 * (t * 2.2 + k).sin();
         sparkle(c, cx + s * 0.52, cy - s * 0.46, s * 0.17, paint::alpha(MOON, twinkle(0.0)));
@@ -874,10 +848,21 @@ impl App {
     /// 常驻胶囊的天气徽标：小图标 + 温度；点击进入天气页。
     pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::bar_layout::Layout) {
         let Some(snapshot) = self.weather_pill().cloned() else { return };
-        self.paint_pill_weather(c, x, layout, &snapshot);
         let width = layout.widths[crate::bar_layout::WEATHER];
+        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::bar_layout::WEATHER));
         let tip = format!("{} · {}\n更新于 {} · {}", snapshot.place, snapshot.description(), weather::clock(snapshot.at),self.weather_source.displayed.name());
         // 用 bar_tooltip：常驻胶囊上的提示不能用 on_hover_text，悬浮层会盖住指针、抢走点击。
+        if crate::quota_ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
+            self.weather.solar_open=false;
+            self.show_page(WEATHER_PAGE);
+        }
+    }
+
+    /// 事件容器里的天气徽标：宽度由容器给，点击行为与常驻一致。
+    pub(crate) fn draw_tray_weather(&mut self, c: &Card, x: f32, width: f32, alpha: f32) {
+        let Some(snapshot) = self.weather_pill().cloned() else { return };
+        self.paint_weather(c, x, &snapshot, width, alpha);
+        let tip = format!("{} · {}\n更新于 {} · {}", snapshot.place, snapshot.description(), weather::clock(snapshot.at),self.weather_source.displayed.name());
         if crate::quota_ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
             self.weather.solar_open=false;
             self.show_page(WEATHER_PAGE);
@@ -899,14 +884,18 @@ impl App {
         paint_temp(c,cx,cy+14.0,&pill_temp_text(snapshot),10.5,W::Bold,if stale{theme::GRAY}else{theme::WHITE},H::Center);
     }
 
-    /// 只画不响应命中，设置页的常驻预览复用。
+    /// 只画不响应命中，设置页的常驻预览与事件容器复用。
     pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::bar_layout::Layout, snapshot: &crate::weather::Snapshot) {
+        let width = layout.widths[crate::bar_layout::WEATHER];
+        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::bar_layout::WEATHER));
+    }
+
+    /// 按给定宽度和透明度画天气徽标；徽标在宽度内居中。
+    pub(crate) fn paint_weather(&self, c: &Card, x: f32, snapshot: &crate::weather::Snapshot, width: f32, alpha: f32) {
         // 吉祥物游到徽标附近时先淡出，避免遮挡。
-        let alpha = layout.pet_clearance(crate::bar_layout::WEATHER);
         let faded = c.faded(alpha);
         let faded = if alpha < 0.8 { faded.ghost() } else { faded };
         let c = &faded;
-        let width = layout.widths[crate::bar_layout::WEATHER];
         let left = x - width / 2.0;
         // 按墨迹对齐：图标中心对准数字中线，温度墨迹左缘紧跟图标右缘留固定间距。
         let text = pill_temp_text(snapshot);
@@ -938,8 +927,8 @@ impl App {
     fn page_weather_body(&mut self, c: &Card, env: &Env, cmds: &mut Vec<Cmd>) {
         let loading = self.weather.loading;
         let ready=self.weather_can_refresh();
-        c.text(326.0, 23.0, if loading { "更新中" } else if ready { "刷新" } else { "稍后刷新" }, 10.5, W::Regular, if ready { theme::GRAY } else { theme::DIM }, H::Center);
-        if c.hit(304.0, 8.0, 44.0, 21.0, "weather-refresh").on_hover_text("重新获取天气；自动模式会重新定位。请求间隔至少 30 秒，失败后至少 2 分钟").clicked() && ready {
+        c.text(302.0, 23.0, if loading { "更新中" } else if ready { "刷新" } else { "稍后刷新" }, 10.5, W::Regular, if ready { theme::GRAY } else { theme::DIM }, H::Center);
+        if c.hit(280.0, 8.0, 44.0, 21.0, "weather-refresh").on_hover_text("重新获取天气；自动模式会重新定位。请求间隔至少 30 秒，失败后至少 2 分钟").clicked() && ready {
             self.weather_refresh();
         }
         let footer=WEATHER_H-4.0;

@@ -526,7 +526,7 @@ impl eframe::App for Shell {
                     Ok(Err(error))=>{
                         self.tray_opening=None;
                         if error==OpenError::Exited{self.app.discard_unread(unread);}
-                        else if unread.source.adapter().dismiss_unread{self.app.reveal_messenger_notice(unread);}
+                        else if unread.source.adapter().keep_unidentified{self.app.reveal_messenger_notice(unread);}
                         self.app.messenger_unavailable(error.message(unread.source));
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected)=>{

@@ -31,7 +31,7 @@ impl State {
     /// 环类账号跟随在图标右侧的数字：有具体点数时取主周期剩余点数（如 Kiro 的 904）。
     fn ring_tail_text(&self,id:&str)->Option<String>{self.rows.get(id)?.as_ref().ok()?.rings().first()?.amount.as_ref().map(Amount::short)}
     /// 常驻胶囊里紧跟图标的文字：余额类给余额，点数类给剩余点数。
-    fn tail_text(&self,id:&str)->Option<String>{self.balance_text(id).or_else(||self.ring_tail_text(id))}
+    pub(crate) fn tail_text(&self,id:&str)->Option<String>{self.balance_text(id).or_else(||self.ring_tail_text(id))}
     pub fn load()->Self {
         if cfg!(test){return Self::default();}
         let mut state=Self::restore(Config::load(),crate::model::config_dir().join("ai-quota-cache.json"));
@@ -354,13 +354,21 @@ impl App {
     pub fn quota_pending(&mut self,accounts:&[Account]){self.quota.busy.extend(accounts.iter().map(|a|a.id.clone()));}
     pub fn quota_event(&mut self,event:quota::Event){self.quota.receive(event);}
     pub fn quota_set_source(&mut self,path:std::path::PathBuf){self.quota.source=path.to_string_lossy().into_owned();}
-    pub(crate) fn quota_bar_indices(&self)->Vec<usize>{
-        if !self.quota.config.enabled || !self.quota.config.compact || !self.settings.visible_pages[6] || self.browser_minimal_active || self.t<self.notification_bell_until{return vec![];}
+    pub(crate) fn quota_pinned(&self)->Vec<usize>{
+        if !self.quota.config.enabled || !self.quota.config.compact || !self.settings.visible_pages[6] {return vec![];}
         self.quota.config.pinned_indices()
+    }
+    pub(crate) fn quota_bar_indices(&self)->Vec<usize>{
+        if self.browser_minimal_active || self.t<self.notification_bell_until || self.windows_unread{return vec![];}
+        self.quota_pinned()
+    }
+    /// 顶部胶囊行显示的额度组；成员在事件容器里时行内不占位。
+    pub(crate) fn bar_quota_indices(&self)->Vec<usize>{
+        if self.settings.tray_quota {vec![]}else{self.quota_bar_indices()}
     }
     /// 常驻胶囊里每个额度槽的实际宽度：图标右侧跟数字的账号需要额外占位。
     pub(crate) fn quota_balance_layout(&self,ctx:&egui::Context)->Vec<(usize,f32)>{
-        self.quota_bar_indices().iter().enumerate().filter_map(|(position,index)|{
+        self.quota_pinned().iter().enumerate().filter_map(|(position,index)|{
             let account=&self.quota.config.accounts[*index];
             let extra=if let Some(text)=self.quota.tail_text(&account.id){ctx.fonts(|fonts|fonts.layout_no_wrap(text,theme::font(theme::size::PILL_CLOCK,W::Bold),theme::WHITE).size().x).ceil()+6.0}
                 else if account.provider.balance()&&self.quota.balance_loading(&account.id){22.0}
@@ -368,8 +376,8 @@ impl App {
             Some((position,extra))
         }).collect()
     }
-    pub(crate) fn draw_quota_bar(&mut self,c:&Card,cx:f32,layout:&crate::bar_layout::Layout){
-        let indices=self.quota_bar_indices();let mut chosen=None;
+    pub(crate) fn draw_quota_bar(&mut self,c:&Card,cx:f32,layout:&crate::bar_layout::Layout,indices:&[usize]){
+        let mut chosen=None;
         for (position,i)in indices.iter().enumerate(){
             let alpha=layout.pet_clearance(crate::bar_layout::quota_slot(position));
             let faded=c.faded(alpha);let faded=if alpha<0.8{faded.ghost()}else{faded};let c=&faded;
@@ -407,6 +415,22 @@ impl App {
             if bar_tooltip(c.hit(x-14.0,1.0,28.0+extra,28.0,("quota-pin",&a.id)),format!("{} · {}\n{}",a.provider.name(),a.alias,summary)).clicked(){chosen=Some(a.id.clone());}
         }
         if let Some(id)=chosen{self.quota.config.selected=id;self.quota.config.save();self.show_page(6);}
+    }
+    /// 事件容器里的额度组：只按常驻账号排布，按实际内容居中，宽度随账号和点数尾巴变化。
+    fn quota_tray_layout(&self,ctx:&egui::Context)->crate::bar_layout::Layout{
+        let pinned=self.quota_pinned();
+        let mut mini=crate::bar_layout::Layout::new(false,pinned.len(),false,false,false,false,false,false);
+        for (position,extra) in self.quota_balance_layout(ctx){mini.balance_tail(position,extra);}
+        mini.hide_clock();
+        mini.center_content();
+        mini
+    }
+    pub(crate) fn quota_tray_width(&self,ctx:&egui::Context)->f32{self.quota_tray_layout(ctx).width}
+    pub(crate) fn draw_quota_tray(&mut self,c:&Card,x:f32){
+        let indices=self.quota_pinned();
+        if indices.is_empty(){return;}
+        let mini=self.quota_tray_layout(c.ui.ctx());
+        self.draw_quota_bar(c,x,&mini,&indices);
     }
     pub(crate) fn page_quota(&mut self,c:&Card){
         if c.hit(303.0,8.0,32.0,21.0,"quota-refresh").on_hover_text("刷新额度").clicked(){self.pending.push(Cmd::QuotaRefresh);}

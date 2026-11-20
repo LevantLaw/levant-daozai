@@ -11,16 +11,17 @@ fn due() -> H {
     h
 }
 
-fn badge(h:&H,kind:&str)->Rect {
-    h.ctx.read_response(egui::Id::new(("card",true,format!("health-{kind}"))))
-        .unwrap_or_else(||panic!("缺少 {kind} 常驻入口")).rect
+fn health_badge(h:&H)->Rect {
+    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::bar_layout::HEALTH))))
+        .unwrap_or_else(||panic!("缺少健康常驻入口")).rect
 }
 
-fn click_badge(h:&mut H,kind:&str) {
+fn click_health_badge(h:&mut H) {
     h.frame(vec![]);h.frame(vec![]);
-    let p=badge(h,kind).center();
-    h.hover(p,0.6);h.click(p);
-    assert!(!h.app.health_pending[if kind=="water"{0}else{1}],"悬停提示不能挡住常驻入口点击");
+    let p=health_badge(h).center();
+    // 悬停超过 0.2 秒胶囊会展开，徽标随之淡出；直接点击，避免工具提示和展开抢先。
+    h.click(p);
+    assert_eq!(h.app.page,crate::app::WATER_PAGE,"健康入口点击应进入健康页");
 }
 
 #[test]
@@ -32,19 +33,27 @@ fn health_reminders_wait_without_repeating_or_advancing_timers(){
     assert_eq!(h.app.history.len(),alerts,"未处理只常驻，不再重复提醒");
     assert_eq!(h.app.last_reminder,water_start,"未确认不能推进饮水计时");
     assert_eq!(h.app.sit_due(),sit_due,"锁屏和等待不能推进久坐计时");
-    assert!(badge(&h,"water").width()>10.0 && badge(&h,"sit").width()>10.0);
+    assert!(health_badge(&h).width()>10.0);
 }
 
 #[test]
-fn health_badges_confirm_independently_and_do_not_record_water(){
+fn health_badge_opens_the_health_page_and_actions_confirm(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=due();
-    click_badge(&mut h,"water");
-    assert_eq!(h.app.water.drunk_ml,0,"点击常驻只确认，不记录喝水量");
-    assert!((h.app.last_reminder-h.t).abs()<0.1);
+    click_health_badge(&mut h);
+    assert_eq!(h.app.health_pending,[true,true],"打开页面不自动确认");
+    assert_eq!(h.app.water.drunk_ml,0,"进入页面不记录喝水量");
     h.hover(H::local(280.0,80.0),1.0);
-    click_badge(&mut h,"sit");
+    h.click_text("喝一口");
+    assert_eq!(h.app.water.drunk_ml,250);
+    assert!((h.app.last_reminder-h.t).abs()<0.1);
+    assert!(!h.app.health_pending[0]);
+    assert!(h.app.health_pending[1],"喝水与久坐互不影响");
+    h.app.sit_mode=true;
+    h.hover(H::local(280.0,80.0),1.0);
+    h.click_text("起身了");
     assert_eq!(h.app.sat_minutes(),0);
     assert!((h.app.sit_due()-h.t-3600.0).abs()<0.1);
+    assert_eq!(h.app.health_pending,[false,false]);
     let alerts=h.app.history.len();
     h.cursor=None;h.t+=44.0*60.0;h.frame(vec![]);assert_eq!(h.app.history.len(),alerts);
     h.t+=61.0;h.frame(vec![]);assert!(h.app.history.len()>alerts,"确认后再完整计时到点提醒");
@@ -60,7 +69,7 @@ fn health_pending_survives_restart_and_day_change(){
         egui::CentralPanel::default().show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});
     });
     assert_eq!(h.app.health_pending,[true,true]);h.frame(vec![]);
-    assert!(badge(&h,"water").width()>10.0 && badge(&h,"sit").width()>10.0,"重启和跨天保留待处理提醒");
+    assert!(health_badge(&h).width()>10.0,"重启和跨天保留待处理提醒");
     h.app.show_page(crate::app::WATER_PAGE);h.app.sit_mode=true;
     h.hover(H::local(280.0,80.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="待活动")));
@@ -71,11 +80,12 @@ fn health_pending_survives_restart_and_day_change(){
 fn health_actions_clear_pending_and_keep_messenger_unread(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=due();
     h.app.settings.wechat_notifications=true;h.app.receive_wechat_reminder();h.app.alerts.clear();h.app.notice=None;
-    h.app.show_page(crate::app::WATER_PAGE);h.hover(H::local(280.0,80.0),1.0);
-    let water=badge(&h,"water");let sit=badge(&h,"sit");
-    assert!((water.center().x-sit.center().x).abs()<0.1 && water.bottom()<=sit.top()+0.1,"展开时健康提醒沿右侧竖排");
+    click_health_badge(&mut h);
+    h.hover(H::local(280.0,80.0),1.0);
     h.click_text("喝一口");assert_eq!(h.app.water.drunk_ml,250);
-    click_badge(&mut h,"sit");
+    h.app.sit_mode=true;h.hover(H::local(280.0,80.0),1.0);
+    h.click_text("起身了");
+    assert_eq!(h.app.health_pending,[false,false]);
     assert_eq!(h.app.pending_messengers.len(),1,"处理健康提醒不影响微信未读");
     h.app=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});h.frame(vec![]);
     assert_eq!(h.app.health_pending,[false,false],"处理结果已保存");
@@ -99,13 +109,24 @@ fn health_notice_body_and_lyrics_badge_confirm_without_recording_water(){
 }
 
 #[test]
-fn health_side_docks_keep_confirmation_independent(){
+fn health_side_docks_open_page_and_confirm_independently(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for dock in [crate::model::Dock::Left,crate::model::Dock::Right]{
-        let mut h=due();h.app.settings.dock=dock;h.app.show_page(crate::app::WATER_PAGE);
+        let mut h=due();h.app.settings.dock=dock;
+        // 换停靠方式后胶囊要重新收拢，徽标才有可点击区域。
+        for _ in 0..60{h.frame(vec![]);}
+        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::bar_layout::HEALTH))))
+            .unwrap_or_else(||panic!("缺少侧栏健康入口")).rect;
+        h.click(rect.center());
+        assert_eq!(h.app.page,crate::app::WATER_PAGE);
+        assert!(h.app.health_pending[1]);
         h.hover(H::local(280.0,80.0),1.0);
-        click_badge(&mut h,"water");assert!(h.app.health_pending[1]);
-        click_badge(&mut h,"sit");assert_eq!(h.app.health_pending,[false,false]);
+        h.click_text("喝一口");
+        assert!(!h.app.health_pending[0]);
+        assert!(h.app.health_pending[1],"喝水与久坐互不影响");
+        h.app.sit_mode=true;h.hover(H::local(280.0,80.0),1.0);
+        h.click_text("起身了");
+        assert_eq!(h.app.health_pending,[false,false]);
     }
 }
 
@@ -126,8 +147,8 @@ fn health_fullscreen_hidden_keeps_pending_silent_and_returns_as_badges(){
     assert!(h.app.notice.is_none() && h.app.alerts.is_empty(),"退出全屏不补弹横幅");
     assert_eq!(h.app.history.len(),count,"全屏期间不重复提醒");
     assert_eq!((h.app.last_reminder,h.app.sit_start),timers,"全屏切换不能重启计时");
-    assert!(badge(&h,"water").width()>10.0 && badge(&h,"sit").width()>10.0,"退出全屏显示常驻入口");
-    click_badge(&mut h,"water");assert!(h.app.health_pending[1]);
+    assert!(health_badge(&h).width()>10.0,"退出全屏显示常驻入口");
+    click_health_badge(&mut h);assert_eq!(h.app.health_pending,[true,true]);
 }
 
 #[test]
@@ -146,7 +167,9 @@ fn health_entering_fullscreen_clears_active_and_queued_popups_only(){
     assert_eq!(h.app.health_pending,[true,true]);
     h.fullscreen=false;h.frame(vec![]);
     assert!(!h.app.notice.as_ref().is_some_and(health));
-    assert!(badge(&h,"water").width()>10.0 && badge(&h,"sit").width()>10.0);
+    // 待办提醒仍会短暂占用常驻位置；清掉后再看健康徽标。
+    h.app.alerts.clear();h.app.notice=None;h.app.hud_notice=None;h.frame(vec![]);
+    assert!(health_badge(&h).width()>10.0);
 }
 
 #[test]

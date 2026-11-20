@@ -29,7 +29,6 @@ pub struct Adapter {
     pub process_names:&'static [&'static str],
     pub publishers:&'static [&'static str],
     pub keep_unidentified:bool,
-    pub dismiss_unread:bool,
     pub icon_scale:f32,
     pub collapsed_icon_scale:f32,
     pub(crate) enabled:fn(&Settings)->bool,
@@ -42,14 +41,14 @@ pub struct Adapter {
 const WECHAT:Adapter=Adapter{
     client:Messenger::Wechat,name:"微信",capture:Capture::Taskbar,notification_id:"WeChat",
     aliases:&["Weixin","Tencent.WeChat","Tencent.Weixin"],display_names:&["微信","WeChat","Weixin"],process_names:&["Weixin.exe","WeChat.exe"],publishers:&["tencent"],
-    keep_unidentified:false,dismiss_unread:false,icon_scale:1.0,collapsed_icon_scale:0.85,
+    keep_unidentified:false,icon_scale:1.0,collapsed_icon_scale:0.85,
     enabled:|settings|settings.wechat_notifications,tray_enabled:|settings|settings.wechat_tray_open,paint_icon:wechat_icon,
     #[cfg(windows)] native:&crate::wechat::ADAPTER,
 };
 const QQ:Adapter=Adapter{
     client:Messenger::Qq,name:"QQ",capture:Capture::SystemToast,notification_id:"QQ",
     aliases:&[],display_names:&["QQ"],process_names:&["QQ.exe"],publishers:&["tencent"],
-    keep_unidentified:true,dismiss_unread:true,icon_scale:1.12,collapsed_icon_scale:0.92,
+    keep_unidentified:true,icon_scale:1.12,collapsed_icon_scale:0.92,
     enabled:|settings|settings.read_notifications,tray_enabled:|_|true,paint_icon:qq_icon,
     #[cfg(windows)] native:&qq::ADAPTER,
 };
@@ -57,7 +56,7 @@ const QQ:Adapter=Adapter{
 const WECOM:Adapter=Adapter{
     client:Messenger::WeCom,name:"企业微信",capture:Capture::Taskbar,notification_id:"WXWork",
     aliases:&["WeCom","WeWork","Tencent.WeWork"],display_names:&["企业微信","WXWork"],process_names:&["WXWork.exe"],publishers:&["tencent"],
-    keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
+    keep_unidentified:true,icon_scale:1.0,collapsed_icon_scale:0.85,
     enabled:|settings|settings.wecom_notifications,tray_enabled:|_|true,paint_icon:|c,x,y|crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::WeCom)),x-10.0,y-10.0,20.0),
     #[cfg(windows)] native:&desktop::WECOM,
 };
@@ -65,7 +64,7 @@ const WECOM:Adapter=Adapter{
 const FEISHU:Adapter=Adapter{
     client:Messenger::Feishu,name:"飞书",capture:Capture::Taskbar,notification_id:"Feishu",
     aliases:&["com.electron.Feishu"],display_names:&["飞书","Feishu"],process_names:&["Feishu.exe"],publishers:&["beijing feishu technology","bytedance"],
-    keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
+    keep_unidentified:true,icon_scale:1.0,collapsed_icon_scale:0.85,
     enabled:|settings|settings.feishu_notifications,tray_enabled:|_|true,paint_icon:|c,x,y|crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::Feishu)),x-10.0,y-10.0,20.0),
     #[cfg(windows)] native:&desktop::FEISHU,
 };
@@ -73,7 +72,7 @@ const FEISHU:Adapter=Adapter{
 const DINGTALK:Adapter=Adapter{
     client:Messenger::DingTalk,name:"钉钉",capture:Capture::Taskbar,notification_id:"DingTalk",
     aliases:&[],display_names:&["钉钉","DingTalk"],process_names:&["DingTalk.exe"],publishers:&["alibaba","dingtalk"],
-    keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
+    keep_unidentified:true,icon_scale:1.0,collapsed_icon_scale:0.85,
     enabled:|settings|settings.dingtalk_notifications,tray_enabled:|_|true,paint_icon:|c,x,y|crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::DingTalk)),x-10.0,y-10.0,20.0),
     #[cfg(windows)] native:&desktop::DINGTALK,
 };

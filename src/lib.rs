@@ -17,6 +17,8 @@ pub mod app;
 pub mod agent;
 mod agent_sound;
 mod agent_ui;
+mod dnd;
+mod page_badges;
 #[cfg(test)]
 mod test_support;
 pub mod messenger;
@@ -54,6 +56,7 @@ mod extras;
 mod pet;
 mod pet_expressions;
 mod bar_layout;
+mod event_tray;
 mod resident_settings;
 mod avoidance;
 mod focus_bar;

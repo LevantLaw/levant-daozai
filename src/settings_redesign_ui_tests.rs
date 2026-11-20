@@ -40,7 +40,7 @@ fn merged_switches_keep_enabled_users_unchanged(){
 #[test]
 fn merged_mail_switch_keeps_last_page_behavior(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.settings.visible_pages=[false;10];h.app.settings.visible_pages[crate::app::MAIL_PAGE]=true;
+    h.app.settings.visible_pages=[false;12];h.app.settings.visible_pages[crate::app::MAIL_PAGE]=true;
     h.app.settings.mail_enabled=false;
     h.app.migrate_merged_switches();
     assert!(h.app.settings.visible_pages[crate::app::MAIL_PAGE]);
@@ -67,8 +67,8 @@ fn settings_every_tab_renders_with_modules_on_and_off(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for on in [true,false] {
         let mut h=H::new();h.app.open_settings();h.ctx.set_embed_viewports(true);
-        if !on {for page in 0..10 {if page!=crate::app::MUSIC_PAGE {h.app.settings.visible_pages[page]=false;}}}
-        for tab in 0..=crate::extras::SETTINGS_TAB_CLIPBOARD {
+        if !on {for page in 0..12 {if page!=crate::app::MUSIC_PAGE {h.app.settings.visible_pages[page]=false;}}}
+        for tab in 0..=crate::extras::SETTINGS_TAB_WINDOWS {
             h.app.settings_tab=tab;
             for _ in 0..2 {let _=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));}
             assert_eq!(h.app.settings_tab,tab,"绘制分页 {tab} 不应自行跳转");
@@ -76,7 +76,7 @@ fn settings_every_tab_renders_with_modules_on_and_off(){
     }
 }
 
-/// 设置窗口拉到最小（600×450）时，侧栏 16 项都在可见区内，「关于」不会被挤出去。
+/// 设置窗口拉到最小（600×450）时，侧栏 17 项都在可见区内，「关于」不会被挤出去。
 #[test]
 fn settings_sidebar_keeps_about_visible_at_minimum_height(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -97,19 +97,30 @@ fn settings_sidebar_keeps_about_visible_at_minimum_height(){
     }
 }
 
-fn settings_text(tab:usize)->Vec<String>{
-    let mut h=H::new();h.app.settings_tab=tab;h.app.open_settings();h.ctx.set_embed_viewports(false);
+fn settings_text(tab:usize)->Vec<String>{settings_text_with(tab,|_|{})}
+fn settings_text_with(tab:usize,prepare:impl FnOnce(&H))->Vec<String>{
+    settings_frame_with(tab,prepare).shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().to_string()),_=>None}).collect()
+}
+/// 渲染一帧设置子视口，返回这一帧的形状。
+fn settings_frame_mut(h:&mut H,events:Vec<egui::Event>)->egui::FullOutput{
     let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
+    h.t+=0.02;let time=h.t;
     egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{
         let id=viewport.ids.this;
-        let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,1600.0))),
-            viewports:std::iter::once((id,egui::ViewportInfo::default())).collect(),..Default::default()};
+        let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,2600.0))),time:Some(time),events:events.clone(),viewports:std::iter::once((id,egui::ViewportInfo::default())).collect(),..Default::default()};
         *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
     });
-    for _ in 0..3 {let _=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));}
+    let _=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));
     let frame=output.lock().unwrap().take().unwrap();
-    let texts=frame.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().to_string()),_=>None}).collect();
-    texts
+    frame
+}
+
+fn settings_frame_with(tab:usize,prepare:impl FnOnce(&H))->egui::FullOutput{
+    let mut h=H::new();h.app.settings_tab=tab;h.app.open_settings();h.ctx.set_embed_viewports(false);
+    prepare(&h);
+    let mut frame=settings_frame_mut(&mut h,vec![]);
+    for _ in 1..3 {frame=settings_frame_mut(&mut h,vec![]);}
+    frame
 }
 
 /// 「岛体」页收拢外观、岛上显示和功能页排布；展开、避让等行为项在「行为」页。
@@ -117,15 +128,17 @@ fn settings_text(tab:usize)->Vec<String>{
 fn body_page_has_appearance_residents_and_feature_pages(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let body=settings_text(crate::extras::SETTINGS_TAB_BODY);
-    for label in ["岛体外观","岛上显示","功能页面","皮肤","形状","大小","显示屏","停靠","恢复居中","岛仔吉祥物","岛体预览","恢复默认","时间","天气"] {
+    for label in ["岛体外观","岛上显示","常驻显示","事件显示","功能页面","皮肤","形状","大小","显示屏","停靠","恢复居中","岛体预览","恢复默认","AI 会话状态灯","岛仔吉祥物","电量","时间","勿扰模式","天气","音乐","专注","邮箱","健康","待办","置物架","日程","剪贴板"] {
         assert!(body.iter().any(|text|text==label),"岛体页缺少「{label}」");
     }
+    assert!(!body.iter().any(|text|text.starts_with("组件开关")),"分组标题下不应再套一层折叠区");
+    assert!(!body.iter().any(|text|text=="基础组件"),"岛上显示已改为两个分组");
     assert!(!body.iter().any(|text|text=="岛体的外观、常驻内容与功能页排布。行为相关设置在「行为」。"),"页标题下不放说明文字");
     for label in ["展开与收起","自动避让","极简刘海","全屏时隐藏"] {
         assert!(!body.iter().any(|text|text==label),"岛体页不应显示行为项「{label}」");
     }
     let behavior=settings_text(crate::extras::SETTINGS_TAB_BEHAVIOR);
-    for label in ["展开与收起","避让","动画速度","展开后停留","全屏时隐藏","顶栏适配","自动避让","常用浏览器"] {
+    for label in ["展开与收起","通知","避让","动画速度","展开后停留","提醒总开关","提醒方式","横幅停留","全屏时隐藏","顶栏适配","自动避让","常用浏览器"] {
         assert!(behavior.iter().any(|text|text==label),"行为页缺少「{label}」");
     }
     assert!(!behavior.iter().any(|text|text=="OLED 像素偏移"),"OLED 像素偏移已并入通用-高级");
@@ -138,13 +151,74 @@ fn body_page_has_appearance_residents_and_feature_pages(){
     assert!(general.iter().any(|text|text=="OLED 像素偏移"),"OLED 像素偏移应在通用-高级");
 }
 
+/// 「岛上显示」分成常驻显示与事件显示；默认设置下音乐在常驻组，天气/额度/专注在事件组。
+#[test]
+fn resident_groups_show_persistent_and_event_components(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let frame=settings_frame_with(crate::extras::SETTINGS_TAB_BODY,|_|{});
+    let body:Vec<&str>=frame.shapes.iter().filter_map(|s|match &s.shape{
+        egui::Shape::Text(t) if t.pos.x>200.0=>Some(t.galley.text()),
+        _=>None,
+    }).collect();
+    let pos=|label:&str|body.iter().position(|text|*text==label).unwrap_or_else(||panic!("缺少「{label}」"));
+    assert!(pos("常驻显示")<pos("事件显示"));
+    for label in ["AI 会话状态灯","岛仔吉祥物","电量","时间","勿扰模式","音乐","邮箱","健康","待办","置物架","日程"] {
+        assert!(pos("常驻显示")<pos(label) && pos(label)<pos("事件显示"),"「{label}」应在常驻显示组");
+    }
+    for label in ["天气","AI 额度","专注"] {
+        assert!(pos("事件显示")<pos(label),"「{label}」应在事件显示组");
+    }
+}
+
+/// 分组标题比子项更醒目；子项因拖动手柄向右缩进。
+#[test]
+fn resident_group_rows_are_nested_under_the_group_label(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let frame=settings_frame_with(crate::extras::SETTINGS_TAB_BODY,|_|{});
+    let text=|label:&str|frame.shapes.iter().find_map(|s|match &s.shape{
+        egui::Shape::Text(t) if t.galley.text()==label && t.pos.x>200.0=>Some(t),
+        _=>None,
+    }).unwrap_or_else(||panic!("缺少「{label}」"));
+    let size=|label:&str|text(label).galley.job.sections.first().map(|s|s.format.font_id.size).unwrap_or(0.0);
+    assert!(size("时间")<size("常驻显示"),"分组子项标题应更小：{} vs {}",size("时间"),size("常驻显示"));
+    assert!(text("时间").visual_bounding_rect().left()>text("常驻显示").visual_bounding_rect().left()+8.0,"分组子项应缩进");
+}
+
+/// 两个分组默认展开；点一个分组标题只收起该组。
+#[test]
+fn resident_groups_default_expanded_and_collapse_independently(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();
+    h.app.settings_tab=crate::extras::SETTINGS_TAB_BODY;h.app.open_settings();h.ctx.set_embed_viewports(false);
+    let mut frame=settings_frame_mut(&mut h,vec![]);
+    for _ in 0..2 {frame=settings_frame_mut(&mut h,vec![]);}
+    let has=|frame:&egui::FullOutput,label:&str|frame.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==label && t.pos.x>200.0));
+    assert!(has(&frame,"常驻显示") && has(&frame,"事件显示"));
+    assert!(has(&frame,"时间") && has(&frame,"天气"),"两个分组默认展开");
+    let point=frame.shapes.iter().find_map(|s|match &s.shape{
+        egui::Shape::Text(t) if t.galley.text()=="常驻显示" && t.pos.x>200.0=>Some(t.visual_bounding_rect().left_center()),
+        _=>None,
+    }).unwrap();
+    let button=|pressed|egui::Event::PointerButton{pos:point,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()};
+    settings_frame_mut(&mut h,vec![egui::Event::PointerMoved(point)]);
+    settings_frame_mut(&mut h,vec![button(true)]);
+    settings_frame_mut(&mut h,vec![button(false)]);
+    frame=settings_frame_mut(&mut h,vec![]);
+    assert!(!has(&frame,"时间"),"点「常驻显示」后收起该组");
+    assert!(has(&frame,"天气"),"「事件显示」不受影响");
+    assert!(has(&frame,"常驻显示"),"收起后标题仍在");
+}
+
 /// 「提醒」页只做跨来源提醒策略；事件开关与提示音在「AI 会话」页。
 #[test]
 fn reminder_page_keeps_policy_and_ai_page_owns_event_hooks(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let reminders=settings_text(crate::extras::SETTINGS_TAB_REMINDERS);
-    for label in ["提醒方式","系统状态","即时通讯","AI 会话消息","Windows 通知","横幅停留","自动展开","重复提醒","会话数","最近消息行数","会话记录保留"] {
+    for label in ["系统状态","即时通讯","AI 会话消息","Windows 通知","自动展开","会话数","最近消息行数","会话记录保留"] {
         assert!(reminders.iter().any(|text|text==label),"提醒页缺少「{label}」");
+    }
+    for label in ["提醒方式","横幅停留","重复提醒","提醒总开关"] {
+        assert!(!reminders.iter().any(|text|text==label),"提醒页不应再显示「{label}」");
     }
     assert!(!reminders.iter().any(|text|text=="消息或事件触发时，岛怎么提醒。"),"页标题下不放说明文字");
     for label in ["等待用户选择","提示音","中断","闲置"] {
@@ -157,7 +231,7 @@ fn reminder_page_keeps_policy_and_ai_page_owns_event_hooks(){
     for label in ["Hooks","提醒事件","提示音","等待用户选择","完成","中断","失败","闲置","开始","提交","审批","错误"] {
         assert!(agent.iter().any(|text|text==label),"AI 会话页缺少「{label}」");
     }
-    for label in ["横幅停留","提醒方式","显示","会话数","最近消息行数"] {
+    for label in ["横幅停留","提醒方式","重复提醒","显示","会话数","最近消息行数"] {
         assert!(!agent.iter().any(|text|text==label),"AI 会话页不应显示「{label}」");
     }
 }
@@ -187,11 +261,11 @@ fn feature_pages_split_into_separate_settings_pages(){
 
 #[test]
 fn island_body_tab_is_not_a_feature_page(){
-    let pages:Vec<_>=(0..=crate::extras::SETTINGS_TAB_CLIPBOARD).filter_map(crate::extras::settings_tab_module).collect();
+    let pages:Vec<_>=(0..=crate::extras::SETTINGS_TAB_WINDOWS).filter_map(crate::extras::settings_tab_module).collect();
     assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_BODY),None);
     assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_BEHAVIOR),None);
-    assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_CLIPBOARD),None);
-    assert_eq!(pages.len(),crate::app::PAGE_NAMES.len(),"功能页到设置页的映射数量不变");
+    assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_CLIPBOARD),Some(crate::app::CLIPBOARD_PAGE));
+    assert_eq!(pages.len(),crate::app::PAGE_NAMES.len(),"每个功能页各有一个设置分页");
 }
 
 #[test]
@@ -222,6 +296,23 @@ fn motion_and_hold_settings_default_clamp_and_persist(){
 }
 
 #[test]
+fn resident_music_and_focus_switches_default_on_and_persist(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let _h=H::new();
+    use crate::model::Settings;
+    let defaults=Settings::default();
+    assert!(defaults.show_music && defaults.show_focus);
+    let path=crate::model::config_dir().join("settings.txt");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path,"show_music=0\nshow_focus=0\n").unwrap();
+    let loaded=Settings::load();
+    assert!(!loaded.show_music && !loaded.show_focus);
+    let mut saved=Settings::default();
+    saved.show_music=false;saved.show_focus=false;saved.save();
+    let text=std::fs::read_to_string(&path).unwrap();
+    for line in ["show_music=0","show_focus=0"] {assert!(text.contains(line),"保存的设置缺少 {line}");}
+}
+
+#[test]
 fn hold_seconds_apply_to_banners_and_pages_only(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.t=10.0;h.app.settings.notice_hold_secs=2.5;
@@ -231,8 +322,8 @@ fn hold_seconds_apply_to_banners_and_pages_only(){
     h.app.alerts.clear();h.app.settings.read_notifications=true;
     h.app.receive_notification("QQ".into(),"QQ".into(),"新消息".into());
     assert_eq!(h.app.alerts.back().unwrap().duration,2.5);
-    h.app.agent_alert("AI","完成",6.0);
-    assert_eq!(h.app.alerts.back().unwrap().duration,6.0,"AI 会话提醒使用事件自己的时长");
+    h.app.agent_alert("AI","完成",crate::agent_ui::AgentAlert{key:"s1".into(),kind:crate::agent::store::NoticeKind::Done},h.app.t);
+    assert_eq!(h.app.alerts.back().unwrap().duration,2.5,"AI 横幅使用横幅停留时长");
     h.app.settings.page_hold_secs=7.0;
     h.app.show_page(0);
     assert_eq!(h.app.forced_open_until_for_tests(),17.0);

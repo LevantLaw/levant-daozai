@@ -827,6 +827,57 @@ pub fn clipboard_glyph(c: &Card, cx: f32, cy: f32, size: f32, color: Color32, sh
     }
 }
 
+/// 信封：邮箱未读。
+pub fn envelope(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
+    let w = size;
+    let h = size * 0.72;
+    c.stroke(cx - w / 2.0, cy - h / 2.0, w, h, size * 0.12, 1.3, color);
+    c.path(&[(cx - w / 2.0, cy - h / 2.0 + 1.0), (cx, cy + 0.5), (cx + w / 2.0, cy - h / 2.0 + 1.0)], 1.3, color);
+}
+
+/// 日历：日程提醒。
+pub fn calendar(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
+    let w = size;
+    let h = size * 0.86;
+    let top = cy - h / 2.0;
+    c.stroke(cx - w / 2.0, top, w, h, size * 0.12, 1.3, color);
+    c.seg((cx - w / 2.0, top + h * 0.28), (cx + w / 2.0, top + h * 0.28), 1.2, color);
+    for x in [-0.26, 0.26] {c.seg((cx + x * w, top - 1.0), (cx + x * w, top + 2.0), 1.6, color);}
+    for (x, y) in [(-0.24, 0.55), (0.0, 0.55), (0.24, 0.55), (-0.24, 0.78), (0.0, 0.78)] {
+        c.circle(cx + x * w, top + y * h, 0.9, color);
+    }
+}
+
+/// 弯月：外圆与偏右内圆之间的三角带，保留透明月牙缺口。
+pub fn moon(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
+    let s = size;
+    let (outer, inner, offset) = (0.62 * s, 0.55 * s, 0.30 * s);
+    // 月牙从外圆向右伸出一段，按包围盒把视觉中心对到 (cx, cy)。
+    let cx = cx - (offset + inner - outer) / 2.0;
+    let x = (offset * offset + outer * outer - inner * inner) / (2.0 * offset);
+    let y = (outer * outer - x * x).max(0.0).sqrt();
+    let (outer_top, inner_top) = (y.atan2(x), y.atan2(x - offset));
+    let mut mesh = egui::Mesh::default();
+    let steps = 24;
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let a = outer_top + (TAU - 2.0 * outer_top) * t;
+        let b = inner_top + (TAU - 2.0 * inner_top) * t;
+        mesh.colored_vertex(c.pos(cx + a.cos() * outer, cy + a.sin() * outer), color);
+        mesh.colored_vertex(c.pos(cx + offset + b.cos() * inner, cy + b.sin() * inner), color);
+        if i > 0 { let n = i * 2; mesh.add_triangle(n - 2, n, n + 1); mesh.add_triangle(n - 2, n + 1, n - 1); }
+    }
+    // 网格本身没有抗锯齿，小尺寸时边缘发毛；沿内外两条弧各描一道约一像素的同色细线补出平滑边缘。
+    // 两条弧分开画、不闭合：月牙尖角极锐，闭合折线在尖角处的斜接会拉出长尖刺。
+    let outer_arc: Vec<_> = mesh.vertices.iter().step_by(2).map(|v| v.pos).collect();
+    let inner_arc: Vec<_> = mesh.vertices.iter().skip(1).step_by(2).map(|v| v.pos).collect();
+    c.painter.add(egui::Shape::mesh(mesh));
+    let stroke = egui::Stroke::new(1.0 / c.ui.ctx().pixels_per_point(), color);
+    c.painter.add(egui::Shape::line(outer_arc, stroke));
+    c.painter.add(egui::Shape::line(inner_arc, stroke));
+}
+
+
 const CHASE_ROWS: [f32; 23] = [
     -16.0, -11.0, -8.2, -6.2, -4.6, -3.4, -2.4, -1.5, -1.0, -0.65, -0.32, 0.0, 0.32, 0.65, 1.0, 1.5, 2.4, 3.4, 4.6, 6.2,
     8.2, 11.0, 16.0,

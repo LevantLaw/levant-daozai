@@ -35,15 +35,22 @@ pub struct NotifyConfig {
     #[serde(default = "yes")] pub failed: bool,
     #[serde(default = "yes")] pub stale: bool,
     #[serde(default = "yes")] pub auto_expand: bool,
-    #[serde(default = "repeat_never")] pub repeat: String,
 }
-fn repeat_never() -> String { "never".into() }
 impl NotifyConfig {
     /// 旧配置没有单独的「中断」开关，沿用「完成」的旧值。
     pub fn interrupted(&self) -> bool { self.interrupted.unwrap_or(self.done) }
+    pub fn enabled(&self, kind: NoticeKind) -> bool {
+        match kind {
+            NoticeKind::Approval | NoticeKind::Question => self.waiting,
+            NoticeKind::Done => self.done,
+            NoticeKind::Interrupted => self.interrupted(),
+            NoticeKind::Failed => self.failed,
+            NoticeKind::Stale => self.stale,
+        }
+    }
 }
 impl Default for NotifyConfig {
-    fn default() -> Self { Self { waiting: true, done: true, interrupted: None, failed: true, stale: true, auto_expand: true, repeat: repeat_never() } }
+    fn default() -> Self { Self { waiting: true, done: true, interrupted: None, failed: true, stale: true, auto_expand: true } }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -129,8 +136,6 @@ pub enum PendingKind { Approval(super::ApprovalRequest), Question(Vec<Question>)
 pub struct Pending {
     pub kind: PendingKind,
     pub at: f64,
-    /// 等待提醒是否已经补发过一次。
-    pub reminded: bool,
     pub reply: Option<mpsc::Sender<String>>,
     pub raw_input: serde_json::Value,
 }
@@ -161,6 +166,8 @@ pub struct Session {
     pub pending: Option<Pending>,
     /// 最近一次 Hook 进程的祖先链（pid, 进程名），跳转时用来找窗口。
     pub hosts: Vec<(u32, String)>,
+    /// 本轮任务里出现过的子代理；主会话结束或开始新一轮时清空。
+    pub subagents: HashSet<String>,
     pub stale_at: Option<f64>,
     pub stale_notified: bool,
 }
@@ -175,6 +182,7 @@ impl Session {
             state: SessionState::Running, since: now, updated_at: now,
             tool: None, detail: None, last_message: None, prompt: None, reply: None, pending: None,
             hosts: Vec::new(),
+            subagents: HashSet::new(),
             stale_at: None, stale_notified: false,
         }
     }
@@ -243,8 +251,17 @@ impl Store {
         let id = super::session_id(&payload);
         let key = format!("{}:{}", agent.key(), id);
         let mut updates = Vec::new();
+        // 子代理的事件沿用主会话的 session_id，用 agent_id 区分。
+        let subagent = payload.get("agent_id").and_then(serde_json::Value::as_str)
+            .filter(|id| !id.is_empty()).map(str::to_string);
         if matches!(kind, EventKind::SessionEnd) {
-            self.sessions.retain(|session| session.key != key);
+            if let Some(id) = &subagent {
+                if let Some(session) = self.sessions.iter_mut().find(|session| session.key == key) {
+                    session.subagents.remove(id);
+                }
+            } else {
+                self.sessions.retain(|session| session.key != key);
+            }
             return updates;
         }
         if !approval_enabled && matches!(kind, EventKind::Permission(_) | EventKind::Question(_)) {
@@ -261,6 +278,7 @@ impl Store {
         };
         let session = &mut self.sessions[index];
         if !hosts.is_empty() { session.hosts = hosts; }
+        if let Some(id) = &subagent { session.subagents.insert(id.clone()); }
         session.updated_at = now;
         session.stale_at = None;
         session.stale_notified = false;
@@ -274,16 +292,20 @@ impl Store {
                 refresh_title(session);
                 if source == "compact" {
                     // 压缩不是新会话：非运行中不恢复状态、不发声。
-                    if session.state == SessionState::Running {
+                    if subagent.is_none() && session.state == SessionState::Running {
                         updates.push(Update { notice: None, sound: Some(SoundKind::Start) });
                     }
-                } else {
-                    session.state = SessionState::Running;
+                } else if subagent.is_none() {
+                    // 新会话还没有收到第一条提问，先显示为闲置，避免空会话一直亮运行灯。
+                    session.state = SessionState::Idle;
                     session.pending = None;
+                    session.subagents.clear();
                     updates.push(Update { notice: None, sound: Some(SoundKind::Start) });
                 }
             }
             EventKind::Prompt { text } => {
+                if subagent.is_some() { return updates; }
+                session.subagents.clear();
                 if !text.is_empty() {
                     // 没有自动标题时，用会话的第一条提问作标题，后续追问不再改。
                     if session.prompt.is_none() && !session.title_from_meta { session.title = text.chars().take(28).collect(); }
@@ -320,7 +342,6 @@ impl Store {
                     session.pending = Some(Pending {
                         kind: PendingKind::Approval(request),
                         at: now,
-                        reminded: false,
                         reply,
                         raw_input: payload.get("tool_input").cloned().unwrap_or(serde_json::Value::Null),
                     });
@@ -336,7 +357,6 @@ impl Store {
                 session.pending = Some(Pending {
                     kind: PendingKind::Question(questions),
                     at: now,
-                    reminded: false,
                     reply,
                     raw_input: payload.get("tool_input").cloned().unwrap_or(serde_json::Value::Null),
                 });
@@ -352,6 +372,11 @@ impl Store {
                 }
             }
             EventKind::Stop { message } => {
+                if let Some(id) = &subagent {
+                    session.subagents.remove(id);
+                    return updates;
+                }
+                session.subagents.clear();
                 let was = session.state;
                 session.pending = None;
                 session.tool = None;
@@ -367,6 +392,11 @@ impl Store {
                 }
             }
             EventKind::Failure(message) => {
+                if let Some(id) = &subagent {
+                    session.subagents.remove(id);
+                    return updates;
+                }
+                session.subagents.clear();
                 let was = session.state;
                 session.pending = None;
                 session.tool = None;
@@ -380,6 +410,11 @@ impl Store {
                 }
             }
             EventKind::Interrupt => {
+                if let Some(id) = &subagent {
+                    session.subagents.remove(id);
+                    return updates;
+                }
+                session.subagents.clear();
                 let was = session.state;
                 session.pending = None;
                 session.tool = None;
@@ -397,24 +432,9 @@ impl Store {
         updates
     }
 
-    /// `repeat_secs` > 0 时，等待超过该时长的会话补发一次提醒；每个待处理请求只补一次。
-    pub fn tick(&mut self, now: f64, retention_minutes: u32, repeat_secs: f64) -> Vec<Update> {
+    pub fn tick(&mut self, now: f64, retention_minutes: u32) -> Vec<Update> {
         let mut updates = Vec::new();
         for session in &mut self.sessions {
-            if let Some(pending) = &mut session.pending {
-                if repeat_secs > 0.0 && !pending.reminded && now - pending.at >= repeat_secs {
-                    pending.reminded = true;
-                    let kind = match pending.kind { PendingKind::Approval(_) => NoticeKind::Approval, PendingKind::Question(_) => NoticeKind::Question };
-                    let body = match &pending.kind {
-                        PendingKind::Approval(request) => format!("仍在等待确认 {}", request.tool),
-                        PendingKind::Question(_) => "仍在等你回答".into(),
-                    };
-                    updates.push(Update {
-                        notice: Some(Notice { kind, agent: session.agent, key: session.key.clone(), title: format!("{} · {}", session.agent.short(), session.title), body }),
-                        sound: None,
-                    });
-                }
-            }
             if session.state == SessionState::Running && session.pending.is_none() && now - session.updated_at > 600.0 {
                 match session.stale_at {
                     None => session.stale_at = Some(now),
@@ -519,6 +539,8 @@ pub struct AgentState {
     /// 提问自由输入框的草稿与焦点状态。
     pub free: String,
     pub free_focus: bool,
+    /// 会话列表的内部滚动位置。
+    pub scroll: f32,
     pub notice_seq: u64,
     last_tick: f64,
 }
@@ -537,6 +559,7 @@ impl Default for AgentState {
             answers: Vec::new(),
             free: String::new(),
             free_focus: false,
+            scroll: 0.0,
             notice_seq: 0,
             last_tick: 0.0,
         }
@@ -571,6 +594,7 @@ impl AgentState {
         self.answers.clear();
         self.free.clear();
         self.free_focus = false;
+        self.scroll = 0.0;
         self.notice_seq = 0;
         self.last_tick = 0.0;
     }
@@ -617,8 +641,7 @@ impl AgentState {
         }
         if now - self.last_tick >= 1.0 {
             self.last_tick = now;
-            let repeat = match self.config.notify.repeat.as_str() { "30s" => 30.0, "1m" => 60.0, "5m" => 300.0, _ => 0.0 };
-            updates.extend(self.store.tick(now, self.config.retention_minutes, repeat));
+            updates.extend(self.store.tick(now, self.config.retention_minutes));
         }
         updates
     }
@@ -695,7 +718,7 @@ mod tests {
         assert!(updates.iter().any(|update| update.notice.as_ref().is_some_and(|notice| notice.kind == NoticeKind::Done)));
         assert_eq!(store.visible().len(), 1, "完成后卡片还在，用于自动展开时展示回复");
         assert!(store.active().is_empty());
-        store.tick(2.0 + 31.0 * 60.0, 30, 0.0);
+        store.tick(2.0 + 31.0 * 60.0, 30);
         assert!(store.sessions.is_empty());
     }
 
@@ -704,7 +727,7 @@ mod tests {
         let mut store = Store::default();
         store.apply(event(AgentId::Claude, "PermissionRequest", serde_json::json!({"session_id":"s2","cwd":"C:\\p","tool_name":"Bash","tool_input":{"command":"dir"}})), 0.0, true);
         assert_eq!(store.visible().len(), 1);
-        store.tick(10000.0, 1, 0.0);
+        store.tick(10000.0, 1);
         assert_eq!(store.visible().len(), 1);
     }
 
@@ -721,13 +744,10 @@ mod tests {
     }
 
     #[test]
-    fn waiting_reminder_fires_once_after_the_configured_delay() {
+    fn waiting_requests_do_not_repeat() {
         let mut store = Store::default();
         store.apply(event(AgentId::Claude, "PermissionRequest", serde_json::json!({"session_id":"s4","cwd":"C:\\p","tool_name":"Bash"})), 0.0, true);
-        assert!(store.tick(29.0, 30, 30.0).is_empty());
-        let updates = store.tick(30.0, 30, 30.0);
-        assert!(updates.iter().any(|update| update.notice.as_ref().is_some_and(|notice| notice.kind == NoticeKind::Approval)));
-        assert!(store.tick(300.0, 30, 30.0).is_empty(), "同一请求只补发一次");
+        assert!(store.tick(300.0, 30).iter().all(|update| update.notice.is_none()));
     }
 
     #[test]

@@ -207,11 +207,25 @@ pub fn shadow(painter: &egui::Painter, rect: Rect, flare: f32, flare_h: f32, rad
     shadow_mapped(painter, rect, EdgeMap::TOP, flare, flare_h, radius, strength);
 }
 
+/// 形变期间的两层简化投影，减少每帧轮廓填充次数。
+pub fn shadow_fast(painter: &egui::Painter, rect: Rect, flare: f32, flare_h: f32, radius: f32, strength: f32) {
+    shadow_layers(painter, rect, EdgeMap::TOP, flare, flare_h, radius, strength, &[(7.0, 0.05), (2.5, 0.08)]);
+}
+
+pub fn shadow_docked_fast(painter: &egui::Painter, rect: Rect, dock: Dock, flare: f32, flare_h: f32, radius: f32, strength: f32) {
+    let (map, frame) = EdgeMap::of(rect, dock);
+    shadow_layers(painter, frame, map, flare, flare_h, radius, strength, &[(7.0, 0.05), (2.5, 0.08)]);
+}
+
 fn shadow_mapped(painter: &egui::Painter, rect: Rect, map: EdgeMap, flare: f32, flare_h: f32, radius: f32, strength: f32) {
+    shadow_layers(painter, rect, map, flare, flare_h, radius, strength, &[(10.0f32, 0.035f32), (6.5, 0.05), (3.5, 0.07), (1.5, 0.09)]);
+}
+
+fn shadow_layers(painter: &egui::Painter, rect: Rect, map: EdgeMap, flare: f32, flare_h: f32, radius: f32, strength: f32, layers: &[(f32, f32)]) {
     if strength <= 0.01 {
         return;
     }
-    for (grow, a) in [(10.0f32, 0.035f32), (6.5, 0.05), (3.5, 0.07), (1.5, 0.09)] {
+    for &(grow, a) in layers {
         let r = Rect::from_min_max(
             Pos2::new(rect.left() - grow * 0.6, rect.top()),
             Pos2::new(rect.right() + grow * 0.6, rect.bottom() + grow),

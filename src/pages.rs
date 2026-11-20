@@ -624,47 +624,11 @@ impl App {
     }
 
     // ================= 置物架 =================
-    /// 标题旁的「文件 | 剪贴板」分栏，返回分栏右边缘。
-    /// 页面标题处的「置物架 | 剪贴板」分栏，返回分栏右边缘。
-    fn shelf_tabs(&mut self, c: &Card, x: f32) -> f32 {
-        let labels = ["置物架", "剪贴板"];
-        let font = 12.0;
-        let widths: Vec<f32> = labels.iter().map(|l| c.text_w(l, font, W::Bold) + 14.0).collect();
-        let total = widths.iter().sum::<f32>() + 4.0;
-        c.fill(x, 9.5, total, 21.0, 10.5, theme::BTN);
-        let mut left = x + 2.0;
-        for (i, (label, w)) in labels.iter().zip(&widths).enumerate() {
-            let selected = self.shelf_tab == i;
-            let r = c.hit(left, 9.5, *w, 21.0, ("shelf-tab", i));
-            let (h, _) = c.hover_t(&r);
-            if selected {
-                c.fill(left, 11.5, *w, 17.0, 8.5, Color32::from_gray(88));
-            } else if h > 0.01 {
-                c.fill(left, 11.5, *w, 17.0, 8.5, Color32::from_white_alpha((18.0 * h) as u8));
-            }
-            c.text(left + w / 2.0, 24.3, label, font, W::Bold, if selected { theme::WHITE } else { theme::GRAY }, H::Center);
-            if r.clicked() && !selected {
-                self.shelf_tab = i;
-                self.confirm_clear = None;
-                self.clip_confirm_clear = None;
-            }
-            left += w;
-        }
-        x + total
-    }
-
-    pub(crate) fn page_shelf(&mut self, c: &Card, env: &Env, cmds: &mut Vec<Cmd>) {
+    pub(crate) fn page_shelf(&mut self, c: &Card, _env: &Env, cmds: &mut Vec<Cmd>) {
         let n = self.shelf.items.len();
         let drag = self.drag_a;
-        // 拖文件进来时回到「文件」分栏。
-        if drag > 0.002 { self.shelf_tab = 0; }
-        self.shelf_tabs(c, 13.0);
-        if self.shelf_tab == 1 {
-            self.page_clipboard(c, env, cmds);
-            return;
-        }
-        c.text(344.0,23.0,"添加",size::SMALL,W::Regular,theme::GRAY,H::Right);
-        if c.hit(311.0,8.0,38.0,22.0,"shelf-add").on_hover_text("从电脑选择文件").clicked(){cmds.push(Cmd::AddFiles);}
+        c.text(320.0,23.0,"添加",size::SMALL,W::Regular,theme::GRAY,H::Right);
+        if c.hit(287.0,8.0,38.0,22.0,"shelf-add").on_hover_text("从电脑选择文件").clicked(){cmds.push(Cmd::AddFiles);}
         if n>5 {c.text(209.5,121.0,&format!("{}–{} / {n} · 滚轮查看",self.shelf_first+1,(self.shelf_first+5).min(n)),10.5,W::Regular,theme::DIM,H::Center);}
 
         if n > 0 {
@@ -778,8 +742,8 @@ impl App {
         }
     }
 
-    // ================= 剪贴板（置物架第二个分栏） =================
-    fn page_clipboard(&mut self, c: &Card, _env: &Env, _cmds: &mut Vec<Cmd>) {
+    // ================= 剪贴板 =================
+    pub(crate) fn page_clipboard(&mut self, c: &Card, _env: &Env, _cmds: &mut Vec<Cmd>) {
         if !self.settings.clipboard_history {
             c.dashed(42.0, 32.0, 335.0, 91.0, 12.0, 1.2, Color32::from_gray(70), 0.0);
             c.text(209.5, 66.0, "剪贴板记录已关闭", 12.0, W::Semibold, theme::WHITE, H::Center);

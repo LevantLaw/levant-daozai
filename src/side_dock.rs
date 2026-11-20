@@ -22,13 +22,15 @@ pub const SIDE_HALF_EXTENT: f32 = 150.0;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SideItem {
     Clock, Weather, Battery, Music, Focus, Bell, Agent,
+    /// 页面徽标：邮箱 / 健康 / 待办 / 置物架 / 日程 / 勿扰。
+    Badge(usize),
     /// AI 额度：账号下标（None 为「+N」）与高度。
     Quota(usize, f32),
 }
 
 impl SideItem {
     fn height(self, clock_seconds: bool) -> f32 {
-        match self { Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Battery => 20.0, Self::Music => 18.0, Self::Focus => 22.0, Self::Bell => 22.0, Self::Agent => 30.0, Self::Quota(_, h) => h }
+        match self { Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Battery => 20.0, Self::Music => 18.0, Self::Focus => 22.0, Self::Bell => 22.0, Self::Agent => 30.0, Self::Badge(_) => 18.0, Self::Quota(_, h) => h }
     }
 }
 
@@ -42,11 +44,12 @@ impl App {
         if self.settings.show_clock {items.push(SideItem::Clock);}
         if self.weather_pill().is_some() {items.push(SideItem::Weather);}
         if self.settings.show_battery && self.resident_power.0.is_some() { items.push(SideItem::Battery); }
-        if self.media.is_music() { items.push(SideItem::Music); }
-        if self.pomo.running { items.push(SideItem::Focus); }
+        if self.settings.show_music && self.media.is_music() { items.push(SideItem::Music); }
+        if self.settings.show_focus && self.pomo.running { items.push(SideItem::Focus); }
         items.extend(self.quota_side_items().into_iter().map(|(index, h)| SideItem::Quota(index, h)));
         if self.agent_bar_visible() { items.push(SideItem::Agent); }
-        if self.t < self.notification_bell_until { items.push(SideItem::Bell); }
+        items.extend(self.page_badges_all().into_iter().map(|badge| SideItem::Badge(badge.slot)));
+        if self.t < self.notification_bell_until || self.windows_unread { items.push(SideItem::Bell); }
         items
     }
 
@@ -144,9 +147,23 @@ impl App {
                 }
                 SideItem::Quota(index, h) => self.draw_quota_side(c, cx, mid, h, index),
                 SideItem::Agent => self.draw_agent_light(c, cx, mid),
+                SideItem::Badge(slot) => {
+                    self.paint_badge(c, slot, cx, theme::WHITE);
+                    let badge=self.page_badges_all().into_iter().find(|badge|badge.slot==slot);
+                    let label=self.badge_label(slot);
+                    if c.hit(cx-16.0,y,32.0,h,("side-badge",slot)).on_hover_text(label).clicked() {
+                        match badge.and_then(|badge|badge.page) {
+                            Some(page)=>self.show_page(page),
+                            None=>self.dnd.toggle(self.t),
+                        }
+                    }
+                }
                 SideItem::Bell => {
                     paint::bell(&c.scaled(cx, mid, 1.1), cx, mid, theme::WHITE, paint::bell_swing(self.t - self.notification_bell_at));
                     c.circle(cx + 4.0, mid - 4.5, 2.0, Color32::from_rgb(255, 72, 72));
+                    if c.hit(cx - 16.0, y, 32.0, h, "side-bell").clicked() {
+                        if self.windows_unread { self.show_page(crate::app::WINDOWS_PAGE); } else { self.show_page(5); }
+                    }
                 }
             }
             y += h;

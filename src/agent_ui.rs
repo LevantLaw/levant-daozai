@@ -1,7 +1,7 @@
 //! AI 会话页面、详情子页与设置。
 
 use crate::agent::hooks::Health;
-use crate::agent::store::{Decision, NoticeKind, PendingKind, SessionState};
+use crate::agent::store::{Decision, Notice, NoticeKind, NotifyConfig, PendingKind, SessionState, Store};
 use crate::agent::{AgentId, Session};
 use crate::app::{App, AI_PAGE};
 use crate::extras::{setting_row, settings_card, settings_control_row_right, settings_hint, settings_label, settings_segmented};
@@ -9,51 +9,68 @@ use crate::paint::{Card, H};
 use crate::theme::{self, W};
 use eframe::egui::{self, Color32};
 
+/// 横幅对应的 AI 事件身份：会话键 + 事件类型，用于去重和失效判断。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AgentAlert {
+    pub key: String,
+    pub kind: NoticeKind,
+}
+
+/// 会话卡片：3–5 行共用内容区，卡片越高信息行越多。
+pub(crate) const AGENT_CARD_GAP: f32 = 6.0;
+pub(crate) const AGENT_CARD_AREA: f32 = 190.0;
+/// 列表首张卡片与页头的间距，以及列表底部给翻页圆点留出的空间。
+pub(crate) const AGENT_LIST_TOP: f32 = 60.0;
+const AGENT_LIST_BOTTOM: f32 = 18.0;
+/// 详情页自由输入框的背景区域。
+const FREE_X: f32 = 15.0;
+const FREE_Y: f32 = 166.0;
+const FREE_W: f32 = 386.0;
+const FREE_H: f32 = 22.0;
+
+pub(crate) fn agent_card_height(rows: usize) -> f32 {
+    let rows = rows.clamp(1, 5) as f32;
+    ((AGENT_CARD_AREA - (rows - 1.0) * AGENT_CARD_GAP) / rows).min(44.0)
+}
+
+/// 列表实际显示的卡片数：受会话数和「会话数」设置共同限制。
+pub(crate) fn agent_visible_rows(count: usize, rows: usize) -> usize {
+    if count == 0 { 0 } else { count.min(rows.clamp(3, 5)) }
+}
+
+/// 卡片区域高度，不含页头和底部留白。
+pub(crate) fn agent_card_area(count: usize, rows: usize) -> f32 {
+    let visible = agent_visible_rows(count, rows);
+    if visible == 0 { return 0.0; }
+    visible as f32 * agent_card_height(visible) + visible.saturating_sub(1) as f32 * AGENT_CARD_GAP
+}
+
+/// 列表最多能滚动的距离；卡片数不超过显示行数时为 0。
+pub(crate) fn agent_scroll_max(count: usize, rows: usize) -> f32 {
+    let visible = agent_visible_rows(count, rows);
+    if visible == 0 { return 0.0; }
+    let card = agent_card_height(visible);
+    let content = count as f32 * card + count.saturating_sub(1) as f32 * AGENT_CARD_GAP;
+    (content - agent_card_area(count, rows)).max(0.0)
+}
+
+pub(crate) fn agent_list_height(count: usize, rows: usize) -> f32 {
+    if count == 0 { return 150.0; }
+    AGENT_LIST_TOP + agent_card_area(count, rows) + AGENT_LIST_BOTTOM
+}
+
 impl App {
     pub(crate) fn agent_tick(&mut self, ctx: &egui::Context) {
         if !self.module_on(AI_PAGE) || !self.agent.config.enabled { return; }
         let updates = self.agent.poll(self.t);
-        let mut expand = false;
+        let mut notices = Vec::new();
         for update in updates {
             if let Some(sound) = update.sound {
                 crate::agent_sound::play(sound, &self.agent.config.sound);
             }
-            let Some(notice) = update.notice else { continue; };
-            let waiting = matches!(notice.kind, NoticeKind::Approval | NoticeKind::Question);
-            let finished = matches!(notice.kind, NoticeKind::Done | NoticeKind::Failed | NoticeKind::Interrupted);
-            let enabled = match notice.kind {
-                NoticeKind::Approval | NoticeKind::Question => self.agent.config.notify.waiting,
-                NoticeKind::Done => self.agent.config.notify.done,
-                NoticeKind::Interrupted => self.agent.config.notify.interrupted(),
-                NoticeKind::Failed => self.agent.config.notify.failed,
-                NoticeKind::Stale => self.agent.config.notify.stale,
-            };
-            if !enabled { continue; }
-            let title = match notice.kind {
-                NoticeKind::Approval => "需要确认",
-                NoticeKind::Question => "等你回答",
-                NoticeKind::Done => "会话完成",
-                NoticeKind::Failed => "会话失败",
-                NoticeKind::Stale => "可能已中断",
-                NoticeKind::Interrupted => "会话中断",
-            };
-            if finished && self.agent.config.notify.auto_expand && !self.open && self.module_on(AI_PAGE) {
-                // 收起时直接展开列表，让刚结束的卡片和消息预览露出来；之后按岛体全局的自动收起行为折叠。
-                self.agent.detail = false;
-                self.agent.selected = None;
-                self.show_page(AI_PAGE);
-            } else {
-                self.agent_alert(title, format!("{} · {}", notice.title, notice.body), if waiting { 6.0 } else { 3.0 });
-            }
-            if waiting && self.agent.config.notify.auto_expand {
-                self.agent.selected = Some(notice.key);
-                self.agent.detail = true;
-                self.agent.question_index = 0;
-                self.agent.answers.clear();
-                expand = true;
-            }
+            if let Some(notice) = update.notice { notices.push(notice); }
         }
-        if expand && self.module_on(AI_PAGE) { self.show_page(AI_PAGE); }
+        if self.settings.notifications { self.agent_notices(notices); }
         let waiting = self.agent.store.waiting_count();
         if self.agent.detail || waiting > 0 || (self.open && self.page == AI_PAGE && !self.agent.store.visible().is_empty()) {
             // 等待状态点有呼吸效果；其余计时每秒刷新。
@@ -62,17 +79,74 @@ impl App {
         }
     }
 
-    /// 常驻状态灯是否显示：模块关闭、开关关闭或没有进行中的会话时隐藏。
+    /// 处理本轮 AI 通知：展开、排队横幅。调用前已确认提醒总开关打开。
+    fn agent_notices(&mut self, notices: Vec<Notice>) {
+        let auto_expand = self.agent.config.notify.auto_expand;
+        let hold = self.settings.page_hold_secs;
+        let mut expand = false;
+        let mut waiting_key = None;
+        let mut show_list = false;
+        let mut alerts = Vec::new();
+        for notice in notices {
+            if !self.agent.config.notify.enabled(notice.kind) { continue; }
+            let waiting = matches!(notice.kind, NoticeKind::Approval | NoticeKind::Question);
+            let finished = matches!(notice.kind, NoticeKind::Done | NoticeKind::Failed | NoticeKind::Interrupted);
+            let title = match notice.kind {
+                NoticeKind::Approval => "需要确认",
+                NoticeKind::Question => "等你回答",
+                NoticeKind::Done => "会话完成",
+                NoticeKind::Failed => "会话失败",
+                NoticeKind::Stale => "可能已中断",
+                NoticeKind::Interrupted => "会话中断",
+            };
+            let mut banner_at = self.t;
+            if waiting && auto_expand {
+                expand = true;
+                banner_at = self.t + hold;
+                if waiting_key.is_none() { waiting_key = Some(notice.key.clone()); }
+            } else if finished && auto_expand && !self.open {
+                expand = true;
+                banner_at = self.t + hold;
+                if waiting_key.is_none() { show_list = true; }
+            }
+            // 等待回答或审批直接开详情，不再收成带「处理 / 跳过」的横幅。
+            if waiting { continue; }
+            alerts.push((AgentAlert { key: notice.key, kind: notice.kind }, title, format!("{} · {}", notice.title, notice.body), banner_at));
+        }
+        if let Some(key) = waiting_key {
+            self.agent.answers = self.agent.selected_session_questions(&key).into_iter().map(|_| Vec::new()).collect();
+            self.agent.question_index = 0;
+            self.agent.selected = Some(key);
+            self.agent.detail = true;
+        } else if show_list {
+            self.agent.detail = false;
+            self.agent.selected = None;
+        }
+        // show_page 会清掉当前横幅，所以先展开再入队。
+        if expand { self.show_page(AI_PAGE); }
+        for (agent, title, body, banner_at) in alerts {
+            self.agent_alert(title, body, agent, banner_at);
+        }
+    }
+
+    /// 等待回答或审批的详情保持展开，等用户在岛上直接处理。
+    pub(crate) fn agent_waiting_pinned(&self) -> bool {
+        self.agent.config.notify.auto_expand && self.agent.detail
+            && self.agent.selected_session().is_some_and(|session| {
+                session.pending.as_ref().is_some_and(|pending| matches!(pending.kind, PendingKind::Question(_) | PendingKind::Approval(_)))
+            })
+    }
+
+    /// 模块和开关开启时显示槽位；没有活跃会话时画暗色圆环，让开关有可见反馈。
     pub(crate) fn agent_bar_visible(&self) -> bool {
         self.agent.config.enabled && self.agent.config.display.bar_indicator && self.module_on(AI_PAGE)
-            && self.agent.store.has_active()
     }
 
     /// 常驻槽：一个状态灯，运行=蓝、等待=橙（呼吸）、可能中断=黄。
     pub(crate) fn draw_agent_light(&self, c: &Card, x: f32, y: f32) {
         let active = self.agent.store.active();
         if active.is_empty() {
-            c.ring(x, y, 4.0, 1.2, theme::DIM);
+            c.ring(x, y, 4.0, 1.2, crate::paint::alpha(theme::GRAY, 0.55));
             return;
         }
         let waiting = active.iter().filter(|session| session.waiting()).count();
@@ -91,20 +165,19 @@ impl App {
         c.circle(x, y, 4.0, Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), (alpha * 255.0) as u8));
     }
 
-    /// 详情页自由输入框的位置：当前问题选项少于 3 个时占用空出的那一行。
+    /// 详情页自由输入框的位置：每个待回答的问题都留一行。
     pub(crate) fn agent_free_row(&self) -> Option<(usize, f32)> {
         if !self.agent.detail { return None; }
         let pending = self.agent.selected_session()?.pending.as_ref()?;
         let PendingKind::Question(questions) = &pending.kind else { return None; };
         let index = self.agent.question_index.min(questions.len().checked_sub(1)?);
-        let count = questions[index].options.len();
-        (count < 3).then(|| (index, 96.0 + count as f32 * 22.0))
+        Some((index, FREE_Y))
     }
 
-    /// 岛内自由输入：真正的 egui 文本框，叠在详情页空出的那一行上。
+    /// 岛内自由输入：真正的 egui 文本框，叠在详情页固定的输入行上。
     pub(crate) fn agent_free_input(&mut self, ui: &mut egui::Ui, origin: egui::Pos2, cmds: &mut Vec<crate::app::Cmd>) {
         let Some((index, y)) = self.agent_free_row() else { self.agent.free_focus = false; return; };
-        let rect = egui::Rect::from_min_size(origin + egui::Vec2::new(22.0, y - 11.0), egui::Vec2::new(372.0, 18.0));
+        let rect = egui::Rect::from_min_size(origin + egui::Vec2::new(FREE_X + 8.0, y + 2.0), egui::Vec2::new(FREE_W - 16.0, FREE_H - 4.0));
         let mut buf = std::mem::take(&mut self.agent.free);
         let editor = egui::TextEdit::singleline(&mut buf)
             .id(egui::Id::new(("agent-free", index)))
@@ -161,38 +234,96 @@ impl App {
             if response.clicked() { self.settings_tab = 15; self.open_settings(); }
             return;
         }
-        let rows = self.agent.config.display.rows.clamp(3, 5);
+        let rows = self.agent.config.display.rows;
+        let visible = agent_visible_rows(sessions.len(), rows);
+        let height = agent_card_height(visible);
+        let viewport = agent_card_area(sessions.len(), rows);
+        let max_scroll = agent_scroll_max(sessions.len(), rows);
+        self.agent.scroll = self.agent.scroll.clamp(0.0, max_scroll);
+        let scroll = self.agent.scroll;
+        let list = c.clipped(40.0, AGENT_LIST_TOP, 320.0, viewport);
         let mut clicked = None;
         let mut jumped = None;
-        for (index, key) in sessions.iter().take(rows).enumerate() {
+        for (index, key) in sessions.iter().enumerate() {
             let Some(session) = self.agent.store.sessions.iter().find(|session| &session.key == key) else { continue; };
-            // 卡片左右留出翻页箭头的空间；整张卡片进详情，右侧箭头单独跳转。
-            let top = 52.0 + index as f32 * 42.0;
-            let row = c.hit(40.0, top, 320.0, 38.0, ("agent-row", key));
-            let fill = if session.waiting() {
+            // 整张卡片进详情，右侧箭头单独跳转。
+            let top = AGENT_LIST_TOP + index as f32 * (height + AGENT_CARD_GAP) - scroll;
+            if top + height < AGENT_LIST_TOP || top > AGENT_LIST_TOP + viewport { continue; }
+            let row = list.hit(40.0, top, 320.0, height, ("agent-row", key));
+            let (hover, _) = list.hover_t(&row);
+            let waiting = session.waiting();
+            let fill = if waiting {
                 Color32::from_rgba_unmultiplied(255, 166, 77, 16)
-            } else if row.hovered() {
-                Color32::from_white_alpha(16)
             } else {
-                Color32::from_white_alpha(8)
+                Color32::from_white_alpha((8.0 + 8.0 * hover) as u8)
             };
-            c.fill(40.0, top, 320.0, 38.0, 9.0, fill);
-            agent_icon(c, session.agent, 58.0, top + 19.0, 17.0);
+            list.fill(40.0, top, 320.0, height, 10.0, fill);
+            let accent = state_color(session);
+            let alpha = if waiting { 0.55 + 0.45 * ((self.t * 4.0).sin() * 0.5 + 0.5) as f32 } else { 0.9 };
+            list.fill(47.0, top + (height - 16.0) / 2.0, 3.0, 16.0, 1.5, crate::paint::alpha(accent, alpha));
+            if waiting || session.stale() || matches!(session.state, SessionState::Failed | SessionState::Interrupted) {
+                list.stroke(40.0, top, 320.0, height, 10.0, 1.0, crate::paint::alpha(accent, 0.65));
+            } else if hover > 0.01 {
+                list.stroke(40.0, top, 320.0, height, 10.0, 1.0, Color32::from_white_alpha((20.0 * hover) as u8));
+            }
             let title = session.title.as_str();
-            c.text(72.0, top + 12.0, &c.fit(title, 11.5, W::Semibold, 248.0), 11.5, W::Semibold, theme::WHITE, H::Left);
-            let state = state_text(session);
             let preview = card_preview(session);
-            let subtitle = if preview.is_empty() { format!("{} · {}", state, duration(self.t - session.since)) } else { format!("{} · {} · {}", state, duration(self.t - session.since), preview) };
-            let color = if session.stale() { theme::YELLOW } else { theme::GRAY };
-            c.text(72.0, top + 26.0, &c.fit(&subtitle, 9.5, W::Regular, 250.0), 9.5, W::Regular, color, H::Left);
-            c.circle(328.0, top + 12.0, 3.5, state_color(session));
-            let jump = c.hit(334.0, top, 26.0, 38.0, ("agent-jump", key));
-            if jump.hovered() { c.fill(336.0, top + 8.0, 22.0, 22.0, 6.0, Color32::from_white_alpha(18)); }
-            c.text(347.0, top + 27.0, "›", 15.0, W::Regular, if jump.hovered() { theme::WHITE } else { theme::GRAY }, H::Center);
+            // 运行状态由左侧状态灯表达；时长和子代理数用小图标加数字放在标题行右侧。
+            let duration_text = duration(self.t - session.since);
+            let subagents = (session.is_active() && !session.stale() && !session.subagents.is_empty())
+                .then(|| session.subagents.len().to_string());
+            let meta_color = if session.stale() { theme::YELLOW } else { theme::GRAY };
+            let stat_size = if height >= 40.0 { 9.5 } else { 9.0 };
+            let stat_gap = 8.0;
+            let icon_w = 7.0;
+            let duration_w = list.text_w(&duration_text, stat_size, W::Regular);
+            let subagents_w = subagents.as_ref().map_or(0.0, |count| stat_gap + icon_w + 2.0 + list.text_w(count, stat_size, W::Regular));
+            let stats_x = 310.0 - (icon_w + 2.0 + duration_w + subagents_w);
+            let base = if height >= 40.0 { top + height * 0.34 } else { top + 15.0 };
+            let stat_cy = base - 3.3;
+            clock_glyph(&list, stats_x + icon_w / 2.0, stat_cy, meta_color);
+            list.text(stats_x + icon_w + 2.0, base, &duration_text, stat_size, W::Regular, meta_color, H::Left);
+            if let Some(count) = &subagents {
+                let x = stats_x + icon_w + 2.0 + duration_w + stat_gap;
+                subagent_glyph(&list, x + icon_w / 2.0, stat_cy, meta_color);
+                list.text(x + icon_w + 2.0, base, count, stat_size, W::Regular, meta_color, H::Left);
+            }
+            let title_w = (stats_x - 6.0 - 56.0).max(60.0);
+            if height >= 40.0 {
+                list.text(56.0, base, &list.fit(title, 11.5, W::Semibold, title_w), 11.5, W::Semibold, theme::WHITE, H::Left);
+                if !preview.is_empty() {
+                    list.text(56.0, top + height * 0.66, &list.fit(&preview, 9.5, W::Regular, 250.0), 9.5, W::Regular, theme::GRAY, H::Left);
+                }
+            } else {
+                list.text(56.0, base, &list.fit(title, 11.0, W::Semibold, title_w), 11.0, W::Semibold, theme::WHITE, H::Left);
+                if !preview.is_empty() {
+                    list.text(56.0, top + 28.0, &list.fit(&preview, 9.0, W::Regular, 250.0), 9.0, W::Regular, theme::GRAY, H::Left);
+                }
+            }
+            agent_icon(&list, session.agent, 324.0, top + height / 2.0, 14.0);
+            let jump = list.hit(334.0, top, 26.0, height, ("agent-jump", key));
+            if jump.hovered() { list.fill(336.0, top + (height - 22.0) / 2.0, 22.0, 22.0, 6.0, Color32::from_white_alpha(18)); }
+            list.centered_text(347.0, top + height / 2.0, "›", 15.0, W::Regular, if jump.hovered() { theme::WHITE } else { theme::GRAY }, H::Center);
             if jump.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("跳转到终端").clicked() {
                 jumped = Some(session.hosts.clone());
             } else if row.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                 clicked = Some(key.clone());
+            }
+        }
+        if max_scroll > 0.0 {
+            // 右侧 3px 滚动条；拖动或滚轮都能翻看超出的会话。
+            let track_x = 363.0;
+            let thumb_h = (viewport / (viewport + max_scroll) * viewport).max(18.0);
+            let thumb_y = AGENT_LIST_TOP + (scroll / max_scroll) * (viewport - thumb_h);
+            c.fill(track_x, AGENT_LIST_TOP, 3.0, viewport, 1.5, Color32::from_white_alpha(14));
+            c.fill(track_x, thumb_y, 3.0, thumb_h, 1.5, Color32::from_white_alpha(64));
+            let drag = c.hit_drag(track_x - 3.0, AGENT_LIST_TOP, 9.0, viewport, "agent-scrollbar");
+            if drag.dragged() {
+                if let Some(p) = drag.interact_pointer_pos() {
+                    let local = c.to_local(p);
+                    let ratio = ((local.y - AGENT_LIST_TOP) / viewport).clamp(0.0, 1.0);
+                    self.agent.scroll = ratio * max_scroll;
+                }
             }
         }
         if let Some(hosts) = jumped {
@@ -226,7 +357,8 @@ impl App {
         }).unwrap_or_default();
         if self.agent.answers.len() < questions.len() { self.agent.answers.resize(questions.len(), Vec::new()); }
 
-        c.text(15.0, 45.0, &c.fit(&format!("{} · {}", agent.short(), title), 11.0, W::Semibold, 270.0), 11.0, W::Semibold, theme::WHITE, H::Left);
+        agent_icon(c, agent, 22.0, 45.0, 13.0);
+        c.text(36.0, 45.0, &c.fit(&title, 11.0, W::Semibold, 250.0), 11.0, W::Semibold, theme::WHITE, H::Left);
         let jump = c.hit(300.0, 34.0, 64.0, 18.0, "agent-jump");
         c.text(332.0, 47.0, "跳转", 10.0, W::Regular, theme::GRAY, H::Center);
         if jump.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
@@ -237,18 +369,21 @@ impl App {
         if back.clicked() { self.agent.detail = false; self.agent.selected = None; return; }
 
         if let Some((tool, detail)) = approval {
-            c.text(15.0, 66.0, &format!("请求使用 {tool}"), 12.0, W::Bold, Color32::from_rgb(255, 176, 86), H::Left);
-            let lines = c.wrap(&detail, 10.0, W::Regular, 386.0, 2);
-            for (index, line) in lines.iter().enumerate() { c.text(15.0, 82.0 + index as f32 * 14.0, line, 10.0, W::Regular, theme::GRAY, H::Left); }
-            let y = 130.0;
-            if button(c, 15.0, y, 88.0, "允许一次", theme::GREEN).clicked() { self.agent.respond(&key, Decision::Allow, self.t); return; }
-            if button(c, 111.0, y, 66.0, "拒绝", theme::RED).clicked() { self.agent.respond(&key, Decision::Deny, self.t); return; }
-            if button(c, 185.0, y, 80.0, "总是允许", theme::BLUE).clicked() { self.agent.respond(&key, Decision::Always, self.t); return; }
-            if button(c, 273.0, y, 94.0, "到终端处理", theme::BTN).clicked() {
+            c.fill(15.0, 58.0, 386.0, 100.0, 10.0, Color32::from_white_alpha(15));
+            c.stroke(15.0, 58.0, 386.0, 100.0, 10.0, 1.0, Color32::from_white_alpha(31));
+            c.text(23.0, 76.0, &c.fit(&format!("请求使用 {tool}"), 11.5, W::Bold, 370.0), 11.5, W::Bold, Color32::from_rgb(255, 176, 86), H::Left);
+            c.fill(23.0, 84.0, 370.0, 52.0, 7.0, Color32::from_white_alpha(18));
+            let lines = c.wrap(&detail, 10.0, W::Regular, 354.0, 2);
+            for (index, line) in lines.iter().enumerate() { c.text(30.0, 100.0 + index as f32 * 14.0, line, 10.0, W::Regular, theme::GRAY, H::Left); }
+            c.hit(23.0, 84.0, 370.0, 52.0, "agent-approval-detail").on_hover_text(&detail);
+            if button(c, 15.0, 168.0, 94.0, "到终端处理", theme::BTN).clicked() {
                 self.agent.respond(&key, Decision::Terminal, self.t);
                 if !crate::agent::focus::focus(&hosts) { self.say("没找到窗口"); }
                 return;
             }
+            if button(c, 195.0, 168.0, 58.0, "拒绝", theme::RED).clicked() { self.agent.respond(&key, Decision::Deny, self.t); return; }
+            if button(c, 259.0, 168.0, 72.0, "总是允许", theme::BLUE).clicked() { self.agent.respond(&key, Decision::Always, self.t); return; }
+            if button(c, 337.0, 168.0, 64.0, "允许一次", theme::GREEN).clicked() { self.agent.respond(&key, Decision::Allow, self.t); return; }
             return;
         }
 
@@ -269,19 +404,35 @@ impl App {
         }
         let index = self.agent.question_index.min(questions.len() - 1);
         let question = &questions[index];
-        let prompt = if question.header.is_empty() { question.question.clone() } else { format!("{} · {}", question.header, question.question) };
-        let lines = c.wrap(&prompt, 11.0, W::Semibold, 386.0, 2);
-        for (line_index, line) in lines.iter().enumerate() { c.text(15.0, 66.0 + line_index as f32 * 14.0, line, 11.0, W::Semibold, theme::WHITE, H::Left); }
+        c.text(15.0, 62.0, &format!("问题 {}/{}", index + 1, questions.len()), 10.0, W::Semibold, theme::BLUE, H::Left);
+        if !question.header.is_empty() {
+            c.text(72.0, 62.0, &c.fit(&question.header, 10.0, W::Regular, 230.0), 10.0, W::Regular, theme::GRAY, H::Left);
+        }
+        if question.multi { c.centered_text(401.0, 62.0, "多选", 9.0, W::Regular, theme::BLUE, H::Right); }
+        let lines = c.wrap(&question.question, 11.5, W::Semibold, 386.0, 2);
+        for (line_index, line) in lines.iter().enumerate() { c.text(15.0, 80.0 + line_index as f32 * 14.0, line, 11.5, W::Semibold, theme::WHITE, H::Left); }
         let selected = self.agent.answers.get(index).cloned().unwrap_or_default();
         let mut clicked_option = None;
-        for (option_index, option) in question.options.iter().take(3).enumerate() {
-            let y = 96.0 + option_index as f32 * 22.0;
+        let mut px = 15.0;
+        let mut py = 104.0;
+        let mut row = 0;
+        for (option_index, option) in question.options.iter().take(4).enumerate() {
+            let width = (c.text_w(&option.label, 10.0, W::Semibold) + 20.0).clamp(44.0, 180.0);
+            if px + width > 401.0 && px > 15.0 {
+                if row == 1 { break; }
+                row = 1;
+                px = 15.0;
+                py += 29.0;
+            }
             let on = selected.iter().any(|label| label == &option.label);
-            let response = c.hit(15.0, y - 13.0, 386.0, 20.0, ("agent-option", index, option_index));
-            if on { c.fill(15.0, y - 13.0, 386.0, 20.0, 6.0, Color32::from_rgba_unmultiplied(62, 172, 248, 30)); }
-            c.text(24.0, y, &c.fit(&option.label, 10.5, W::Semibold, 150.0), 10.5, W::Semibold, if on { theme::BLUE } else { theme::WHITE }, H::Left);
-            if !option.description.is_empty() { c.text(180.0, y, &c.fit(&option.description, 9.5, W::Regular, 215.0), 9.5, W::Regular, theme::GRAY, H::Left); }
+            let response = c.hit(px, py, width, 24.0, ("agent-option", index, option_index));
+            let (hover, _) = c.hover_t(&response);
+            let fill = if on { Color32::from_rgba_unmultiplied(62, 172, 248, 36) } else { Color32::from_white_alpha((hover * 12.0) as u8) };
+            c.fill(px, py, width, 24.0, 12.0, fill);
+            if !option.description.is_empty() { response.clone().on_hover_text(&option.description); }
+            c.centered_text(px + width / 2.0, py + 12.0, &c.fit(&option.label, 10.0, W::Semibold, width - 12.0), 10.0, W::Semibold, if on { theme::BLUE } else { theme::WHITE }, H::Center);
             if response.clicked() { clicked_option = Some(option.label.clone()); }
+            px += width + 5.0;
         }
         if let Some(label) = clicked_option {
             let entry = &mut self.agent.answers[index];
@@ -291,22 +442,31 @@ impl App {
                 entry.clear(); entry.push(label);
             }
         }
-        // 选项少于三行时，空出的那一行用于自由输入（文本框在页面渲染后叠加）。
-        if question.options.len() < 3 {
-            let input_y = 96.0 + question.options.len() as f32 * 22.0;
-            c.fill(15.0, input_y - 11.0, 386.0, 18.0, 6.0, Color32::from_white_alpha(10));
-        }
+        c.fill(FREE_X, FREE_Y, FREE_W, FREE_H, 6.0, Color32::from_white_alpha(10));
         let last = index + 1 >= questions.len();
-        let y = 148.0;        if !last {
-            if button(c, 15.0, y, 76.0, "下一题", theme::BTN).clicked() { self.agent.question_index = index + 1; }
-        } else if button(c, 15.0, y, 76.0, "提交", theme::GREEN).clicked() {
-            self.agent.respond(&key, Decision::Answers(self.agent.answers.clone()), self.t);
-            return;
-        }
-        if index > 0 && button(c, 99.0, y, 76.0, "上一题", theme::BTN).clicked() { self.agent.question_index = index - 1; }
-        if button(c, 183.0, y, 94.0, "到终端处理", theme::BTN).clicked() {
+        if button(c, 15.0, 232.0, 94.0, "到终端处理", theme::BTN).clicked() {
             self.agent.respond(&key, Decision::Terminal, self.t);
             if !crate::agent::focus::focus(&hosts) { self.say("没找到窗口"); }
+            return;
+        }
+        if index > 0 && button(c, 263.0, 232.0, 60.0, "上一题", theme::BTN).clicked() {
+            self.agent.question_index = index - 1;
+            self.agent.free.clear();
+            self.agent.free_focus = false;
+        }
+        if button(c, 331.0, 232.0, 70.0, if last { "提交" } else { "下一题" }, if last { theme::GREEN } else { theme::BTN }).clicked() {
+            let free = std::mem::take(&mut self.agent.free);
+            let free = free.trim().to_string();
+            if !free.is_empty() {
+                let entry = &mut self.agent.answers[index];
+                if question.multi { if !entry.contains(&free) { entry.push(free); } } else { entry.clear(); entry.push(free); }
+            }
+            if last {
+                self.agent.respond(&key, Decision::Answers(self.agent.answers.clone()), self.t);
+                return;
+            }
+            self.agent.question_index = index + 1;
+            self.agent.free_focus = false;
         }
     }
 
@@ -424,14 +584,6 @@ impl App {
             setting_row(ui, "自动展开", "等待确认或回答时打开详情；完成或中断时打开列表", &mut auto_expand);
             if auto_expand != self.agent.config.notify.auto_expand { self.agent.config.notify.auto_expand = auto_expand; self.agent.config.save(); }
             ui.separator();
-            settings_control_row_right(ui, "重复提醒", |ui| {
-                let mut repeat = match self.agent.config.notify.repeat.as_str() { "30s" => 1, "1m" => 2, "5m" => 3, _ => 0 };
-                if settings_segmented(ui, &mut repeat, &[(0, "不提醒"), (1, "30 秒"), (2, "1 分钟"), (3, "5 分钟")], 56.0) {
-                    self.agent.config.notify.repeat = match repeat { 1 => "30s", 2 => "1m", 3 => "5m", _ => "never" }.into();
-                    self.agent.config.save();
-                }
-            });
-            ui.separator();
             settings_control_row_right(ui, "会话数", |ui| {
                 let mut rows = self.agent.config.display.rows;
                 if settings_segmented(ui, &mut rows, &[(3, "3 个"), (4, "4 个"), (5, "5 个")], 52.0) {
@@ -460,6 +612,20 @@ impl App {
             });
             settings_hint(ui, "会话到保留时间后清理；事件与提示音在「AI 会话」页设置。");
         });
+    }
+}
+
+/// 横幅对应的 AI 事件是否仍然成立：事件开关开着，且会话仍处于该状态。
+pub(crate) fn agent_alert_valid(store: &Store, notify: &NotifyConfig, alert: &AgentAlert) -> bool {
+    if !notify.enabled(alert.kind) { return false; }
+    let Some(session) = store.sessions.iter().find(|session| session.key == alert.key) else { return false; };
+    match alert.kind {
+        NoticeKind::Approval => matches!(session.pending.as_ref().map(|pending| &pending.kind), Some(PendingKind::Approval(_))),
+        NoticeKind::Question => matches!(session.pending.as_ref().map(|pending| &pending.kind), Some(PendingKind::Question(_))),
+        NoticeKind::Done => session.state == SessionState::Completed,
+        NoticeKind::Failed => session.state == SessionState::Failed,
+        NoticeKind::Interrupted => session.state == SessionState::Interrupted,
+        NoticeKind::Stale => session.stale(),
     }
 }
 
@@ -523,7 +689,8 @@ fn card_preview(session: &Session) -> String {
         match session.state {
             SessionState::WaitingApproval | SessionState::WaitingAnswer => "等待你的决定".into(),
             SessionState::Idle => "等待新任务…".into(),
-            SessionState::Completed => "已完成".into(),
+            // 完成状态由状态灯和时长表达，卡片不再重复「已完成」。
+            SessionState::Completed => String::new(),
             SessionState::Failed => "运行失败".into(),
             SessionState::Interrupted => "已中断".into(),
             _ => String::new(),
@@ -537,6 +704,23 @@ fn duration(seconds: f64) -> String {
     if seconds < 60 { format!("{seconds} 秒") }
     else if seconds < 3600 { format!("{} 分钟", seconds / 60) }
     else { format!("{} 小时", seconds / 3600) }
+}
+
+/// 标题行右侧的时长图标：外圈加时针分针。
+fn clock_glyph(c: &Card, x: f32, y: f32, color: Color32) {
+    c.ring(x, y, 3.2, 0.9, color);
+    c.seg((x, y), (x, y - 1.8), 0.9, color);
+    c.seg((x, y), (x + 1.4, y + 0.6), 0.9, color);
+}
+
+/// 子代理图标：主干带两个分支。
+fn subagent_glyph(c: &Card, x: f32, y: f32, color: Color32) {
+    c.seg((x - 2.4, y - 2.8), (x - 2.4, y + 2.8), 0.9, color);
+    c.seg((x - 2.4, y - 0.8), (x + 1.2, y - 2.2), 0.9, color);
+    c.seg((x - 2.4, y + 1.2), (x + 1.2, y + 2.4), 0.9, color);
+    c.circle(x - 2.4, y - 2.8, 1.0, color);
+    c.circle(x + 1.6, y - 2.4, 1.0, color);
+    c.circle(x + 1.6, y + 2.6, 1.0, color);
 }
 
 fn health_text(health: Health, note: &str) -> (Color32, String) {
@@ -574,4 +758,32 @@ fn agent_icon(c: &Card, agent: AgentId, x: f32, y: f32, size: f32) {
     let min = egui::pos2((center.x * ppp - half).round() / ppp, (center.y * ppp - half).round() / ppp);
     let rect = egui::Rect::from_min_size(min, egui::Vec2::splat(pixels as f32 / ppp));
     c.painter.image(texture.id(), rect, egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), Color32::WHITE);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_heights_fit_three_to_five_rows() {
+        assert!((agent_card_height(3) - 44.0).abs() < 0.01);
+        assert!((agent_card_height(4) - 43.0).abs() < 0.01);
+        assert!((agent_card_height(5) - 33.2).abs() < 0.01);
+        for rows in 3..=5 {
+            let height = agent_list_height(rows, rows);
+            assert!(height <= 268.0, "{rows} 行列表不应超过 268px：{height}");
+            let cards = rows as f32 * agent_card_height(rows) + (rows as f32 - 1.0) * AGENT_CARD_GAP;
+            assert!((AGENT_LIST_TOP + cards + AGENT_LIST_BOTTOM - height).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn list_height_follows_actual_session_count_and_scrolls_after_the_limit() {
+        for (count, expected) in [(0, 150.0), (1, 122.0), (2, 172.0), (3, 222.0), (4, 268.0), (5, 268.0)] {
+            assert!((agent_list_height(count, 5) - expected).abs() < 0.01, "{count} 个会话的高度应为 {expected}");
+        }
+        assert!(agent_list_height(4, 3) <= 268.0);
+        assert!((agent_scroll_max(3, 5) - 0.0).abs() < 0.01);
+        assert!((agent_scroll_max(6, 3) - 150.0).abs() < 0.01);
+    }
 }

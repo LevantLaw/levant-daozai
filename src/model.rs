@@ -251,11 +251,33 @@ pub struct Settings {
     pub browser_minimal: bool,
     pub avoid_browsers: bool,
     pub avoid_apps: Vec<(String,String)>,
-    pub visible_pages: [bool; 10],
-    pub page_order: [usize; 10],
+    pub visible_pages: [bool; 12],
+    pub page_order: [usize; 12],
     pub show_clock: bool,
     pub show_battery: bool,
     pub show_weather: bool,
+    pub show_music: bool,
+    pub show_focus: bool,
+    /// 事件容器成员：只在数据变化时短暂出现，不再常驻。
+    pub tray_weather: bool,
+    pub tray_quota: bool,
+    pub tray_focus: bool,
+    pub tray_mail: bool,
+    pub tray_health: bool,
+    pub tray_shelf: bool,
+    pub tray_todo: bool,
+    pub tray_calendar: bool,
+    pub tray_music: bool,
+    pub tray_battery: bool,
+    /// 事件容器成员的显示顺序；空表示默认顺序。
+    pub tray_order: Vec<usize>,
+    /// 页面徽标：邮箱未读、健康提醒、待办到期、置物架拖入、日程提醒、勿扰模式。
+    pub show_mail: bool,
+    pub show_health: bool,
+    pub show_todo: bool,
+    pub show_shelf: bool,
+    pub show_calendar: bool,
+    pub show_dnd: bool,
     pub clock_12h: bool,
     pub clock_period: u8,
     pub clock_seconds: bool,
@@ -336,7 +358,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 10], page_order: [0,1,2,3,4,5,6,7,8,9], show_clock: true, show_battery: true, show_weather: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), hud_volume: true, hud_power: true, hud_network: true, hud_keyboard: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, qq_notifications:true, notification_preview:false, notifications: true, notice_hold_secs: 4.5, page_hold_secs: 4.0, motion_speed: MotionSpeed::Normal, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 12], page_order: [0,1,2,3,11,4,5,6,7,8,9,10], show_clock: true, show_battery: true, show_weather: true, show_music: true, show_focus: true, tray_weather: true, tray_quota: true, tray_focus: true, tray_mail: false, tray_health: false, tray_shelf: false, tray_todo: false, tray_calendar: false, tray_music: false, tray_battery: false, tray_order: Vec::new(), show_mail: true, show_health: true, show_todo: true, show_shelf: true, show_calendar: true, show_dnd: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), hud_volume: true, hud_power: true, hud_network: true, hud_keyboard: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, qq_notifications:true, notification_preview:false, notifications: true, notice_hold_secs: 4.5, page_hold_secs: 4.0, motion_speed: MotionSpeed::Normal, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -400,18 +422,16 @@ impl Settings {
                     if crate::bar_layout::valid_order(&order){s.resident_order=order;}
                 }
                 "page_order" => {
-                    if let Ok(order)=v.split(',').map(str::parse::<usize>).collect::<Result<Vec<_>,_>>() {
-                        if order.len()==10 && (0..10).all(|page|order.contains(&page)) {
+                    if let Ok(mut order)=v.split(',').map(str::parse::<usize>).collect::<Result<Vec<_>,_>>() {
+                        if order.len()==12 && (0..12).all(|page|order.contains(&page)) {
                             s.page_order.copy_from_slice(&order);
-                        } else if order.len()==9 && (0..9).all(|page|order.contains(&page)) {
-                            // 旧配置里没有 AI 会话页：接在最后。
-                            s.page_order[..9].copy_from_slice(&order);
-                            s.page_order[9]=9;
-                        } else if order.len()==8 && (0..8).all(|page|order.contains(&page)) {
-                            // 旧配置里没有天气页：接在最后，其余顺序保持不变。
-                            s.page_order[..8].copy_from_slice(&order);
-                            s.page_order[8]=8;
-                            s.page_order[9]=9;
+                        } else if (8..=11).contains(&order.len()) && (0..order.len()).all(|page|order.contains(&page)) {
+                            // 旧配置缺少后加的页面：按历史顺序接在最后，再把剪贴板插到置物架之后。
+                            for page in 8..=10 {if !order.contains(&page) {order.push(page);}}
+                            if let Some(index)=order.iter().position(|page|*page==3) {order.insert(index+1,11);}
+                            if order.len()==12 && (0..12).all(|page|order.contains(&page)) {
+                                s.page_order.copy_from_slice(&order);
+                            }
                         }
                     }
                 }
@@ -421,10 +441,36 @@ impl Settings {
                 "show_battery" => s.show_battery = v != "0",
                 "show_clock" => s.show_clock = v != "0",
                 "show_weather" => s.show_weather = v != "0",
-                "visible_pages" if (6..=10).contains(&v.len()) && v.bytes().all(|b| b==b'0' || b==b'1') => {
+                "show_music" => s.show_music = v != "0",
+                "show_focus" => s.show_focus = v != "0",
+                "tray_weather" => s.tray_weather = v != "0",
+                "tray_quota" => s.tray_quota = v != "0",
+                "tray_focus" => s.tray_focus = v != "0",
+                "tray_mail" => s.tray_mail = v != "0",
+                "tray_health" => s.tray_health = v != "0",
+                "tray_shelf" => s.tray_shelf = v != "0",
+                "tray_todo" => s.tray_todo = v != "0",
+                "tray_calendar" => s.tray_calendar = v != "0",
+                "tray_music" => s.tray_music = v != "0",
+                "tray_battery" => s.tray_battery = v != "0",
+                "tray_order" => {
+                    let mut order:Vec<usize>=v.split(',').filter_map(|n|n.parse().ok()).collect();
+                    if order.len()==9 && crate::bar_layout::TRAY_ORDER.iter().filter(|slot|**slot!=crate::bar_layout::CALENDAR).all(|slot|order.contains(slot)) {
+                        // 旧配置里没有日程槽：接在置物架之后。
+                        if let Some(index)=order.iter().position(|slot|*slot==crate::bar_layout::SHELF){order.insert(index+1,crate::bar_layout::CALENDAR);}
+                    }
+                    if crate::bar_layout::valid_tray_order(&order){s.tray_order=order;}
+                }
+                "show_mail" => s.show_mail = v != "0",
+                "show_health" => s.show_health = v != "0",
+                "show_todo" => s.show_todo = v != "0",
+                "show_shelf" => s.show_shelf = v != "0",
+                "show_calendar" => s.show_calendar = v != "0",
+                "show_dnd" => s.show_dnd = v != "0",
+                "visible_pages" if (6..=12).contains(&v.len()) && v.bytes().all(|b| b==b'0' || b==b'1') => {
                     for (enabled,value) in s.visible_pages.iter_mut().zip(v.bytes()) { *enabled=value==b'1'; }
                     for enabled in &mut s.visible_pages[v.len()..]{*enabled=v.bytes().any(|b|b==b'1');}
-                    // 新增的 AI 会话页默认开启。
+                    // 新增的 AI 会话页默认开启；Windows 通知页跟随已有页面是否开启。
                     if v.len()==9 {s.visible_pages[9]=true;}
                 }
                 "read_notifications" => s.read_notifications=v=="1",
@@ -524,6 +570,25 @@ impl Settings {
                 ("show_battery".into(), (self.show_battery as u8).to_string()),
                 ("show_clock".into(), (self.show_clock as u8).to_string()),
                 ("show_weather".into(), (self.show_weather as u8).to_string()),
+                ("show_music".into(), (self.show_music as u8).to_string()),
+                ("show_focus".into(), (self.show_focus as u8).to_string()),
+                ("tray_weather".into(), (self.tray_weather as u8).to_string()),
+                ("tray_quota".into(), (self.tray_quota as u8).to_string()),
+                ("tray_focus".into(), (self.tray_focus as u8).to_string()),
+                ("tray_mail".into(), (self.tray_mail as u8).to_string()),
+                ("tray_health".into(), (self.tray_health as u8).to_string()),
+                ("tray_shelf".into(), (self.tray_shelf as u8).to_string()),
+                ("tray_todo".into(), (self.tray_todo as u8).to_string()),
+                ("tray_calendar".into(), (self.tray_calendar as u8).to_string()),
+                ("tray_music".into(), (self.tray_music as u8).to_string()),
+                ("tray_battery".into(), (self.tray_battery as u8).to_string()),
+                ("tray_order".into(),self.tray_order.iter().map(usize::to_string).collect::<Vec<_>>().join(",")),
+                ("show_mail".into(), (self.show_mail as u8).to_string()),
+                ("show_health".into(), (self.show_health as u8).to_string()),
+                ("show_todo".into(), (self.show_todo as u8).to_string()),
+                ("show_shelf".into(), (self.show_shelf as u8).to_string()),
+                ("show_calendar".into(), (self.show_calendar as u8).to_string()),
+                ("show_dnd".into(), (self.show_dnd as u8).to_string()),
                 ("read_notifications".into(),(self.read_notifications as u8).to_string()),
                 ("wechat_notifications".into(),(self.wechat_notifications as u8).to_string()),
                 ("wecom_notifications".into(),(self.wecom_notifications as u8).to_string()),
