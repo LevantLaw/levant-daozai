@@ -319,6 +319,21 @@ mod gradient_tests {
     }
 
     #[test]
+    fn moon_bbox_is_centered_on_the_requested_point() {
+        let ctx=egui::Context::default();
+        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::splat(120.0))),..Default::default()};
+        let output=ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{
+            moon(&Card::new(ui,Pos2::ZERO,ui.max_rect()),60.0,50.0,13.0,Color32::WHITE);
+        });});
+        let mesh=output.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Mesh(mesh)=>Some(mesh),_=>None}).expect("月牙网格");
+        let xs=mesh.vertices.iter().map(|v|v.pos.x);let ys=mesh.vertices.iter().map(|v|v.pos.y);
+        let (minx,maxx)=(xs.clone().fold(f32::INFINITY,f32::min),xs.fold(f32::NEG_INFINITY,f32::max));
+        let (miny,maxy)=(ys.clone().fold(f32::INFINITY,f32::min),ys.fold(f32::NEG_INFINITY,f32::max));
+        assert!(((minx+maxx)/2.0-60.0).abs()<0.01,"月牙包围盒应水平居中：{minx}..{maxx}");
+        assert!(((miny+maxy)/2.0-50.0).abs()<0.01,"月牙包围盒应垂直居中：{miny}..{maxy}");
+    }
+
+    #[test]
     fn long_email_links_do_not_create_hundreds_of_layouts() {
         let ctx=egui::Context::default();
         let text=format!("https://example.com/{}","newsletter-link-".repeat(40));
@@ -475,10 +490,17 @@ pub fn skip(c: &Card, cx: f32, cy: f32, dir: f32, color: Color32) {
 }
 
 pub fn playback_bars(c:&Card,cx:f32,cy:f32,time:f64,playing:bool,color:Color32) {
+    playback_bars_box(c,cx,cy,time,playing,color,17.5,11.5);
+}
+/// 指定外框的音柱；状态行按统一图标尺寸绘制。
+pub fn playback_bars_box(c:&Card,cx:f32,cy:f32,time:f64,playing:bool,color:Color32,width:f32,height:f32) {
+    let bar=width*1.9/17.5;
+    let step=width*3.9/17.5;
+    let left=cx-width/2.0;
     for i in 0..5 {
         let phase=if playing {time as f32*(5.0+i as f32*0.7)}else{0.0}+i as f32*1.6;
-        let height=if playing {3.5+(phase.sin()*0.5+0.5)*8.0}else{3.5};
-        c.fill(cx-7.8+i as f32*3.9,cy-height/2.0,1.9,height,0.95,color);
+        let h=if playing {height*0.30+(phase.sin()*0.5+0.5)*height*0.70}else{height*0.30};
+        c.fill(left+i as f32*step,cy-h/2.0,bar,h,0.95,color);
     }
 }
 
@@ -830,7 +852,7 @@ pub fn clipboard_glyph(c: &Card, cx: f32, cy: f32, size: f32, color: Color32, sh
 /// 信封：邮箱未读。
 pub fn envelope(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
     let w = size;
-    let h = size * 0.72;
+    let h = size * 0.80;
     c.stroke(cx - w / 2.0, cy - h / 2.0, w, h, size * 0.12, 1.3, color);
     c.path(&[(cx - w / 2.0, cy - h / 2.0 + 1.0), (cx, cy + 0.5), (cx + w / 2.0, cy - h / 2.0 + 1.0)], 1.3, color);
 }
@@ -852,11 +874,11 @@ pub fn calendar(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
 pub fn moon(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
     let s = size;
     let (outer, inner, offset) = (0.62 * s, 0.55 * s, 0.30 * s);
-    // 月牙从外圆向右伸出一段，按包围盒把视觉中心对到 (cx, cy)。
-    let cx = cx - (offset + inner - outer) / 2.0;
     let x = (offset * offset + outer * outer - inner * inner) / (2.0 * offset);
     let y = (outer * outer - x * x).max(0.0).sqrt();
     let (outer_top, inner_top) = (y.atan2(x), y.atan2(x - offset));
+    // 月牙包围盒从 -outer 到 x，平移让包围盒中心落在 (cx, cy)。
+    let cx = cx + (outer - x) / 2.0;
     let mut mesh = egui::Mesh::default();
     let steps = 24;
     for i in 0..=steps {

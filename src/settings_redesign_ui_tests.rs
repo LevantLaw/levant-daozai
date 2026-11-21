@@ -138,8 +138,11 @@ fn body_page_has_appearance_residents_and_feature_pages(){
         assert!(!body.iter().any(|text|text==label),"岛体页不应显示行为项「{label}」");
     }
     let behavior=settings_text(crate::extras::SETTINGS_TAB_BEHAVIOR);
-    for label in ["展开与收起","通知","避让","动画速度","展开后停留","提醒总开关","提醒方式","横幅停留","全屏时隐藏","顶栏适配","自动避让","常用浏览器"] {
+    for label in ["岛体组件","横幅提醒","系统提醒","展开与收起","避让","动画速度","展开后停留","提醒总开关","横幅停留","全屏时隐藏","顶栏适配","自动避让","常用浏览器"] {
         assert!(behavior.iter().any(|text|text==label),"行为页缺少「{label}」");
+    }
+    for label in ["通知","提醒方式"] {
+        assert!(!behavior.iter().any(|text|text==label),"行为页不应再显示「{label}」");
     }
     assert!(!behavior.iter().any(|text|text=="OLED 像素偏移"),"OLED 像素偏移已并入通用-高级");
     assert!(!behavior.iter().any(|text|text=="位置"),"位置已并入岛体外观");
@@ -184,6 +187,22 @@ fn resident_group_rows_are_nested_under_the_group_label(){
     assert!(text("时间").visual_bounding_rect().left()>text("常驻显示").visual_bounding_rect().left()+8.0,"分组子项应缩进");
 }
 
+/// 「提醒事件」沿用「岛上显示」的二级分组样式：子项标题更小并缩进一级。
+#[test]
+fn agent_notify_groups_use_nested_rows_like_island_groups(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let frame=settings_frame_with(15,|_|{});
+    let text=|label:&str|frame.shapes.iter().find_map(|s|match &s.shape{
+        egui::Shape::Text(t) if t.galley.text()==label && t.pos.x>200.0=>Some(t),
+        _=>None,
+    }).unwrap_or_else(||panic!("缺少「{label}」"));
+    let size=|label:&str|text(label).galley.job.sections.first().map(|s|s.format.font_id.size).unwrap_or(0.0);
+    for (group,row) in [("展开提醒","用户选择"),("横幅提醒","完成")] {
+        assert!(size(row)<size(group),"「{group}」子项标题应更小：{} vs {}",size(row),size(group));
+        assert!(text(row).visual_bounding_rect().left()>text(group).visual_bounding_rect().left()+8.0,"「{group}」子项应缩进");
+    }
+}
+
 /// 两个分组默认展开；点一个分组标题只收起该组。
 #[test]
 fn resident_groups_default_expanded_and_collapse_independently(){
@@ -221,14 +240,14 @@ fn reminder_page_keeps_policy_and_ai_page_owns_event_hooks(){
         assert!(!reminders.iter().any(|text|text==label),"提醒页不应再显示「{label}」");
     }
     assert!(!reminders.iter().any(|text|text=="消息或事件触发时，岛怎么提醒。"),"页标题下不放说明文字");
-    for label in ["等待用户选择","提示音","中断","闲置"] {
+    for label in ["用户选择","展开提醒","横幅提醒","提示音","中断","闲置"] {
         assert!(!reminders.iter().any(|text|text==label),"提醒页不应再显示「{label}」");
     }
     for label in ["检查间隔","服务"] {
         assert!(!reminders.iter().any(|text|text==label),"提醒页不应包含功能模块设置「{label}」");
     }
     let agent=settings_text(15);
-    for label in ["Hooks","提醒事件","提示音","等待用户选择","完成","中断","失败","闲置","开始","提交","审批","错误"] {
+    for label in ["Hooks","提醒事件","展开提醒","横幅提醒","用户选择","审批","完成","中断","失败","闲置","提示音","开始","提交","错误"] {
         assert!(agent.iter().any(|text|text==label),"AI 会话页缺少「{label}」");
     }
     for label in ["横幅停留","提醒方式","重复提醒","显示","会话数","最近消息行数"] {
@@ -318,10 +337,14 @@ fn hold_seconds_apply_to_banners_and_pages_only(){
     h.app.t=10.0;h.app.settings.notice_hold_secs=2.5;
     h.app.settings.wechat_notifications=true;h.app.receive_wechat_reminder();
     assert_eq!(h.app.alerts.back().unwrap().duration,2.5);
-    assert_eq!(h.app.notification_bell_until,12.5);
+    assert_eq!(h.app.notification_bell_until,0.0,"即时通讯不点亮铃铛");
     h.app.alerts.clear();h.app.settings.read_notifications=true;
     h.app.receive_notification("QQ".into(),"QQ".into(),"新消息".into());
     assert_eq!(h.app.alerts.back().unwrap().duration,2.5);
+    assert_eq!(h.app.notification_bell_until,0.0,"QQ 不点亮铃铛");
+    h.app.notification_apps.items.push(("weather.app".into(),"天气".into(),true));
+    h.app.receive_notification("天气".into(),"weather.app".into(),"降雨提醒".into());
+    assert_eq!(h.app.notification_bell_until,12.5,"非即时通讯的 Windows 通知点亮铃铛");
     h.app.agent_alert("AI","完成",crate::agent_ui::AgentAlert{key:"s1".into(),kind:crate::agent::store::NoticeKind::Done},h.app.t);
     assert_eq!(h.app.alerts.back().unwrap().duration,2.5,"AI 横幅使用横幅停留时长");
     h.app.settings.page_hold_secs=7.0;

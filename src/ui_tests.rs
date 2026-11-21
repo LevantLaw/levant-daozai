@@ -86,11 +86,13 @@ fn weather_content_tap_switches_both_ways_with_a_short_transition(){
 #[test]
 fn weather_content_tap_keeps_other_controls_independent(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for (x,y,target) in [(375.0,crate::app::WEATHER_H-7.0,8),(394.0,18.0,8),(340.0,18.0,0),(398.0,88.0,9),(20.0,88.0,7)] {
+    for (x,y,target) in [(375.0,crate::app::WEATHER_H-7.0,8),(394.0,18.0,8),(398.0,88.0,9),(20.0,88.0,7)] {
         let mut h=H::new();h.app.settings.pet=false;
         h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
         h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:19.0,..Default::default()});
-        h.app.show_page(8);h.hover(H::local(250.0,65.0),1.0);h.click(H::local(x,y));
+        h.app.show_page(8);h.hover(H::local(250.0,65.0),1.0);
+        let point=if x==394.0 {settings_button(&h)}else{H::local(x,y)};
+        h.click(point);
         assert!(!h.app.weather.solar_open,"操作 ({x},{y}) 不应触发日照切换");
         assert_eq!(h.app.page(),target,"操作 ({x},{y}) 的页面跳转应保持不变");
         if y>200.0 {assert!(h.cmds.contains(&crate::app::Cmd::OpenUrl("https://open-meteo.com/".into())));}
@@ -361,7 +363,7 @@ fn island_meshes_stay_valid_after_long_uptime_and_repeated_hover(){
             for scale in [1.0,1.25,1.5] {
                 h.ctx.set_pixels_per_point(scale);
                 for frame in 0..120 {
-                    let point=if frame%60<30{H::local(200.0,15.0)}else{Pos2::new(900.0,250.0)};
+                    let point=if frame%60<30{Pos2::new(WIN_W/2.0,15.0)}else{Pos2::new(900.0,250.0)};
                     h.cursor=Some(point);h.frame(vec![egui::Event::PointerMoved(point)]);
                     let meshes=h.ctx.tessellate(h.shapes.clone(),h.ctx.pixels_per_point());
                     for primitive in meshes {if let egui::epaint::Primitive::Mesh(mesh)=primitive.primitive {
@@ -805,7 +807,8 @@ fn calendar_hides_ended_events_and_keeps_all_day_out_of_featured_card() {
     h.app.open_calendar(None);h.hover(H::local(300.0,40.0),1.0);
     let contains=|h:&H,text:&str|h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()==text));
     assert!(!contains(&h,"过去的安排"));assert!(contains(&h,"全天安排"));
-    assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="11:00" && t.galley.job.sections[0].format.font_id.size>=23.0)));
+    assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="11:00" && (t.galley.job.sections[0].format.font_id.size-14.0).abs()<0.01)));
+    assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="全天安排" && t.galley.job.sections[0].format.font_id.size<14.0)),"全天日程不应占用展开卡片");
     h.click(H::local(270.0,43.0));h.frame(vec![]);assert!(contains(&h,"过去的安排"));
     h.click(H::local(270.0,43.0));h.frame(vec![]);assert!(!contains(&h,"过去的安排"));
 }
@@ -1012,7 +1015,7 @@ fn expanded_settings_routes_preserve_inline_controls(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for (page,tab) in crate::app::PAGE_SETTINGS_TABS.into_iter().enumerate(){
         let mut h=H::new();h.app.show_page(page);h.hover(H::local(200.0,40.0),1.0);
-        h.click(H::local(394.0,18.0));
+        h.click(settings_button(&h));
         assert!(h.app.settings_open,"页面 {page} 应打开设置窗口");
         assert_eq!(h.app.settings_tab,tab);assert_eq!(h.app.page,page);
         assert!(h.app.subpage.is_none());
@@ -1020,7 +1023,7 @@ fn expanded_settings_routes_preserve_inline_controls(){
     for (page,point) in [(1,H::local(111.0,18.0)),(2,H::local(149.0,110.0))]{
         let mut h=H::new();h.app.show_page(page);h.hover(H::local(200.0,40.0),1.0);
         h.click(point);assert_eq!(h.app.subpage,Some(page));assert!(!h.app.settings_open);
-        h.click(H::local(394.0,18.0));assert!(h.app.settings_open);
+        h.click(settings_button(&h));assert!(h.app.settings_open);
         assert_eq!(h.app.subpage,Some(page),"打开完整设置后应保留岛内调整页");
     }
     let mut h=H::new();h.app.show_page(3);h.hover(H::local(200.0,40.0),1.0);
@@ -1275,8 +1278,9 @@ impl H {
         self.picker_frame(vec![egui::Event::PointerMoved(point)]);
         for pressed in [true,false]{self.picker_frame(vec![egui::Event::PointerButton{pos:point,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()}]);}
     }
+    /// 页面内容的本地坐标：x 相对面板左边，y 相对状态行下方的页面内容顶部。
     fn local(x: f32, y: f32) -> Pos2 {
-        Pos2::new((WIN_W - PW) / 2.0 + x, y)
+        Pos2::new((WIN_W - PW) / 2.0 + x, crate::app::STATUS_H - crate::app::PAGE_RAISE + y)
     }
     fn quota_accounts(&mut self,count:usize) {
         use crate::quota::{Account,Provider,Snapshot,Window};
@@ -1334,9 +1338,14 @@ fn island_drag_header(h:&mut H,bounds:crate::display_layout::Bounds,ppp:f32)->Po
     h.app.show_page(1);
     let mut screen=Rect::NOTHING;
     for _ in 0..90{screen=island_drag_frame(h,bounds,ppp,None,None);}
-    h.shapes.iter().find_map(|shape|match &shape.shape{
-        egui::Shape::Text(text) if text.galley.text()=="10月28日 周三"=>Some(text.visual_bounding_rect().center()-screen.min.to_vec2()),_=>None,
-    }).expect("展开后的日期应可见")
+    let (width,height)=if h.app.side(){(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)}else{(WIN_W,WIN_H)};
+    let win=Rect::from_min_size(Pos2::ZERO,Vec2::new(width,height));
+    h.app.content_origin(win)+Vec2::new(210.0,15.0)-screen.min.to_vec2()
+}
+
+/// 展开态状态行最右侧的设置按钮；位置随组件宽度变化，按响应取中心。
+fn settings_button(h:&H)->Pos2 {
+    h.ctx.read_response(egui::Id::new(("card",true,"page-settings"))).expect("展开后应有设置按钮").rect.center()
 }
 
 #[test]
@@ -1524,7 +1533,7 @@ fn island_position_drag_ignores_jitter_and_preserves_header_buttons(){
     island_drag_frame(&mut h,bounds,1.0,Some(start+Vec2::splat(1.0)),Some(false));
     assert_eq!(h.app.settings.island_offset,0,"轻微手抖不能改变位置");
     let screen=island_drag_frame(&mut h,bounds,1.0,Some(start),None);
-    let gear=H::local(394.0,18.0)-screen.min.to_vec2();
+    let gear=settings_button(&h)-screen.min.to_vec2();
     island_drag_frame(&mut h,bounds,1.0,Some(gear),Some(true));
     island_drag_frame(&mut h,bounds,1.0,Some(gear),Some(false));
     assert!(h.app.settings_open,"时间区域拖动不能拦截设置按钮");
@@ -2047,7 +2056,7 @@ fn music_lyrics_island_toggle_is_independent_and_persistent() {
     assert!(!h.app.show_lyrics && !h.app.settings.lyrics_enabled);
     let saved=crate::model::Settings::load();
     assert!(saved.island_lyrics && !saved.lyrics_enabled);
-    h.hover(Pos2::new(WIN_W/2.0,PH+30.0),1.0);
+    h.hover(Pos2::new(WIN_W/2.0,PH+crate::app::STATUS_H+30.0),1.0);
     assert!(!h.app.open);
     assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"));
     let pet_width=if h.app.pet_enabled(){48.0}else{0.0};
@@ -2166,7 +2175,7 @@ fn expanded_and_segmented_lyrics_share_the_early_display_time(){
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let next=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text()=="下一句"=>Some(text),_=>None}).unwrap();
     assert_eq!(next.galley.job.sections[0].format.font_id.size,12.0,"展开歌词也应在开唱前高亮下一句");
-    h.hover(Pos2::new(WIN_W/2.0,PH+30.0),1.0);
+    h.hover(Pos2::new(WIN_W/2.0,PH+crate::app::STATUS_H+30.0),1.0);
     let line="愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光";
     h.media.position=6.0;h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
     for _ in 0..60{h.frame(vec![]);}
@@ -2408,7 +2417,7 @@ fn hover_expands_with_overshoot_and_leave_collapses() {
     }
     assert!(peak > 1.002 && peak < 1.02, "展开应有轻微过冲, peak={peak}");
     assert!((h.app.progress() - 1.0).abs() < 0.02);
-    h.cursor = Some(Pos2::new(WIN_W / 2.0, PH + 30.0));
+    h.cursor = Some(Pos2::new(WIN_W / 2.0, PH + crate::app::STATUS_H + 30.0));
     for _ in 0..40 {
         h.frame(vec![]);
     }
@@ -2495,7 +2504,7 @@ fn minimal_hover_does_not_catch_tabs_during_collapse() {
     h.app.set_minimal(true);
     h.hover(Pos2::new(WIN_W/2.0,2.0),1.0);
     assert!(h.app.open);
-    h.cursor=Some(Pos2::new(WIN_W/2.0,PH+30.0));
+    h.cursor=Some(Pos2::new(WIN_W/2.0,PH+crate::app::STATUS_H+30.0));
     for _ in 0..30 {
         h.frame(vec![]);
         if !h.app.open {break;}
@@ -2516,7 +2525,8 @@ fn music_header_shortcut_returns_from_every_page_without_controlling_playback() 
         h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),playing,duration:120.0,..Default::default()};
         for page in 1..crate::app::PAGE_NAMES.len() {
             h.app.show_page(page);h.hover(H::local(300.0,60.0),0.8);h.cmds.clear();
-            h.click(H::local(340.0,18.0));
+            let music=h.ctx.read_response(egui::Id::new(("card",true,"header-music"))).expect("展开态状态行应显示音乐入口").rect;
+            h.click(music.center());
             assert_eq!(h.app.page,0,"播放状态 {playing} 时应从页面 {page} 直达音乐页");
             assert!(h.app.open);assert!(!h.app.settings_open);assert_eq!(h.app.media.playing,playing);
             assert!(h.cmds.iter().all(|cmd|!matches!(cmd,crate::app::Cmd::Media(_)|crate::app::Cmd::MusicVolume(..))),"返回音乐页不能改变播放或音量");
@@ -2529,7 +2539,8 @@ fn music_header_shortcut_keeps_hidden_music_page_disabled() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     h.app.set_page_visible(0,false);h.app.show_page(4);h.hover(H::local(300.0,60.0),0.8);
-    h.click(H::local(340.0,18.0));
+    let music=h.ctx.read_response(egui::Id::new(("card",true,"header-music"))).expect("音乐入口仍应可见").rect;
+    h.click(music.center());
     assert_eq!(h.app.page,4);assert!(!h.app.settings.visible_pages[0]);
     assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,1);
 }
@@ -2539,8 +2550,9 @@ fn music_header_shortcut_is_absent_without_music_and_keeps_settings_clickable() 
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for media in [crate::smtc::NowPlaying::default(),crate::smtc::NowPlaying{title:"Video".into(),artist:"Channel".into(),playing:true,playback_type:crate::smtc::MediaKind::Video,..Default::default()}] {
         let mut h=H::new();h.media=media;h.app.show_page(4);h.hover(H::local(300.0,60.0),0.8);
+        assert!(h.ctx.read_response(egui::Id::new(("card",true,"header-music"))).is_none(),"没有音乐时状态行不显示音乐入口");
         h.click(H::local(340.0,18.0));assert_eq!(h.app.page,4);assert!(!h.app.settings_open);
-        h.click(H::local(394.0,18.0));assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,4);
+        h.click(settings_button(&h));assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,4);
     }
 }
 
@@ -2589,10 +2601,10 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
     assert_eq!(h.app.page,5);
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.app.open && !h.hit.contains(edge),"原位保留翻页意图，岛外仍可点击桌面");
-    assert!((h.app.h.pos-PH).abs()<0.1 && (h.hit.height()-PH-2.0).abs()<0.1,"矮页应使用自身高度");
+    assert!((h.app.h.pos-(PH+crate::app::STATUS_H)).abs()<0.1 && (h.hit.height()-PH-crate::app::STATUS_H-2.0).abs()<0.1,"矮页应使用自身高度");
     h.hover(H::local(180.0,174.0),0.4);
     assert!(h.app.open,"在上一页范围内向侧下方移动仍可阅读");
-    h.hover(H::local(220.0,PH-1.0),0.4);
+    h.hover(H::local(220.0,PH-1.0+crate::app::PAGE_RAISE),0.4);
     h.hover(H::local(250.0,157.0),0.4);
     assert!(h.app.open,"轻微穿过新页边缘再移回来不应误收起");
     h.wheel(40.0);
@@ -2604,7 +2616,7 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
 
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.app.go(6,1.0);
-    h.hover(H::local(70.0,PH-1.0),0.8);
+    h.hover(H::local(70.0,PH-1.0+crate::app::PAGE_RAISE),0.8);
     h.wheel(40.0);
     h.hover(edge,0.4);
     assert!(h.app.open,"翻页时光标刚好在新边缘内，也能顺势移到旧页范围");
@@ -2625,18 +2637,18 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
         for sign in [-1.0,1.0] {
             h.app.go(6,1.0);
             let tall=side_frame(&mut h,Some(resident)).hit;
-            let edge=tall.center()+Vec2::new(0.0,sign*83.0);
+            let edge=tall.center()+Vec2::new(0.0,sign*((PH+crate::app::STATUS_H)/2.0+8.0));
             for _ in 0..45 {side_frame(&mut h,Some(edge));}
             side_frame_events(&mut h,Some(edge),vec![egui::Event::MouseWheel {
                 unit:egui::MouseWheelUnit::Point,delta:Vec2::new(0.0,40.0),modifiers:Default::default(),
             }]);
             assert_eq!(h.app.page,5);
-            let moved=edge+Vec2::new(65.0,4.0*sign);
+            let moved=edge+Vec2::new(65.0,8.0*sign);
             for _ in 0..45 {side_frame(&mut h,Some(moved));}
             let out=side_frame(&mut h,Some(moved));
             assert!(out.expanded && !out.hit.contains(moved) && out.page_scroll_area.is_some_and(|r|r.contains(moved)),
                 "{dock:?} 原页上下边缘的空白处应可移动并续滚");
-            assert!((h.app.h.pos-PH).abs()<0.1);
+            assert!((h.app.h.pos-(PH+crate::app::STATUS_H)).abs()<0.1);
             let out=side_frame(&mut h,Some(tall.center()));
             assert!(out.expanded && !out.hit.contains(edge),"{dock:?} 移入矮页后应恢复高度");
         }
@@ -3181,11 +3193,11 @@ fn quota_update_status_is_visible_for_every_provider_and_keeps_failed_data(){
             shoot_feature(&mut h,&mut raster,&dest,&format!("quota-{}",provider.name()),90,Some(H::local(300.0,60.0)),"2026-11-07");
         }
         h.hover(H::local(300.0,60.0),1.0);
-        assert_eq!(h.app.expanded_height(),176.0,"{provider:?} 额度页应采用同宽加高的布局");
+        assert_eq!(h.app.expanded_height(),176.0+crate::app::STATUS_H,"{provider:?} 额度页应采用同宽加高的布局");
         assert!((h.app.current_width()-PW).abs()<0.1,"{provider:?} 额度页应保持原有宽度：{}",h.app.current_width());
         let expected=if provider==Provider::Claude{format!("本地记录 · {time}")}else if provider==Provider::DeepSeek{format!("CNY · {time} 更新")}else{format!("{time} 更新")};
         let status=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==expected=>Some(t.visual_bounding_rect()),_=>None}).unwrap_or_else(||panic!("{provider:?} 缺少更新时间：{expected}"));
-        assert!(status.bottom()+6.0<=H::local(0.0,h.app.expanded_height()-9.2).y,"{provider:?} 更新时间 {status:?} 应与分页圆点留出间距");
+        assert!(status.bottom()+6.0<=H::local(0.0,h.app.expanded_height()-crate::app::STATUS_H-9.2).y,"{provider:?} 更新时间 {status:?} 应与分页圆点留出间距");
         for shape in &h.shapes{if let egui::Shape::Text(text)=&shape.shape{
             if !text.galley.text().is_empty()&&text.galley.text()!=expected&&text.visual_bounding_rect().left()>=H::local(125.0,0.0).x{
                 assert!(shape.clip_rect.contains(text.visual_bounding_rect().center()),"{provider:?} 的 {} 应完整显示在面板内",text.galley.text());
@@ -3204,14 +3216,14 @@ fn quota_update_status_is_visible_for_every_provider_and_keeps_failed_data(){
 fn quota_page_navigation_tracks_the_taller_panel(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.quota_accounts(1);
     h.app.show_page(6);h.hover(H::local(300.0,60.0),0.8);
-    assert!((h.hit.height()-178.0).abs()<0.2,"额度页新增的底部空间应属于命中区域");
+    assert!((h.hit.height()-208.0).abs()<0.2,"额度页新增的底部空间应属于命中区域");
     let dot=h.shapes.iter().find_map(|shape|match &shape.shape{
-        egui::Shape::Rect(rect) if (rect.rect.width()-4.0).abs()<0.1&&(rect.rect.height()-4.0).abs()<0.1&&(rect.rect.center().y-168.8).abs()<0.1=>Some(rect.rect.center()),_=>None,
+        egui::Shape::Rect(rect) if (rect.rect.width()-4.0).abs()<0.1&&(rect.rect.height()-4.0).abs()<0.1&&(rect.rect.center().y-198.8).abs()<0.1=>Some(rect.rect.center()),_=>None,
     }).expect("分页圆点应随加高的面板下移");
     h.click(dot);assert_ne!(h.app.page,6,"新增底部区域中的分页应可点击");
     h.app.show_page(6);h.hover(H::local(300.0,60.0),0.8);
     h.click(H::local(21.0,88.0));assert_eq!(h.app.page,5);
-    h.hover(H::local(300.0,60.0),0.8);assert_eq!(h.app.expanded_height(),PH);
+    h.hover(H::local(300.0,60.0),0.8);assert_eq!(h.app.expanded_height(),PH+crate::app::STATUS_H);
     h.click(H::local(398.0,68.0));assert_eq!(h.app.page,6);
     h.hover(H::local(300.0,60.0),0.8);
     h.click(H::local(398.0,88.0));assert_eq!(h.app.page,crate::app::CALENDAR_PAGE);
@@ -3293,6 +3305,11 @@ fn page_visibility_is_saved_and_sets_the_starting_page() {
     assert_eq!(crate::model::Settings::load().visible_pages,[true;12]);
 }
 
+/// 去掉 egui 在浮层淡入首帧留下的不可见占位，只比较真正绘制的内容。
+fn visible_shapes(shapes:&[egui::epaint::ClippedShape])->Vec<egui::epaint::ClippedShape>{
+    shapes.iter().filter(|s|!matches!(s.shape,egui::Shape::Noop)).cloned().collect()
+}
+
 #[test]
 fn battery_module_hides_power_in_collapsed_and_expanded_headers() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -3301,16 +3318,16 @@ fn battery_module_hides_power_in_collapsed_and_expanded_headers() {
         h.app.settings.pet=false;
         h.app.settings.show_battery=false;
         if expanded {h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);} else {h.frame(vec![]);}
-        let baseline=h.shapes.clone();
+        let baseline=visible_shapes(&h.shapes);
         h.power=(Some(80),true);
         h.t-=1.0/60.0;h.frame(vec![]);
-        assert!(h.shapes==baseline,"关闭电量后，本机电池状态不应影响界面布局");
+        assert!(visible_shapes(&h.shapes)==baseline,"关闭电量后，本机电池状态不应影响界面布局");
         h.app.settings.show_battery=true;
         h.t-=1.0/60.0;h.frame(vec![]);
-        assert!(h.shapes!=baseline,"开启后应显示电量");
+        assert!(visible_shapes(&h.shapes)!=baseline,"开启后应显示电量");
         h.power=(None,true);
         h.t-=1.0/60.0;h.frame(vec![]);
-        assert!(h.shapes==baseline,"没有电池的设备应自动隐藏电量并释放占位");
+        assert!(visible_shapes(&h.shapes)==baseline,"没有电池的设备应自动隐藏电量并释放占位");
     }
 }
 
@@ -3459,8 +3476,9 @@ fn mail_page_shows_code_and_copies_on_click() {
         },
         new: true,
     });
-    assert!(h.app.notification_bell_until > 0.0, "新邮件应点亮铃铛");
-    assert!(h.app.alerts.iter().any(|a|a.title=="新邮件"&&a.page==5),"新邮件应进入通知队列，不能只有收起时才可见的铃铛");
+    assert!(h.app.notification_bell_until <= h.app.t, "新邮件不点亮 Windows 专用铃铛");
+    assert!(h.app.alerts.iter().any(|a|a.title=="新邮件"&&a.page==5),"新邮件应进入通知队列");
+    assert!(h.app.mail_unread_count() > 0, "未读邮件应由邮箱图标常驻提示");
     h.app.show_page(5);
     h.hover(Pos2::new(WIN_W / 2.0, 12.0), 0.6);
     h.hover(H::local(300.0, 60.0), 0.4);
@@ -3734,7 +3752,7 @@ fn mascot_stays_beside_the_clock_and_all_resident_components(){
     h.app.pomo.running=true;h.app.pomo.remaining=1200.0;
     for _ in 0..120 {h.frame(vec![]);}let width=h.app.current_width();
     h.app.settings.pet=true;for _ in 0..120 {h.frame(vec![]);}
-    assert!((h.app.current_width()-width-44.0).abs()<0.1,"岛仔应有独立常驻位置");
+    assert!((h.app.current_width()-width-(crate::bar_layout::slot_width(crate::bar_layout::PET)+crate::bar_layout::GAP)).abs()<0.1,"岛仔应有独立常驻位置");
     assert_eq!(h.quota_centers().len(),5,"五个常驻账号均显示额度环");
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="09:41")),"岛仔与时钟共存");
     assert!(h.shapes.iter().filter(|s|matches!(&s.shape,egui::Shape::Path(p) if p.points.len()==13 && (p.stroke.width-3.6).abs()<0.01)).count()>=2,"没有闲置或悬停也应显示眼睛");
@@ -4711,6 +4729,20 @@ fn closing_app_notification_keeps_queued_messages_and_the_resident_bell(){
 }
 
 #[test]
+fn windows_notice_view_opens_the_notification_page(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
+    for _ in 0..60{h.frame(vec![]);}
+    h.app.receive_notification("天气".into(),"weather.app".into(),"降雨提醒".into());
+    for _ in 0..30{h.frame(vec![]);}
+    let view=h.ctx.read_response(egui::Id::new(("card",true,"external-view"))).expect("外部通知横幅应有查看按钮").rect;
+    h.click(view.center());
+    assert_eq!(h.app.page,crate::app::WINDOWS_PAGE);
+    assert!(h.app.notice.is_none());
+    assert!(!h.app.windows_unread);
+}
+
+#[test]
 fn lyric_app_notification_respects_preview_and_restores_current_lyrics(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for preview in [false,true]{
@@ -5074,25 +5106,30 @@ fn calendar_dates_are_readable_and_source_labels_do_not_take_a_second_line() {
 }
 
 #[test]
-fn calendar_first_schedule_has_a_large_time_and_keeps_the_lower_list_scrollable() {
+fn calendar_selected_schedule_expands_in_place_with_two_rows() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let day=chrono::NaiveDate::from_ymd_opt(2026,10,28).unwrap();
     let start=day.and_hms_opt(10,0,0).unwrap().and_local_timezone(chrono::Local).earliest().unwrap().timestamp();
     h.app.calendar.view.day=day;h.app.calendar.view.month=crate::calendar::month_start(day);h.app.calendar.view.loaded=Some(h.app.calendar.view.month);
     h.app.calendar.view.events=(0..7).map(|i|crate::mail::Meeting{ all_day:false,title:format!("会议 {i}"),start:start+i*3600,end:Some(start+i*3600+2700),at:String::new(),uid:format!("layout-{i}")}).collect();
     h.app.open_calendar(None);h.hover(H::local(300.0,40.0),1.0);
-    let text=|label:&str|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t) if t.galley.text()==label=>Some(t),_=>None}).unwrap();
-    assert!(text("10:00").galley.job.sections[0].format.font_id.size>=23.0);
-    assert!(text("会议 0").galley.job.sections[0].format.font_id.size>text("会议 1").galley.job.sections[0].format.font_id.size);
-    assert!(text("10:45 结束").visual_bounding_rect().bottom()<text("会议 1").visual_bounding_rect().top());
-    assert!(text("会议 4").visual_bounding_rect().bottom()<H::local(0.0,205.0).y);
+    fn find<'a>(shapes:&'a [egui::epaint::ClippedShape],label:&str)->&'a egui::epaint::TextShape {
+        shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t) if t.galley.text()==label=>Some(t),_=>None}).unwrap()
+    }
+    let size=|shapes:&[egui::epaint::ClippedShape],label:&str|find(shapes,label).galley.job.sections[0].format.font_id.size;
+    assert!((size(&h.shapes,"10:00")-14.0).abs()<0.01,"展开卡片的开始时间与名称同字号");
+    assert!((size(&h.shapes,"会议 0")-14.0).abs()<0.01);
+    assert!(size(&h.shapes,"会议 0")>size(&h.shapes,"会议 1"),"未选中行保持紧凑");
+    assert!(find(&h.shapes,"10:45 结束").visual_bounding_rect().bottom()<find(&h.shapes,"会议 1").visual_bounding_rect().top(),"结束时间在下一行");
+    assert!(find(&h.shapes,"会议 4").visual_bounding_rect().bottom()<H::local(0.0,205.0).y);
     h.hover(H::local(300.0,194.0),0.25);h.wheel(-40.0);
     assert_eq!(h.app.calendar.view.first,1,"列表底部也应滚动日程");assert_eq!(h.app.page,7);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="会议 0")),"滚动不能切换大卡片");
+    assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="会议 0")),"滚动不应把卡片置顶");
     h.click(H::local(260.0,138.0));h.hover(H::local(300.0,194.0),0.2);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="12:00" && t.galley.job.sections[0].format.font_id.size>=23.0)),"点击才切换大卡片");
+    assert!((size(&h.shapes,"15:00")-14.0).abs()<0.01,"点击的卡片在原位置放大");
+    assert!(size(&h.shapes,"会议 5")>size(&h.shapes,"会议 1"),"选中卡片不应置顶");
     h.wheel(-40.0);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="12:00" && t.galley.job.sections[0].format.font_id.size>=23.0)),"选中后滚动仍保持详情");
+    assert!((size(&h.shapes,"15:00")-14.0).abs()<0.01,"选中后滚动仍保持展开");
     h.app.open_calendar(Some(h.app.calendar.view.events[6].clone()));h.hover(H::local(300.0,40.0),0.3);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="会议 6")),"提醒定位的末条日程应完整可见");
 }
@@ -5152,15 +5189,15 @@ fn calendar_layout_gallery() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_CALENDAR_PREVIEW_DIR").expect("需指定预览目录"));
     std::fs::create_dir_all(&dest).unwrap();
-    for mode in ["agenda","dingtalk","wecom","empty","loading","failed","disconnected","local-editor","local","local-all-day","mixed"] {
+    for mode in ["agenda","dingtalk","wecom","icloud","exchange","empty","loading","failed","disconnected","local-editor","local","local-all-day","mixed"] {
         let mut h=H::new();
         let day=chrono::NaiveDate::from_ymd_opt(2026,11,2).unwrap();
         h.app.calendar.view.day=day;h.app.calendar.view.month=crate::calendar::month_start(day);
         h.app.open_calendar(None);
-        let provider=match mode{"dingtalk"=>crate::calendar::Provider::DingTalk,"wecom"=>crate::calendar::Provider::WeCom,_=>crate::calendar::Provider::Feishu};
+        let provider=match mode{"dingtalk"=>crate::calendar::Provider::DingTalk,"wecom"=>crate::calendar::Provider::WeCom,"icloud"=>crate::calendar::Provider::ICloud,"exchange"=>crate::calendar::Provider::Exchange,_=>crate::calendar::Provider::Feishu};
         if !["disconnected","local-editor","local","local-all-day"].contains(&mode){h.app.calendar.config=Some(crate::calendar::Config{provider,username:"demo".into(),href:None,server:None});h.app.calendar.connected=true;}
         h.app.calendar.view.loaded=Some(crate::calendar::month_start(day));
-        if ["agenda","dingtalk","wecom","mixed"].contains(&mode) {
+        if ["agenda","dingtalk","wecom","icloud","exchange","mixed"].contains(&mode) {
             for (i,(hour,minute,title)) in [(14,30,"产品方案评审"),(16,0,"下一阶段的设计方案与开发排期对齐"),(17,0,"项目进度同步")].into_iter().enumerate(){
                 let at=day.and_hms_opt(hour,minute,0).unwrap().and_local_timezone(chrono::Local).earliest().unwrap();
                 h.app.calendar.view.events.push(crate::mail::Meeting{ all_day:false,end:Some(at.timestamp()+2700),title:title.into(),start:at.timestamp(),at:at.format("%m-%d %H:%M").to_string(),uid:format!("sample-{i}")});
@@ -5448,8 +5485,8 @@ fn todo_reminder_picker_is_embedded_in_the_island(){
     egui::Context::set_immediate_viewport_renderer(|_,_|panic!("待办提醒必须在岛内选择，不能创建独立窗口"));
     h.click(H::local(343.0,46.0));
     for _ in 0..90 {h.frame(vec![]);}
-    assert_eq!(h.app.expanded_height(),PH,"右侧滚轮应保持待办页原来的高度");
-    assert!(h.hit.height()<=PH+2.0,"选择时间不能撑大岛体");
+    assert_eq!(h.app.expanded_height(),PH+crate::app::STATUS_H,"右侧滚轮应保持待办页原来的高度");
+    assert!(h.hit.height()<=PH+crate::app::STATUS_H+2.0,"选择时间不能撑大岛体");
     for label in ["准备会议","已完成","取消","完成","暂不提醒"] {
         let (rect,clip)=h.shapes.iter().find_map(|s|match &s.shape {
             egui::Shape::Text(t) if t.galley.text()==label=>Some((t.visual_bounding_rect(),s.clip_rect)),_=>None,
@@ -6062,7 +6099,7 @@ fn mailbox_large_code_card_preserves_copy_and_identifies_source(){
     h.cmds.clear();h.click(H::local(60.0,70.0));
     assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Copy(value) if value=="274630")));
     assert!(h.app.mail.open_uid.is_none(),"复制验证码不能误开邮件详情");
-    assert_eq!(h.app.expanded_height(),PH,"邮箱沿用录屏里的面板尺寸");
+    assert_eq!(h.app.expanded_height(),PH+crate::app::STATUS_H,"邮箱沿用录屏里的面板尺寸");
 }
 
 #[test]
@@ -6525,7 +6562,8 @@ fn clock_residency_only_hides_the_collapsed_clock(){
         for _ in 0..90{h.frame(vec![]);}
         assert!(!visible(&h));assert!(h.app.resident.target.x[crate::bar_layout::CLOCK].is_none());
         assert!(h.app.resident.target.width<width,"关闭时间应收回常驻占位");
-        h.hover(Pos2::new(WIN_W/2.0,15.0),1.0);assert!(visible(&h),"展开顶栏仍应显示时间");
+        h.hover(Pos2::new(WIN_W/2.0,15.0),1.0);
+        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="09:41")),"展开顶栏仍应显示时间");
         h.cursor=None;for _ in 0..120{h.frame(vec![]);}
         for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
             h.app.settings.dock=dock;
@@ -6602,7 +6640,7 @@ fn clock_seconds_keep_resident_spacing_and_digit_width(){
             assert!(widths.iter().all(|w|(w-widths[0]).abs()<0.01),"秒数变化不应改变时钟占位");
         });});
         h.app.show_page(0);h.hover(H::local(200.0,40.0),1.0);
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==if twelve{"9:41:00"}else{"09:41:00"})),"展开后顶栏也应显示秒数");
+        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="09:41")),"展开后顶栏只显示时:分");
         h.t+=5.0;
         for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
             h.app.settings.dock=dock;
@@ -7003,14 +7041,14 @@ fn ai_question_keeps_detail_open_until_answered(){
     h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-q1");
-    for _ in 0..120 {h.frame(vec![]);if h.app.open{break;}}
-    assert!(h.app.open&&h.app.agent.detail,"等待回答应展开详情");
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.open&&h.app.agent.detail,"等待回答应直接展开详情");
+    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待回答不应先出横幅");
     assert_eq!(h.app.page,crate::app::AI_PAGE);
     assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-q1"));
     h.cursor=None;
     for _ in 0..360 {h.frame(vec![]);}
     assert!(h.app.open,"光标离开和停留时长都不应自动收起提问详情");
-    assert!(h.app.notice.is_none(),"提问不再收成横幅");
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="甲")),"选项直接画在详情里");
     h.click_text("甲");
     h.click_text("提交");
@@ -7020,24 +7058,165 @@ fn ai_question_keeps_detail_open_until_answered(){
 }
 
 #[test]
+fn ai_question_inline_input_enter_keeps_text_and_does_not_submit(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    post_agent_hook(port,&token,"ui-free");
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.agent.detail,"提问详情应已打开");
+    for _ in 0..120 {h.frame(vec![]);if h.app.reveal>0.95 {break;}}
+    assert!((h.app.expanded_height()-(crate::app::STATUS_H+214.0)).abs()<0.01,"两个选项时详情不应按最大高度展开");
+    let (_,free_y)=h.app.agent_free_row().expect("自由输入行应已画出");
+    h.click(H::local(200.0,free_y+11.0));
+    h.frame(vec![]);
+    assert!(h.app.agent.free_focus,"点击自由输入行应获得焦点");
+    h.frame(vec![egui::Event::Text("hello".into())]);
+    assert_eq!(h.app.agent.free,"hello","文字应先进入输入框");
+    h.frame(vec![egui::Event::Key{key:egui::Key::Enter,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);
+    h.frame(vec![]);
+    assert!(!h.app.agent.free_focus,"回车应结束输入并释放焦点");
+    assert_eq!(h.app.agent.free,"hello","回车后输入内容仍留在行内");
+    assert_eq!(h.app.agent.store.waiting_count(),1,"回车不能提交");
+    assert!(h.app.agent.detail,"回车后详情仍保持");
+    h.click_text("提交");
+    assert_eq!(h.app.agent.store.waiting_count(),0,"点提交才真正提交");
+    assert!(!h.app.agent.detail);
+}
+
+#[test]
 fn ai_approval_keeps_detail_open_until_decided(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_permission_hook(port,&token,"ui-p1");
-    for _ in 0..120 {h.frame(vec![]);if h.app.open{break;}}
-    assert!(h.app.open&&h.app.agent.detail,"等待审批应展开详情");
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.open&&h.app.agent.detail,"等待审批应直接展开详情");
+    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待审批不应先出横幅");
     assert_eq!(h.app.page,crate::app::AI_PAGE);
     assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-p1"));
     h.cursor=None;
     for _ in 0..360 {h.frame(vec![]);}
     assert!(h.app.open,"光标离开和停留时长都不应自动收起审批详情");
-    assert!(h.app.notice.is_none(),"审批不再收成横幅");
+    assert!((h.app.expanded_height()-(crate::app::STATUS_H+186.0)).abs()<0.01,"单行命令的审批详情应收缩到一行高度");
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="允许一次")),"审批按钮直接画在详情里");
     h.click_text("允许一次");
     assert_eq!(h.app.agent.store.waiting_count(),0,"在岛上直接批准即可放行");
     assert!(!h.app.agent_waiting_pinned());
     assert!(!h.app.agent.detail);
+}
+
+#[test]
+fn ai_waiting_expands_directly_even_without_auto_expand(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.agent.config.notify.auto_expand=false;
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    post_agent_hook(port,&token,"ui-q2");
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.open&&h.app.agent.detail,"等待回答不受自动展开开关影响");
+    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待回答不排横幅");
+    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-q2"));
+}
+
+#[test]
+fn ai_waiting_expansion_waits_for_todo_editing(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    h.app.adding=true;h.app.buf="草稿".into();
+    post_agent_hook(port,&token,"ui-edit");
+    for _ in 0..60 {h.frame(vec![]);}
+    assert!(!h.app.open&&!h.app.agent.detail,"编辑时等待事件应排队");
+    assert!(h.app.agent_open_after_notice.is_some(),"编辑结束后仍应展开");
+    h.app.cancel_edit();
+    for _ in 0..60 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.open&&h.app.agent.detail,"编辑结束后应展开详情");
+}
+
+#[test]
+fn ai_second_waiting_event_opens_after_the_first_is_answered(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    post_agent_hook(port,&token,"ui-a");
+    post_agent_hook(port,&token,"ui-b");
+    for _ in 0..60 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.agent.detail,"第一条等待事件应直接展开");
+    let first=h.app.agent.selected.clone().unwrap();
+    assert!(h.app.agent_open_after_notice.is_some(),"第二条等待事件应排队");
+    for _ in 0..360 {h.frame(vec![]);if h.app.reveal>0.95&&h.app.h.settled(h.app.expanded_height()){break;}}
+    assert!(h.app.agent.detail,"展开完成后详情应仍打开");
+    h.click_text("甲");
+    h.click_text("提交");
+    for _ in 0..60 {h.frame(vec![]);if h.app.agent.detail&&h.app.agent.selected.as_deref()!=Some(first.as_str()){break;}}
+    assert!(h.app.agent.detail,"答完第一条后应展开第二条");
+    assert_ne!(h.app.agent.selected.as_deref(),Some(first.as_str()));
+    assert_eq!(h.app.agent.store.waiting_count(),1);
+}
+
+#[test]
+fn ai_sound_follows_master_sound_and_light_visibility(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.settings.sound=true;
+    assert!(h.app.agent_sound_allowed());
+    h.app.settings.notifications=false;
+    assert!(!h.app.agent_sound_allowed(),"提醒总开关关闭时不出声");
+    h.app.settings.notifications=true;h.app.settings.sound=false;
+    assert!(!h.app.agent_sound_allowed(),"声音关闭时不出声");
+    h.app.settings.sound=true;h.app.agent.config.display.bar_indicator=false;
+    assert!(!h.app.agent_sound_allowed(),"状态灯隐藏时不出声");
+    h.app.agent.config.display.bar_indicator=true;
+    assert!(h.app.agent_sound_allowed());
+}
+
+#[test]
+fn collapsed_agent_light_opens_ai_page(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    for _ in 0..10 {h.frame(vec![]);}
+    let light=h.ctx.read_response(egui::Id::new(("card",true,"agent-pill"))).expect("收起态应显示 AI 状态灯").rect;
+    h.click(light.center());
+    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert!(h.app.open,"点状态灯应直接打开 AI 页");
+}
+
+#[test]
+fn expanded_status_row_keeps_entries_clickable_and_time_short(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();
+    h.app.settings.clock_12h=true;h.app.settings.clock_period=2;h.app.settings.clock_seconds=true;
+    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.app.windows_unread=true;
+    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
+    let rect=|h:&H,name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap_or_else(||panic!("展开态缺少 {name}")).rect;
+    for (name,r) in [("bell-mail",rect(&h,"bell-mail")),("header-music",rect(&h,"header-music")),("agent-pill",rect(&h,"agent-pill"))] {
+        assert!(r.center().y<crate::app::STATUS_H,"{name} 应留在顶部状态行：{r:?}");
+    }
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="09:41"&&t.visual_bounding_rect().center().y<crate::app::STATUS_H)),"展开态只显示时:分");
+    assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains("上午")||t.galley.text()=="9:41:00")),"展开态不受时段和秒数设置影响");
+    h.click(rect(&h,"header-music").center());
+    assert_eq!(h.app.page(),0,"展开态音乐入口可点");
+    h.hover(H::local(300.0,60.0),0.5);
+    h.click(rect(&h,"bell-mail").center());
+    assert_eq!(h.app.page(),crate::app::WINDOWS_PAGE,"展开态铃铛可点");
+}
+
+#[test]
+fn side_agent_light_opens_ai_page(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let (w,hgt)=(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H);
+    let mut h=H::new();h.app.settings.dock=crate::model::Dock::Left;
+    let away=Some(Pos2::new(w/2.0,hgt-5.0));
+    for _ in 0..60 {side_frame(&mut h,away);}
+    let item=h.ctx.read_response(egui::Id::new(("card",true,"side-agent"))).expect("侧边收起态应显示 AI 状态灯").rect;
+    let p=item.center();
+    let button=|pressed|egui::Event::PointerButton{pos:p,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()};
+    side_frame_events(&mut h,Some(p),vec![egui::Event::PointerMoved(p)]);
+    side_frame_events(&mut h,Some(p),vec![button(true)]);
+    side_frame_events(&mut h,Some(p),vec![button(false)]);
+    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert!(h.app.open,"点侧边状态灯应直接打开 AI 页");
 }
 
 #[test]
@@ -8488,16 +8667,16 @@ fn calendar_add_button_does_not_overlap_the_battery_ring(){
         let image=image::RgbaImage::from_raw((crate::app::CANVAS_W*2.0) as u32,(WIN_H*2.0) as u32,rgba).unwrap();
         image::imageops::crop_imm(&image,200,0,880,470).to_image().save(path).unwrap();
     }
-    let text=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text) if text.galley.text()=="＋ 新增"=>Some(text.visual_bounding_rect()),_=>None}).unwrap();
-    let button=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Rect(rect) if rect.rect.contains(text.center()) && (rect.rect.width()-46.0).abs()<0.1 && (rect.rect.height()-18.0).abs()<0.1=>Some(rect.rect),_=>None}).unwrap();
+    let text=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text) if text.galley.text()=="＋ 添加日程"=>Some(text.visual_bounding_rect()),_=>None}).unwrap();
+    let button=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Rect(rect) if rect.rect.contains(text.center()) && (rect.rect.width()-54.0).abs()<0.1 && (rect.rect.height()-18.0).abs()<0.1=>Some(rect.rect),_=>None}).unwrap();
     if battery.is_some(){
-        let ring=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Circle(circle) if (circle.radius-6.56).abs()<0.1 && (circle.center.y-button.center().y-0.6).abs()<0.1=>Some(Rect::from_center_size(circle.center,Vec2::splat(circle.radius*2.0+circle.stroke.width))),_=>None}).unwrap();
-        assert!(!button.expand(3.0).intersects(ring),"日程新增按钮与电量圆环应留有间距：按钮 {button:?}，圆环 {ring:?}");
+        let ring=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Circle(circle) if (circle.radius-8.2*crate::bar_layout::BATTERY_SCALE).abs()<0.1 && circle.center.y<crate::app::STATUS_H=>Some(Rect::from_center_size(circle.center,Vec2::splat(circle.radius*2.0+circle.stroke.width))),_=>None}).unwrap();
+        assert!(!button.expand(3.0).intersects(ring),"日程添加按钮与电量圆环应留有间距：按钮 {button:?}，圆环 {ring:?}");
     }
     let clock=h.app.settings.clock_text("17:43:00");
     for text in shapes.iter().filter_map(|shape|match &shape.shape{egui::Shape::Text(text) if text.galley.text()==date || clock.split_whitespace().any(|part|part==text.galley.text())=>Some(text),_=>None}){
         let bounds=text.visual_bounding_rect();
-        assert!(!button.expand(3.0).intersects(bounds),"新增按钮不能覆盖日期或时间：{}",text.galley.text());
+        assert!(!button.expand(3.0).intersects(bounds),"添加日程按钮不能覆盖日期或时间：{}",text.galley.text());
         assert!(bounds.right()<h.app.content_origin(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))).x+355.0,"日期与时间应留出右侧播放和设置按钮的位置");
     }
     }
@@ -8539,7 +8718,7 @@ fn wheel_short_lists_turn_pages(){
             assert_eq!(h.app.page,page,"日历可见列表未溢出应翻页，条数 {count}");
         }
     }
-    h.app.calendar.view.events=(0..6).map(|i|crate::mail::Meeting{all_day:false,title:format!("日程 {i}"),start:start+i*60,end:Some(start+3600),at:String::new(),uid:format!("wheel-long-{i}")}).collect();
+    h.app.calendar.view.events=(0..7).map(|i|crate::mail::Meeting{all_day:false,title:format!("日程 {i}"),start:start+i*60,end:Some(start+3600),at:String::new(),uid:format!("wheel-long-{i}")}).collect();
     h.app.show_page(7);
     for (delta,first) in [(40.0,0),(-40.0,1),(-40.0,1),(40.0,0),(40.0,0)]{
         h.hover(H::local(300.0,160.0),0.5);h.wheel(delta);

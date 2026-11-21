@@ -29,7 +29,9 @@ pub struct Adapter {
     pub process_names:&'static [&'static str],
     pub publishers:&'static [&'static str],
     pub keep_unidentified:bool,
+    /// 统一到约 20 点视觉外框：微信双气泡宽 21、QQ 方标 19、办公图标 20，按各自包围盒折算。
     pub icon_scale:f32,
+    /// 收起态在此基础上再乘 0.85，保持同一套图标比例。
     pub collapsed_icon_scale:f32,
     pub(crate) enabled:fn(&Settings)->bool,
     pub(crate) tray_enabled:fn(&Settings)->bool,
@@ -41,14 +43,14 @@ pub struct Adapter {
 const WECHAT:Adapter=Adapter{
     client:Messenger::Wechat,name:"微信",capture:Capture::Taskbar,notification_id:"WeChat",
     aliases:&["Weixin","Tencent.WeChat","Tencent.Weixin"],display_names:&["微信","WeChat","Weixin"],process_names:&["Weixin.exe","WeChat.exe"],publishers:&["tencent"],
-    keep_unidentified:false,icon_scale:1.0,collapsed_icon_scale:0.85,
+    keep_unidentified:false,icon_scale:0.95,collapsed_icon_scale:0.81,
     enabled:|settings|settings.wechat_notifications,tray_enabled:|settings|settings.wechat_tray_open,paint_icon:wechat_icon,
     #[cfg(windows)] native:&crate::wechat::ADAPTER,
 };
 const QQ:Adapter=Adapter{
     client:Messenger::Qq,name:"QQ",capture:Capture::SystemToast,notification_id:"QQ",
     aliases:&[],display_names:&["QQ"],process_names:&["QQ.exe"],publishers:&["tencent"],
-    keep_unidentified:true,icon_scale:1.12,collapsed_icon_scale:0.92,
+    keep_unidentified:true,icon_scale:1.05,collapsed_icon_scale:0.89,
     enabled:|settings|settings.read_notifications,tray_enabled:|_|true,paint_icon:qq_icon,
     #[cfg(windows)] native:&qq::ADAPTER,
 };

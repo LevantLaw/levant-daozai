@@ -321,6 +321,8 @@ impl Pet {
 
     pub fn draw(&mut self, c: &Card, cx: f32, t: f64, palette:Option<crate::skin_paint::Palette>) {
         if self.expressions.draw(c,cx,palette) {return;}
+        // 眼睛的墨迹中心比状态行中线高半点，整体下移使视觉中线落在 15 点。
+        let c=&c.shifted(0.0,0.5);
         for (i, eye) in self.eyes.iter().enumerate() {
             let x = cx + if i == 0 { -5.6 } else { 5.6 } + self.gaze[0];
             let y = 14.5 + self.y + eye.y + self.gaze[1];

@@ -1,6 +1,6 @@
 //! 左右停靠：岛体贴在屏幕左 / 右边缘，收起时是竖向胶囊，展开后面板从边缘滑出。
 //!
-//! 展开后的页面内容与顶部停靠完全相同（419 × 140 的横向面板），只是锚点换到侧边；
+//! 展开后的页面内容与顶部停靠完全相同（419 宽、顶部为常驻状态行的横向面板），只是锚点换到侧边；
 //! 收起态换成竖排：时间（时 / 分两行）、电池、播放状态、专注倒计时、通知铃铛。
 //! AI 额度竖排：环形额度一行一个，余额类图标在上、金额在下。
 //! 吉祥物和岛上歌词是横向内容，侧边停靠时不显示。
@@ -9,14 +9,14 @@ use crate::app::{App, Env, Phase, BAR_H_MIN, BAR_W_MIN, PILL_GAP, PW};
 use crate::model::{Dock, IslandShape};
 use crate::paint::{self, Card, H};
 use crate::theme::{self, size, W};
-use eframe::egui::{Color32, Pos2, Rect, Vec2};
+use eframe::egui::{Color32, CursorIcon, Pos2, Rect, Vec2};
 
 /// 侧边停靠时的透明画布（窗口）大小，逻辑点。
 pub const SIDE_W: f32 = 500.0;
 pub const SIDE_H: f32 = 600.0;
 /// 收起时竖向胶囊的厚度。
 pub const SIDE_BAR_W: f32 = 36.0;
-/// 岛体中心能离开屏幕竖直中线的预留：展开面板（最高约 236）与肩部、阴影留在屏幕内。
+/// 岛体中心能离开屏幕竖直中线的预留：展开面板（最高约 294）与肩部、阴影留在屏幕内。
 pub const SIDE_HALF_EXTENT: f32 = 150.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -78,9 +78,9 @@ impl App {
         }
     }
 
-    /// 展开面板（页面内容）的左上角。
+    /// 展开面板（页面内容）的左上角；比状态行下缘略高，收紧页头与状态栏之间的空白。
     pub(crate) fn content_origin(&self, win: Rect) -> Pos2 {
-        self.island_rect(win, PW, self.expanded_height()).min
+        self.island_rect(win, PW, self.expanded_height()).min + Vec2::new(0.0, crate::app::STATUS_H - crate::app::PAGE_RAISE)
     }
 
     /// 侧边停靠的命中区域：收起时是胶囊外扩几点并一直延伸到屏幕边缘，展开时是整个面板。
@@ -146,7 +146,13 @@ impl App {
                     c.text(cx, mid + 9.0, &format!("{minutes}′"), size::TINY, W::Semibold, theme::WHITE, H::Center);
                 }
                 SideItem::Quota(index, h) => self.draw_quota_side(c, cx, mid, h, index),
-                SideItem::Agent => self.draw_agent_light(c, cx, mid),
+                SideItem::Agent => {
+                    self.draw_agent_light(c, cx, mid);
+                    let item=c.hit(cx - 16.0, y, 32.0, h, "side-agent").on_hover_cursor(CursorIcon::PointingHand);
+                    if crate::quota_ui::bar_tooltip(item,"AI 会话".into()).clicked() {
+                        self.show_page(crate::app::AI_PAGE);
+                    }
+                }
                 SideItem::Badge(slot) => {
                     self.paint_badge(c, slot, cx, theme::WHITE);
                     let badge=self.page_badges_all().into_iter().find(|badge|badge.slot==slot);
@@ -161,8 +167,9 @@ impl App {
                 SideItem::Bell => {
                     paint::bell(&c.scaled(cx, mid, 1.1), cx, mid, theme::WHITE, paint::bell_swing(self.t - self.notification_bell_at));
                     c.circle(cx + 4.0, mid - 4.5, 2.0, Color32::from_rgb(255, 72, 72));
-                    if c.hit(cx - 16.0, y, 32.0, h, "side-bell").clicked() {
-                        if self.windows_unread { self.show_page(crate::app::WINDOWS_PAGE); } else { self.show_page(5); }
+                    let bell=c.hit(cx - 16.0, y, 32.0, h, "side-bell").on_hover_cursor(CursorIcon::PointingHand);
+                    if crate::quota_ui::bar_tooltip(bell,"Windows 通知 · 点击打开".into()).clicked() {
+                        self.show_page(crate::app::WINDOWS_PAGE);
                     }
                 }
             }

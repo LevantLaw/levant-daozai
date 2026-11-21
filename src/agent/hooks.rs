@@ -103,6 +103,13 @@ pub fn status(agent: AgentId) -> Status {
     if !current {
         return Status { agent, health: Health::NeedsRepair, path: Some(path), note: "Hook 指向旧版本，点修复更新".into() };
     }
+    let outdated = agent.hook_events().iter().any(|event| {
+        entries.iter().filter(|(name, _)| name == event.name)
+            .any(|(_, value)| contains_marker(value, agent) && !timeout_matches(value, agent, event.timeout))
+    });
+    if outdated {
+        return Status { agent, health: Health::NeedsRepair, path: Some(path), note: "Hook 超时配置过期，点修复更新".into() };
+    }
     Status { agent, health: Health::Installed, path: Some(path), note: "已接入".into() }
 }
 
@@ -135,6 +142,49 @@ fn contains_path(value: &Value, exe: &Path) -> bool {
         Value::Array(items) => items.iter().any(|item| contains_path(item, exe.as_ref().as_ref())),
         Value::Object(map) => map.values().any(|item| contains_path(item, exe.as_ref().as_ref())),
         _ => false,
+    }
+}
+
+fn is_our_hook(map: &serde_json::Map<String, Value>, agent: AgentId) -> bool {
+    map.get("command").is_some_and(|value| contains_marker(value, agent))
+        || map.get("args").is_some_and(|value| contains_marker(value, agent))
+}
+
+fn timeout_matches(value: &Value, agent: AgentId, seconds: u64) -> bool {
+    match value {
+        Value::Array(items) => items.iter().any(|item| timeout_matches(item, agent, seconds)),
+        Value::Object(map) => {
+            if is_our_hook(map, agent) {
+                let actual = if agent == AgentId::ZCode {
+                    map.get("timeoutMs").and_then(Value::as_u64).map(|ms| ms / 1000)
+                } else {
+                    map.get("timeout").and_then(Value::as_u64)
+                };
+                actual == Some(seconds)
+            } else {
+                map.values().any(|item| timeout_matches(item, agent, seconds))
+            }
+        }
+        _ => false,
+    }
+}
+
+fn set_timeout(value: &mut Value, agent: AgentId, seconds: u64, touched: &mut bool) {
+    match value {
+        Value::Array(items) => for item in items { set_timeout(item, agent, seconds, touched); },
+        Value::Object(map) => {
+            if is_our_hook(map, agent) {
+                let key = if agent == AgentId::ZCode { "timeoutMs" } else { "timeout" };
+                let value = if agent == AgentId::ZCode { seconds * 1000 } else { seconds };
+                if map.get(key).and_then(Value::as_u64) != Some(value) {
+                    map.insert(key.into(), json!(value));
+                    *touched = true;
+                }
+            } else {
+                for item in map.values_mut() { set_timeout(item, agent, seconds, touched); }
+            }
+        }
+        _ => {}
     }
 }
 
@@ -321,6 +371,35 @@ pub fn cleanup_legacy() -> bool {
     changed
 }
 
+/// 把岛仔自己的 Hook 超时更新到当前版本；只改自己的条目，写前备份。
+pub fn refresh_timeouts() -> bool {
+    let mut changed = false;
+    for agent in [AgentId::Claude, AgentId::Codex, AgentId::ZCode, AgentId::Copilot] {
+        let Some(path) = config_path(agent) else { continue; };
+        let Ok(bytes) = std::fs::read(&path) else { continue; };
+        let Ok(mut root) = serde_json::from_slice::<Value>(&bytes) else { continue; };
+        let before = root.clone();
+        let mut touched = false;
+        let entries = if agent == AgentId::ZCode {
+            root.get_mut("hooks").and_then(|hooks| hooks.get_mut("events")).and_then(Value::as_object_mut)
+        } else {
+            root.get_mut("hooks").and_then(Value::as_object_mut)
+        };
+        if let Some(entries) = entries {
+            for event in agent.hook_events() {
+                if let Some(list) = entries.get_mut(event.name).and_then(Value::as_array_mut) {
+                    for item in list.iter_mut() { set_timeout(item, agent, event.timeout, &mut touched); }
+                }
+            }
+        }
+        if touched && root != before {
+            let _ = backup(&path);
+            if write_json(&path, &root).is_ok() { changed = true; }
+        }
+    }
+    changed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,6 +421,29 @@ mod tests {
         assert!(legacy(&json!({"command":"powershell.exe -File play-sound.ps1 -Sound start"})));
         assert!(!legacy(&json!({"command":"rtk hook claude"})));
         assert!(!legacy(&json!({"command":"D:/Program Files/Pebrel/runtime/pebrel-hook.exe"})));
+    }
+
+    #[test]
+    fn timeout_refresh_only_touches_our_hook() {
+        let mut claude = json!({"hooks":[{"type":"command","command":"C:\\d.exe","args":["--agent-hook","claude","--event","PreToolUse"],"timeout":120}]});
+        assert!(!timeout_matches(&claude, AgentId::Claude, 86400));
+        let mut touched = false;
+        set_timeout(&mut claude, AgentId::Claude, 86400, &mut touched);
+        assert!(touched);
+        assert!(timeout_matches(&claude, AgentId::Claude, 86400));
+
+        let mut other = json!({"hooks":[{"type":"command","command":"rtk hook claude","timeout":120}]});
+        let mut touched = false;
+        set_timeout(&mut other, AgentId::Claude, 86400, &mut touched);
+        assert!(!touched);
+        assert_eq!(other["hooks"][0]["timeout"], 120);
+
+        let mut zcode = json!({"hooks":{"events":{"PermissionRequest":[{"type":"process","command":"C:\\d.exe","args":["--agent-hook","zcode","--event","PermissionRequest"],"timeoutMs":120000}]}}});
+        assert!(!timeout_matches(&zcode, AgentId::ZCode, 86400));
+        let mut touched = false;
+        set_timeout(&mut zcode, AgentId::ZCode, 86400, &mut touched);
+        assert!(touched);
+        assert!(timeout_matches(&zcode, AgentId::ZCode, 86400));
     }
 
     #[test]

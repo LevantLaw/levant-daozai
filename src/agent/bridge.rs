@@ -11,7 +11,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const MAX_BODY: usize = 256 * 1024;
-const WAIT_SECONDS: u64 = 90;
+/// 与 Hook 配置的超时一致：等待用户在岛上作答或审批时，不因中继超时提前关闭。
+const WAIT_SECONDS: u64 = 86400;
 
 #[derive(Debug)]
 pub struct Incoming {

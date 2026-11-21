@@ -359,7 +359,7 @@ impl App {
         self.quota.config.pinned_indices()
     }
     pub(crate) fn quota_bar_indices(&self)->Vec<usize>{
-        if self.browser_minimal_active || self.t<self.notification_bell_until || self.windows_unread{return vec![];}
+        if !self.open && (self.browser_minimal_active || self.t<self.notification_bell_until || self.windows_unread){return vec![];}
         self.quota_pinned()
     }
     /// 顶部胶囊行显示的额度组；成员在事件容器里时行内不占位。

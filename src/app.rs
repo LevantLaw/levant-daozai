@@ -21,7 +21,11 @@ use std::path::PathBuf;
 
 // ---------- 几何（逻辑点；原版 125% 截图 ÷ 1.25） ----------
 pub const PW: f32 = 419.0; // 展开面板宽
-pub const PH: f32 = 140.0; // 展开面板高
+pub const PH: f32 = 140.0; // 展开面板内容高（不含顶部状态行）
+/// 展开后保留的常驻状态行高度；收起时它就是整颗药丸。
+pub(crate) const STATUS_H: f32 = BAR_H;
+/// 页面内容向上压过状态行下缘的量；状态行底部是空白，页头可以更靠近它。
+pub(crate) const PAGE_RAISE: f32 = 6.0;
 pub const MUSIC_PAGE: usize = 0;
 pub const FOCUS_PAGE: usize = 1;
 pub const WATER_PAGE: usize = 2;
@@ -56,7 +60,7 @@ pub const FLARE_H: f32 = 16.0; // 外翻收敛高度
 pub const RAD: f32 = 33.0; // 底部圆角
 pub const WIN_W: f32 = 640.0; // 窗口（透明画布）
 pub const CANVAS_W: f32 = WIN_W + 320.0; // 保留右侧通知及阴影的完整空间，原岛仍按 WIN_W 定位。
-pub const WIN_H: f32 = 270.0;
+pub const WIN_H: f32 = 300.0;
 /// 胶囊皮肤与屏幕顶边的间隙。
 pub const PILL_GAP: f32 = 6.0;
 
@@ -916,6 +920,8 @@ pub struct App {
     pub(crate) quota: crate::quota_ui::State,
     /// AI 会话：Agent 状态、Hook 与本地中继。
     pub(crate) agent: crate::agent::AgentState,
+    /// `auto_expand` 打开时，等当前 AI 横幅结束后再进详情或列表。
+    pub(crate) agent_open_after_notice: Option<crate::agent_ui::AgentAlert>,
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
     pub(crate) weather_source: crate::weather_source_ui::State,
@@ -1060,6 +1066,7 @@ impl App {
             calendar: CalendarState::load(),
             quota: crate::quota_ui::State::load(),
             agent,
+            agent_open_after_notice:None,
             weather,
             weather_source,
             updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
@@ -1152,8 +1159,6 @@ impl App {
                     let body=format!("{} · {}",item.from,item.subject);
                     let body=item.code.as_ref().map(|code|crate::mail_privacy::mask(&body,code)).unwrap_or(body);
                     self.alert("新邮件",body,5,false);
-                    self.notification_bell_at = self.t;
-                    self.notification_bell_until = self.t + 6.0;
                 }
             }
             mail::Event::Test { account, ok, note } => {
@@ -1561,6 +1566,7 @@ impl App {
     }
 
     pub fn show_page(&mut self,page:usize) {
+        self.agent_open_after_notice=None;
         if !self.settings.visible_pages[page] {
             self.settings_tab=PAGE_SETTINGS_TABS[page];
             self.open_settings();
@@ -1864,19 +1870,21 @@ impl App {
     }
 
     pub(crate) fn expanded_height(&self)->f32 {
-        if self.page==CALENDAR_PAGE {CALENDAR_H}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6 {176.0}else if self.page==WINDOWS_PAGE {176.0}else if self.page==AI_PAGE {self.agent_page_height()}else if self.page==5&&self.mail.open_uid.is_some(){236.0}else{PH}
+        let content=if self.page==CALENDAR_PAGE {CALENDAR_H}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6 {176.0}else if self.page==WINDOWS_PAGE {176.0}else if self.page==AI_PAGE {self.agent_page_height()}else if self.page==5&&self.mail.open_uid.is_some(){236.0}else{PH};
+        content+STATUS_H
     }
 
     /// AI 会话页按卡片数增高；详情页按待处理类型或最近回复行数增高。
     fn agent_page_height(&self)->f32 {
         if self.agent.detail {
+            let reply = 138.0 + (self.agent.config.display.recent_lines.clamp(1, 3) as f32 - 1.0) * 14.0;
             match self.agent.selected_session().and_then(|session|session.pending.as_ref().map(|pending|&pending.kind)) {
-                Some(crate::agent::store::PendingKind::Question(_)) => 264.0,
-                Some(crate::agent::store::PendingKind::Approval(_)) => 200.0,
-                None => {
-                    let lines=self.agent.config.display.recent_lines.clamp(1,3) as f32;
-                    138.0+(lines-1.0)*14.0
+                Some(crate::agent::store::PendingKind::Question(questions)) => {
+                    let index = self.agent.question_index.min(questions.len().saturating_sub(1));
+                    questions.get(index).map(|question|crate::agent_ui::question_height(question.options.len())).unwrap_or(reply)
                 }
+                Some(crate::agent::store::PendingKind::Approval(_)) => crate::agent_ui::approval_height(self.agent.approval_lines),
+                None => reply,
             }
         } else {
             crate::agent_ui::agent_list_height(self.agent.store.visible().len(), self.agent.config.display.rows)
@@ -1929,10 +1937,11 @@ impl App {
         let mut cmds = Vec::new();
 
         self.tick(env, dt, elapsed);
-        self.tray_tick();
         self.dnd.tick(self.t);
         self.sync_device(env);
         self.tick_alerts();
+        self.agent_after_notice();
+        self.tray_tick();
         let hud_active=self.notice.clone();
         if hud_active.as_ref().map(|a|&a.title)!=self.hud_notice.as_ref().map(|a|&a.title)||hud_active.is_none(){self.notice_details=false;}
         if let Some(a)=&hud_active {self.hud_notice=Some(a.clone());}
@@ -1945,21 +1954,36 @@ impl App {
         self.update_media(env,&ctx);
         let bell=(self.t<self.notification_bell_until||self.windows_unread)&&!self.compact_notices();
         self.resident_power=(env.battery,env.charging);
-        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some()&&!self.settings.tray_battery,self.bar_quota_indices().len(),self.settings.show_music&&self.media.is_music()&&!bell&&!self.settings.tray_music,self.settings.show_focus&&self.pomo.running&&!self.settings.tray_focus,bell,self.pet_enabled(),self.weather_pill().is_some()&&!self.settings.tray_weather,self.agent_bar_visible());
-        layout.reorder(&self.settings.resident_order);
-        for (position,extra) in self.quota_balance_layout(&ctx){layout.balance_tail(position,extra);}
-        if self.settings.clock_period!=0 { layout.widen_clock(40.0); }
-        if self.settings.clock_seconds { layout.widen_clock(24.0); }
-        if let Some(extra)=self.weather_pill_extra(&ctx){ layout.widen(bar::WEATHER,extra); }
-        if !self.settings.show_clock {layout.hide_clock();}
         let badges=self.page_badges();
-        layout.add_extras(&badges.iter().map(|badge|(badge.slot,badge.width)).collect::<Vec<_>>());
-        if self.tray_visible() {
-            if let Some(width)=self.tray_width(&ctx) {layout.add_tray(width);}
-        }
-        if self.pet_enabled() {
-            if let Some(a)=self.notice.as_ref().filter(|_|!self.compact_notices()&&!self.open){layout.x[bar::PET]=Some(22.0-(self.notice_size(a).0+self.pet_space())/2.0);}
-            else if self.island_lyrics_active() {layout.x[bar::PET]=Some(60.0-self.lyric_bar_width()/2.0);}
+        let build_layout=|gap:f32|{
+            let mut layout=Layout::new_with_gap(gap,self.settings.show_battery&&env.battery.is_some()&&!self.settings.tray_battery,self.bar_quota_indices().len(),self.settings.show_music&&self.media.is_music()&&!self.settings.tray_music,self.settings.show_focus&&self.pomo.running&&!self.settings.tray_focus,bell,self.pet_enabled(),self.weather_pill().is_some()&&!self.settings.tray_weather,self.agent_bar_visible());
+            layout.reorder(&self.settings.resident_order);
+            for (position,extra) in self.quota_balance_layout(&ctx){layout.balance_tail(position,extra);}
+            if self.settings.clock_period!=0 && !self.open { layout.widen_clock(40.0); }
+            if self.settings.clock_seconds && !self.open { layout.widen_clock(24.0); }
+            if let Some(extra)=self.weather_pill_extra(&ctx){ layout.widen(bar::WEATHER,extra); }
+            if !self.settings.show_clock && !self.open {layout.hide_clock();}
+            // 展开后勿扰固定在状态行最右侧，页面徽标里不再重复占位。
+            layout.add_extras(&badges.iter().filter(|badge| !(self.open && badge.slot==bar::DND)).map(|badge|(badge.slot,badge.width)).collect::<Vec<_>>());
+            if self.tray_visible() {
+                if let Some(width)=self.tray_width(&ctx) {layout.add_tray(width);}
+            }
+            if self.pet_enabled() {
+                if let Some(a)=self.notice.as_ref().filter(|_|!self.compact_notices()&&!self.open){layout.x[bar::PET]=Some(22.0-(self.notice_size(a).0+self.pet_space())/2.0);}
+                else if self.island_lyrics_active() {layout.x[bar::PET]=Some(60.0-self.lyric_bar_width()/2.0);}
+            }
+            layout
+        };
+        let mut layout=build_layout(bar::GAP);
+        // 展开态优先压缩间距保住图标尺寸；间距压到下限仍放不下时再由绘制层等比缩小。
+        if self.open {
+            let available=PW-16.0-bar::TAIL_W;
+            let slots=layout.x.iter().filter(|x|x.is_some()).count();
+            if slots>1 && layout.width>available {
+                let content=layout.width-bar::GAP*(slots-1) as f32;
+                let gap=((available-content)/(slots-1) as f32).clamp(bar::MIN_GAP,bar::GAP);
+                if gap<bar::GAP {layout=build_layout(gap);}
+            }
         }
         self.resident.step(layout,dt,ctx.style().animation_time>0.0&&bar::animations_enabled());
         if self.opts.fetch_lyrics {
@@ -2095,10 +2119,12 @@ impl App {
         let shell_moving = self.shell_moving();
         if shell_moving { self.shell_settled_at = self.t; }
         let shell_edge = if shell_moving { 0.0 } else { smoothstep(0.0, 0.20, (self.t - self.shell_settled_at) as f32) };
-        self.update_pet(env, cx);
+        let p = self.progress();
+        // 展开后状态行整体左移给勿扰和设置让位，吉祥物的绘制和悬停也跟随行中心。
+        let tail_w=bar::TAIL_W*smoothstep(0.70,0.98,p);
+        self.update_pet(env, cx-tail_w/2.0);
 
         // ---------- 绘制 ----------
-        let p = self.progress();
         let (sx, sy) = self.drag_scale();
         // 拿起放大不能超出透明画布，否则两端会被切掉。
         let (max_w, max_h) = if side {(crate::side_dock::SIDE_W, crate::side_dock::SIDE_H)} else {(WIN_W, WIN_H)};
@@ -2165,6 +2191,7 @@ impl App {
         let origin = self.content_origin(win);
         let clip = panel.intersect(win);
         let base = Card::new(ui, origin, clip);
+        let status_base = Card::new(ui, panel.min, clip);
         self.cursor_local = env.cursor.map(|p| base.to_local(p));
 
         let banner=!self.compact_notices()&&self.notice.is_some()&&!self.open;
@@ -2175,7 +2202,7 @@ impl App {
             let width_progress=if (to-from).abs()<1.0 {if banner{1.0}else{0.0}}else{((self.w.pos-from)/(to-from)).clamp(0.0,1.0)};
             let (opacity,header_opacity)=if banner {(self.hud_alpha*smoothstep(0.45,0.85,width_progress),1.0-smoothstep(0.05,0.40,width_progress))}
                 else {(self.hud_alpha*smoothstep(0.20,0.60,width_progress),1.0-smoothstep(0.05,0.25,width_progress))};
-            if !minimal_pill||pc>0.0 {self.resident_header(&base.faded(header_opacity),panel,cx,pc,reveal,env);}
+            if !minimal_pill||pc>0.0 {self.resident_header(&status_base.faded(header_opacity),panel,cx,pc,reveal,env);}
             if let Some(a)=self.hud_notice.clone(){
                 let overlay=Card::new(ui,panel.min+Vec2::new(self.pet_space(),0.0),panel.intersect(ui.max_rect())).faded(opacity);
                 let overlay=if opacity<0.85||!banner{overlay.ghost()}else{overlay};
@@ -2184,7 +2211,7 @@ impl App {
         }else if banner {
             if let Some(a)=self.notice.clone(){self.draw_notice(&Card::new(ui,panel.min+Vec2::new(self.pet_space(),0.0),panel.intersect(ui.max_rect())),panel,&a,&mut cmds);}
         }else if !minimal_pill || pc > 0.0 {
-            self.resident_header(&base, panel, cx, if restoring_lyrics{0.0}else{pc}, reveal, env);
+            self.resident_header(&status_base, panel, cx, if restoring_lyrics{0.0}else{pc}, reveal, env);
         }
         if let Some(rect)=notice_rect {
             let c=Card::new(ui,rect.min,rect.intersect(ui.max_rect()));
@@ -2201,7 +2228,7 @@ impl App {
                 paint::bell(&c.scaled(20.0,14.0,1.2),20.0,14.0,theme::WHITE,paint::bell_swing(self.t-self.notification_bell_at));
                 c.circle(24.0,9.5,2.0,Color32::from_rgb(255,72,72));
                 if c.hit(6.0,0.0,28.0,30.0,"bell-mail").clicked(){
-                    if self.windows_unread {self.show_page(WINDOWS_PAGE);} else {self.show_page(5);}
+                    self.show_page(WINDOWS_PAGE);
                 }
             }
         }
@@ -2231,12 +2258,14 @@ impl App {
             self.draw_notice(&Card::new(ui,rect.min,rect.intersect(ui.max_rect())),rect,&self.hud_notice.clone().unwrap(),&mut cmds);
             if ctx.input(|i|i.pointer.any_pressed()&&i.pointer.interact_pos().is_some_and(|p|!rect.contains(p)&&!notice_rect.is_some_and(|r|r.contains(p)))){self.notice_details=false;}
         }
-        let pet_alpha=self.pet_a*(1.0-smoothstep(0.0,0.3,pc));
+        let pet_alpha=self.pet_a;
         if pet_alpha>0.004 && !minimal_pill {
             let y=(h.min(self.base_size().1)-BAR_H).max(0.0)/2.0;
             // 吉祥物跟随皮肤换色：浅色底上变成深色版本，保持清晰。
-            let fit=if self.island_lyrics_active()||self.notice.is_some(){1.0}else{((WIN_W-32.0)/self.resident.target.width).min(1.0)};
-            self.pet.draw(&base.scaled(cx-origin.x,15.0,fit).shifted(0.0,y).faded(pet_alpha),cx-origin.x+self.resident.position(bar::PET),self.pet.clock,self.skin_palette());
+            let available=lerp(WIN_W-32.0,PW-16.0,p)-tail_w;
+            let fit=if self.island_lyrics_active()||self.notice.is_some(){1.0}else{(available/self.resident.target.width).min(1.0)};
+            let local_cx=cx-panel.min.x-tail_w/2.0;
+            self.pet.draw(&status_base.scaled(local_cx,15.0,fit).shifted(0.0,y).faded(pet_alpha),local_cx+self.resident.position(bar::PET),self.pet.clock,self.skin_palette());
         }
         let mut page_transition=false;
         if reveal > 0.004 && !banner && !restoring_lyrics {
@@ -2251,7 +2280,7 @@ impl App {
             let toast_origin=if side {
                 let center=if dock==model::Dock::Left {panel.center().x.max(win.left()+90.0)} else {panel.center().x.min(win.right()-90.0)};
                 Pos2::new(center-PW/2.0,panel.top())
-            } else {origin};
+            } else {panel.min};
             self.toast_layer(&Card::new(ui,toast_origin,win),h+8.0)
         }else{None};
         if (self.adding||self.editing.is_some()) && reveal > 0.9 && self.page == 4 && self.page_e() > 0.25 {
@@ -2985,12 +3014,18 @@ impl App {
     }
 
     // ---------------------------------------------------------------
-    // 顶栏：电池 + 日期 + 时钟。药丸里的电池与时钟会「飞」到顶栏位置（共享元素过渡）。
+    // 常驻状态行：电池、时钟、额度、天气、音乐、事件容器、页面徽标、
+    // AI 状态灯和铃铛。收起时就是药丸，展开后固定在面板顶部。
     // ---------------------------------------------------------------
-    fn shared_header(&mut self, base: &Card, cx: f32, p: f32, reveal: f32, env: &Env) {
+    fn shared_header(&mut self, base: &Card, cx: f32, p: f32, env: &Env) {
         let local_cx = cx - base.origin.x;
-        let fit=((WIN_W-32.0)/self.resident.target.width).min(1.0);
-        let fitted=base.scaled(local_cx,15.0,lerp(fit,1.0,p));
+        // 展开后右侧留给勿扰和设置；状态行在剩余宽度内居中，组件多时整体等比缩小而不是溢出。
+        let tail=smoothstep(0.70,0.98,p);
+        let tail_w=bar::TAIL_W*tail;
+        let available=lerp(WIN_W-32.0,PW-16.0,p)-tail_w;
+        let fit=(available/self.resident.target.width).min(1.0);
+        let row_cx=local_cx-tail_w/2.0;
+        let fitted=base.scaled(row_cx,15.0,fit);
         let base=&fitted;
         let lyric=self.island_lyric().map(|(index,_)|index);
         let lyric_alpha=if self.island_lyrics_active() {1.0-smoothstep(0.0,0.35,p)}else{0.0};
@@ -3028,135 +3063,81 @@ impl App {
         if lyric_alpha>=0.997 {return;}
         let header=base.faded(1.0-lyric_alpha);
         let base=&header;
-        let m = anim::ease_in_out(smoothstep(0.0, 0.85, p));
-        let clock = self.settings.clock_text(&env.clock);
-        let show_battery=self.settings.show_battery && env.battery.is_some();
-
-        // 顶栏终点布局：[电池][日期][时钟] 作为一组整体居中
-        let date_w = base.text_w(&env.date, size::DATE, W::Regular);
-        let clock_w = paint::clock_width(base,&clock,size::CLOCK);
-        let battery_space=if show_battery {24.0}else{0.0};
-        let group = battery_space + date_w + 8.0 + clock_w;
-        let gx = local_cx - group / 2.0 + if show_battery {6.0}else{0.0};
-        // 日程页左侧还有新增按钮，顶栏从操作区右侧开始，避免较长的日期和时段文字挤到按钮上。
-        let gx = if self.page==CALENDAR_PAGE {gx.max(155.0)}else{gx};
-        let hb = (gx + 8.5, 18.6);
-        let hd = gx + battery_space;
-        let hc = hd + date_w + 8.0;
-        // 药丸起点布局
-        let has_music=self.settings.show_music && self.media.is_music();
+        // 尾部控件不跟随状态行的等比缩放，固定在面板右侧。
+        let status=base;
         let layout=self.resident.current();
-        let battery_slot=layout.x[bar::BATTERY];
-        let pb=(local_cx+battery_slot.unwrap_or(0.0),15.0);
-        let pcx=layout.x[bar::CLOCK].map_or(hc,|x|local_cx+x-paint::clock_width(base,&clock,size::PILL_CLOCK)/2.0);
+        // 展开态只显示时:分，不受 12 小时制、时段文字和秒数设置影响。
+        let clock=if self.open {env.clock.get(0..5).unwrap_or("--:--").to_string()}else{self.settings.clock_text(&env.clock)};
 
-        if self.browser_minimal_active && self.t>=self.notification_bell_until && !self.windows_unread && p < 0.02 { return; }
-        // 电池：位置/大小连续插值
-        let bk = lerp(1.0, 0.8, m);
-        let bpos = (lerp(pb.0, hb.0, m), lerp(pb.1, hb.1, m));
-        // 电量在事件容器里时，收起状态不画；展开时随顶栏一起淡入。
-        if show_battery && (battery_slot.is_some() || m > 0.01) {
-            let fade = if battery_slot.is_some() {lerp(layout.clearance(bar::BATTERY),1.0,m)} else {m};
-            paint::battery(&base.faded(fade), bpos.0, bpos.1, env.battery, env.charging, bk);
+        if let Some(x)=layout.x[bar::BATTERY] {
+            paint::battery(&base.faded(layout.clearance(bar::BATTERY)),row_cx+x,15.0,env.battery,env.charging,bar::BATTERY_SCALE);
         }
-
-        // 时钟：两个字号沿同一路径交叉淡化，避免逐帧换字号
-        let cpos = (lerp(pcx, hc, m), lerp(21.0, 23.0, m));
-        let a_pill = (1.0 - smoothstep(0.25, 0.6, m)) * layout.clearance(bar::CLOCK);
-        let a_head = smoothstep(0.35, 0.75, m);
-        if a_pill > 0.0 {
-            paint::clock(&base.faded(a_pill),cpos.0,cpos.1,&clock,size::PILL_CLOCK);
+        if let Some(x)=layout.x[bar::CLOCK] {
+            let w=paint::clock_width(base,&clock,size::PILL_CLOCK);
+            paint::clock(&base.faded(layout.clearance(bar::CLOCK)),row_cx+x-w/2.0,21.0,&clock,size::PILL_CLOCK);
         }
-        if a_head > 0.0 {
-            paint::clock(&base.faded(a_head),cpos.0,cpos.1-0.5,&clock,size::CLOCK);
-        }
-        // 日期随内容淡入，从药丸方向轻轻滑出
-        if reveal > 0.0 {
-            base.faded(reveal).text(hd + (1.0 - reveal) * 10.0, 22.5, &env.date, size::DATE, W::Regular, Color32::from_rgb(210, 210, 214), H::Left);
-        }
-        if self.open && reveal>0.95 && p>0.98 && !self.is_editing() && !self.drag_hot {
-            if let Some(screen)=env.screen {
-                // 中间的日期时间区不占用两侧的新增、刷新和设置按钮。
-                let left=hd.max(150.0);let right=(hc+clock_w).min(303.0);
-                if right>left {
-                    // Windows 没有「抓手」光标，Grab 会变成四向箭头；保持普通箭头，改用岛体内的把手提示。
-                    let response=base.hit_drag(left,4.0,right-left,26.0,"island-position").on_hover_text("按住拖动位置");
-                    let (_,press)=base.hover_t(&response);
-                    // 停留才显现：划过（< 0.3 s）什么都不出现；先露出把手，再慢慢浮起底色；按下立即到位，移开快速淡出。
-                    let dwell=(if response.hovered() {self.t-*self.grip_hover_since.get_or_insert(self.t)}else{self.grip_hover_since=None;0.0}) as f32;
-                    if response.hovered() && dwell<1.2 {base.ui.ctx().request_repaint();}
-                    let ctx=base.ui.ctx();
-                    let grip_in=ctx.animate_value_with_time(response.id.with("grip"),smoothstep(0.30,0.65,dwell),0.12);
-                    let fill_in=ctx.animate_value_with_time(response.id.with("grip-fill"),smoothstep(0.50,1.00,dwell),0.12);
-                    let (grip_in,fill_in)=(grip_in.max(press),fill_in.max(press));
-                    if grip_in>0.003 {
-                        let pad=6.0;
-                        let (x,w)=(left-pad,right-left+pad*2.0);
-                        if fill_in>0.003 {base.fill(x,5.0,w,26.0,13.0,Color32::from_white_alpha((fill_in*7.0+press*12.0) as u8));}
-                        let grip=lerp(14.0,22.0,press)*lerp(0.5,1.0,grip_in);
-                        base.fill(x+w/2.0-grip/2.0,7.5,grip,2.6,1.3,Color32::from_white_alpha((grip_in*60.0+press*60.0) as u8));
-                    }
-                    // 开始移动立即拿起；原地按住片刻也会拿起，先给反馈再移动。
-                    let held=response.is_pointer_button_down_on() && base.ui.input(|i|i.pointer.primary_down() && i.pointer.press_start_time().is_some_and(|at|i.time-at>=LIFT_HOLD));
-                    if response.is_pointer_button_down_on() {base.ui.ctx().request_repaint();}
-                    if response.drag_started_by(egui::PointerButton::Primary) || held {
-                        if let Some(start)=base.ui.input(|i|i.pointer.press_origin()) {self.start_position_drag(start,screen);}
-                    }
-                }
-            }
-        }
-        if has_music && (p>0.1 || layout.x[bar::MUSIC].is_some()) {
-            // 展开后音乐入口让出月亮的位置；三个入口用同样的 26×28 外框、27 像素中心距。
-            let x=lerp(local_cx+layout.x[bar::MUSIC].unwrap_or(0.0),if self.settings.show_dnd {340.0} else {367.0},m);
-            let y=lerp(15.0,18.0,m);
-            paint::playback_bars(&base.scaled(x,y,16.0/17.5),x,y,self.t,self.media.playing,theme::WHITE);
-            if self.open && reveal>0.6 && base.hit(x-13.0,y-14.0,26.0,28.0,"header-music")
+        if let Some(x)=layout.x[bar::MUSIC] {
+            let x=row_cx+x;
+            paint::playback_bars_box(base,x,15.0,self.t,self.media.playing,theme::WHITE,bar::GLYPH,bar::MUSIC_H);
+            if base.hit(x-9.0,3.0,18.0,24.0,"header-music")
                 .on_hover_text(if self.settings.visible_pages[0]{"返回音乐播放页"}else{"打开音乐设置"})
                 .on_hover_cursor(egui::CursorIcon::PointingHand).clicked(){self.show_page(0);}
         }
-        let compact_alpha=1.0-smoothstep(0.0,0.22,p);
-        if (self.t<self.notification_bell_until||self.windows_unread)&&!self.compact_notices()&&p<0.1 {
-            if let Some(x)=layout.x[bar::BELL]{
-                let x=local_cx+x;paint::bell(&base.scaled(x,14.0,1.2),x,14.0,theme::WHITE,paint::bell_swing(self.t-self.notification_bell_at));
-                base.circle(x+4.0,9.5,2.0,Color32::from_rgb(255,72,72));
-                if base.hit(x-14.0,3.0,28.0,25.0,"bell-mail").clicked(){
-                    if self.windows_unread {self.show_page(WINDOWS_PAGE);} else {self.show_page(5);}
-                }
+        if let Some(x)=layout.x[bar::BELL] {
+            let x=row_cx+x;
+            paint::bell(&base.scaled(x,14.0,bar::BELL_SCALE),x,14.0,theme::WHITE,paint::bell_swing(self.t-self.notification_bell_at));
+            base.circle(x+4.0,9.5,2.0,Color32::from_rgb(255,72,72));
+            let bell=base.hit(x-9.0,3.0,18.0,25.0,"bell-mail").on_hover_cursor(egui::CursorIcon::PointingHand);
+            if crate::quota_ui::bar_tooltip(bell,"Windows 通知 · 点击打开".into()).clicked(){
+                self.show_page(WINDOWS_PAGE);
             }
         }
-        if compact_alpha>0.004 {
-            let c=base.faded(compact_alpha);let c=if compact_alpha<0.8{c.ghost()}else{c};
-            let indices=self.bar_quota_indices();
-            self.draw_quota_bar(&c,local_cx,&layout,&indices);
-            if let Some(x)=layout.x[bar::WEATHER] { self.draw_pill_weather(&c,local_cx+x,&layout); }
-            if let Some(x)=layout.x[bar::TRAY] { self.draw_tray(&c,local_cx+x,&layout); }
-            self.draw_page_badges(&c,local_cx,&layout);
-            if let Some(x)=layout.x[bar::AGENT] {
-                let x=local_cx+x;
-                self.draw_agent_light(&c,x,15.0);
-                if self.open && reveal>0.6 {
-                    let hint={
-                        let active=self.agent.store.active();
-                        let waiting=active.iter().filter(|session|session.waiting()).count();
-                        active.first().map(|session|format!("{} · {} 个活跃会话 · {} 个等待你",session.agent.display(),active.len(),waiting))
-                            .unwrap_or_else(||"AI 会话 · 暂无活跃会话".to_string())
-                    };
-                    if base.hit(x-10.0,3.0,20.0,24.0,"agent-pill").on_hover_text(hint)
-                        .on_hover_cursor(egui::CursorIcon::PointingHand).clicked(){self.show_page(AI_PAGE);}
-                }
-            }
+        let indices=self.bar_quota_indices();
+        self.draw_quota_bar(base,row_cx,&layout,&indices);
+        if let Some(x)=layout.x[bar::WEATHER] { self.draw_pill_weather(base,row_cx+x,&layout); }
+        if let Some(x)=layout.x[bar::TRAY] { self.draw_tray(base,row_cx+x,&layout); }
+        self.draw_page_badges(base,row_cx,&layout);
+        if let Some(x)=layout.x[bar::AGENT] {
+            let x=row_cx+x;
+            self.draw_agent_light(base,x,15.0);
+            let hint={
+                let active=self.agent.store.active();
+                let waiting=active.iter().filter(|session|session.waiting()).count();
+                active.first().map(|session|format!("{} · {} 个活跃会话 · {} 个等待你",session.agent.display(),active.len(),waiting))
+                    .unwrap_or_else(||"AI 会话 · 暂无活跃会话".to_string())
+            };
+            let pill=base.hit(x-10.0,3.0,20.0,24.0,"agent-pill")
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if crate::quota_ui::bar_tooltip(pill,hint).clicked(){self.show_page(AI_PAGE);}
         }
-        if self.pomo.running && self.settings.show_focus && compact_alpha>0.004 {
-            if let Some(x)=layout.x[bar::FOCUS] {
-                crate::focus_bar::draw(&base.faded(compact_alpha),local_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
+        if let Some(x)=layout.x[bar::FOCUS] {
+            crate::focus_bar::draw(base,row_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
+        }
+        if tail>0.003 {
+            let c=status.faded(tail);
+            let c=if tail>0.9 {c}else{c.ghost()};
+            let gear_x=PW-bar::EDGE_PAD-bar::TAIL_SLOT/2.0;
+            let dnd_x=gear_x-bar::TAIL_SLOT-bar::GAP;
+            let r=bar::TAIL_SLOT/2.0;
+            if self.settings.show_dnd {
+                let dnd=c.hit(dnd_x-r,3.0,r*2.0,24.0,"page-dnd").on_hover_text(if self.dnd.active{"关闭勿扰模式"}else{"开启勿扰模式"});
+                let (hover,press)=c.hover_t(&dnd);
+                c.circle(dnd_x,15.0,r,Color32::from_white_alpha((hover*24.0) as u8));
+                paint::moon(&c.scaled(dnd_x,15.0,1.0-press*0.08),dnd_x,15.0,bar::MOON_SIZE,if self.dnd.active{theme::WHITE}else{paint::mix(theme::GRAY,theme::WHITE,hover)});
+                if dnd.clicked(){self.dnd.toggle(self.t);}
             }
+            let gear=c.hit(gear_x-r,3.0,r*2.0,24.0,"page-settings").on_hover_text(format!("打开{}设置窗口",PAGE_NAMES[self.page]));
+            let (hover,press)=c.hover_t(&gear);
+            c.circle(gear_x,15.0,r,Color32::from_white_alpha((hover*24.0) as u8));
+            paint::gear(&c.scaled(gear_x,15.0,bar::GEAR_SCALE*(1.0-press*0.08)),gear_x,15.0,paint::mix(theme::GRAY,theme::WHITE,hover));
+            if gear.clicked(){self.settings_tab=PAGE_SETTINGS_TABS[self.page];self.open_settings();}
         }
     }
 
-    /// 常驻内容：顶部停靠走共享元素过渡（药丸里的电池、时钟飞到顶栏）；
-    /// 左右停靠时竖排内容随展开淡出，顶栏随面板内容淡入。
+    /// 常驻状态行：顶部停靠收起时是药丸，展开后留在面板顶部；
+    /// 左右停靠收起时是竖排胶囊，展开后同样换成顶部状态行。
     fn resident_header(&mut self, base: &Card, panel: Rect, cx: f32, p: f32, reveal: f32, env: &Env) {
-        if !self.side() {self.shared_header(base,cx,p,reveal,env);return;}
+        if !self.side() {self.shared_header(base,cx,p,env);return;}
         let bar_alpha=1.0-smoothstep(0.0,0.3,p);
         let minimal=self.browser_minimal_active&&self.t>=self.notification_bell_until&&!self.windows_unread;
         if bar_alpha>0.004 && !minimal {
@@ -3164,7 +3145,7 @@ impl App {
             let c=if bar_alpha<0.8 {c.ghost()} else {c};
             self.side_bar(&c,panel.width(),panel.height(),env);
         }
-        if reveal>0.004 {self.shared_header(&base.faded(reveal),base.origin.x+PW/2.0,1.0,reveal,env);}
+        if reveal>0.004 {self.shared_header(&base.faded(reveal),base.origin.x+PW/2.0,1.0,env);}
     }
 
     fn update_pet(&mut self, env: &Env, cx: f32) {
@@ -3184,16 +3165,18 @@ impl App {
         self.pet.worried = self.settings.show_battery && env.battery.is_some_and(|v|v<=20) && !env.charging || env.network == Some(false);
         let allowed = self.pet_enabled();
         if !allowed { self.pet.reaction = None; self.pet.waking_until = 0.0; self.pet.expressions.clear(); self.pet.anim_until = 0.0; }
-        let available = allowed && !self.open && !self.drag_hot;
+        let available = allowed && !self.drag_hot;
         self.pet_a = anim::approach(self.pet_a, if available {1.0}else{0.0}, 9.0, self.dt);
-        // 面板展开时吉祥物不可见，冻结状态和动画；收起后从当前状态重新过渡。
+        // 吉祥物随状态行常驻；拖动岛体时暂时收起。
         if !available { return; }
         if self.pet_a < 0.7 { self.pet.anim_until = self.t + 1.2; }
-        let visible = self.pet_a > 0.7 && self.progress() < 0.1;
+        let visible = self.pet_a > 0.7;
         let state = self.pet_state();
         if state != self.pet.state { self.pet.anim_until = self.t + 1.2; }
         // 空闲时不推进吉祥物时钟：没有悬停、表情或状态过渡就保持当前帧。
-        let moving = self.pet_a > 0.01
+        // 面板展开时吉祥物保持当前表情，反馈计时留到收起后继续。
+        let ticking = !self.open;
+        let moving = ticking && self.pet_a > 0.01
             && (self.pet.hovered || self.pet.reaction.is_some() || self.pet.waking_until > self.t
                 || self.pet.expressions.current().is_some() || self.t < self.pet.anim_until
                 || state == PetState::Music);
@@ -3211,18 +3194,35 @@ impl App {
     // 面板主体：页标题 + 页面（带切页过渡）+ 翻页箭头 + 页码豆
     // ---------------------------------------------------------------
     fn panel_body(&mut self, c: &Card, env: &Env, cmds: &mut Vec<Cmd>) -> bool {
-        if self.settings.show_dnd {
-            let dnd=c.hit(354.0,4.0,26.0,28.0,"page-dnd").on_hover_text(if self.dnd.active{"关闭勿扰模式"}else{"开启勿扰模式"});
-            let (hover,press)=c.hover_t(&dnd);
-            c.circle(367.0,18.0,13.0,Color32::from_white_alpha((hover*24.0) as u8));
-            paint::moon(&c.scaled(367.0,18.0,0.8*(1.0-press*0.08)),367.0,18.0,11.0,if self.dnd.active{theme::WHITE}else{paint::mix(theme::GRAY,theme::WHITE,hover)});
-            if dnd.clicked(){self.dnd.toggle(self.t);}
+        if self.open && self.reveal>0.95 && self.progress()>0.98 && !self.is_editing() && !self.drag_hot {
+            if let Some(screen)=env.screen {
+                // 中间的标题区不占用左侧新增、刷新和右侧设置按钮。
+                let (left,right)=(150.0,270.0);
+                // Windows 没有「抓手」光标，Grab 会变成四向箭头；保持普通箭头，改用岛体内的把手提示。
+                let response=c.hit_drag(left,4.0+PAGE_RAISE,right-left,26.0,"island-position").on_hover_text("按住拖动位置");
+                let (_,press)=c.hover_t(&response);
+                // 停留才显现：划过（< 0.3 s）什么都不出现；先露出把手，再慢慢浮起底色；按下立即到位，移开快速淡出。
+                let dwell=(if response.hovered() {self.t-*self.grip_hover_since.get_or_insert(self.t)}else{self.grip_hover_since=None;0.0}) as f32;
+                if response.hovered() && dwell<1.2 {c.ui.ctx().request_repaint();}
+                let ctx=c.ui.ctx();
+                let grip_in=ctx.animate_value_with_time(response.id.with("grip"),smoothstep(0.30,0.65,dwell),0.12);
+                let fill_in=ctx.animate_value_with_time(response.id.with("grip-fill"),smoothstep(0.50,1.00,dwell),0.12);
+                let (grip_in,fill_in)=(grip_in.max(press),fill_in.max(press));
+                if grip_in>0.003 {
+                    let pad=6.0;
+                    let (x,w)=(left-pad,right-left+pad*2.0);
+                    if fill_in>0.003 {c.fill(x,5.0+PAGE_RAISE,w,26.0,13.0,Color32::from_white_alpha((fill_in*7.0+press*12.0) as u8));}
+                    let grip=lerp(14.0,22.0,press)*lerp(0.5,1.0,grip_in);
+                    c.fill(x+w/2.0-grip/2.0,7.5+PAGE_RAISE,grip,2.6,1.3,Color32::from_white_alpha((grip_in*60.0+press*60.0) as u8));
+                }
+                // 开始移动立即拿起；原地按住片刻也会拿起，先给反馈再移动。
+                let held=response.is_pointer_button_down_on() && c.ui.input(|i|i.pointer.primary_down() && i.pointer.press_start_time().is_some_and(|at|i.time-at>=LIFT_HOLD));
+                if response.is_pointer_button_down_on() {c.ui.ctx().request_repaint();}
+                if response.drag_started_by(egui::PointerButton::Primary) || held {
+                    if let Some(start)=c.ui.input(|i|i.pointer.press_origin()) {self.start_position_drag(start,screen);}
+                }
+            }
         }
-        let settings=c.hit(381.0,4.0,26.0,28.0,"page-settings").on_hover_text(format!("打开{}设置窗口",PAGE_NAMES[self.page]));
-        let (hover,press)=c.hover_t(&settings);
-        c.circle(394.0,18.0,13.0,Color32::from_white_alpha((hover*24.0) as u8));
-        paint::gear(&c.scaled(394.0,18.0,(16.0/14.0)*(1.0-press*0.08)),394.0,18.0,paint::mix(theme::GRAY,theme::WHITE,hover));
-        if settings.clicked(){self.settings_tab=PAGE_SETTINGS_TABS[self.page];self.open_settings();}
         if self.subpage==Some(self.page) {
             c.text(15.0,25.0,"‹",19.0,W::Bold,theme::WHITE,H::Left);
             // 健康提醒设置沿用主页的标题 + 喝水/久坐切换，切到哪边就设置哪边。
@@ -3301,7 +3301,8 @@ impl App {
         if r.clicked() { self.navigate_page(true); }
         // 页码豆：宽度由弹簧驱动，整行实时居中；当前页是白色长条
         let gap = 4.0;
-        let dot_y=self.expanded_height()-7.2;
+        // 分页圆点贴着面板下沿；页面内容上移时圆点保持原位。
+        let dot_y=self.expanded_height()-STATUS_H-7.2+PAGE_RAISE;
         let total: f32 = pages.iter().map(|page| self.dots[*page].pos).sum::<f32>() + gap * (pages.len()-1) as f32;
         let mut x = PW / 2.0 - total / 2.0;
         let mut clicked = None;

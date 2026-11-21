@@ -74,11 +74,42 @@ fn dnd_badge_and_button_follow_the_system_focus_state(){
     let dnd=h.ctx.read_response(egui::Id::new(("card",true,"page-dnd"))).expect("展开后应有勿扰按钮");
     let gear=h.ctx.read_response(egui::Id::new(("card",true,"page-settings"))).expect("展开后应有设置按钮");
     assert!(dnd.rect.right()<=gear.rect.left(),"勿扰按钮在设置齿轮左侧");
+    assert!(dnd.rect.center().y<crate::app::STATUS_H&&gear.rect.center().y<crate::app::STATUS_H,"勿扰和设置都在展开顶行");
     h.click(dnd.rect.center());
     assert!(!h.app.dnd.active,"展开后也能关闭勿扰");
+    h.frame(vec![]);h.frame(vec![]);
+    assert!(h.ctx.read_response(egui::Id::new(("card",true,"page-dnd"))).is_some(),"勿扰关闭后月亮仍常驻在设置左侧");
 
     h.app.settings.show_dnd=false;h.frame(vec![]);h.frame(vec![]);
     assert!(h.ctx.read_response(egui::Id::new(("card",true,"page-dnd"))).is_none(),"关闭开关后不显示勿扰按钮");
+}
+
+#[test]
+fn expanded_status_row_compresses_gaps_before_shrinking_icons(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();
+    h.app.settings.pet=true;
+    h.app.settings.tray_weather=false;
+    h.app.settings.tray_focus=false;
+    h.app.settings.tray_mail=false;
+    h.app.settings.tray_health=false;
+    h.app.settings.tray_calendar=false;
+    h.app.settings.tray_music=false;
+    h.power=(Some(80),true);
+    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.app.pomo.running=true;h.app.pomo.remaining=600.0;
+    h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:-12.0,..Default::default()});
+    add_unread_mail(&mut h);
+    h.app.calendar_badge_until=h.app.t+crate::page_badges::HOLD;
+    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
+    let available=crate::app::PW-16.0-crate::bar_layout::TAIL_W;
+    let layout=&h.app.resident.target;
+    let slots=layout.x.iter().filter(|x|x.is_some()).count();
+    let natural=layout.x.iter().zip(&layout.widths).filter_map(|(x,w)|x.map(|_|*w)).sum::<f32>()
+        +2.0*crate::bar_layout::EDGE_PAD+crate::bar_layout::GAP*(slots-1) as f32;
+    assert!(natural>available,"用例应触发间距压缩：自然宽 {natural}，可用 {available}");
+    assert!(layout.width<=available+0.01,"压缩间距后应放进状态行：{} <= {available}",layout.width);
+    assert!(h.app.resident.position(crate::bar_layout::BATTERY).is_finite());
 }
 
 #[test]
@@ -148,6 +179,73 @@ fn tray_members_can_be_reordered_by_dragging(){
     for _ in 0..3{draw(&mut h,vec![]);}
     draw(&mut h,vec![button(target,false)]);
     assert_eq!(&h.app.settings.tray_order[..3],[QUOTA,FOCUS,WEATHER],"容器内拖动后按目标位置排序");
+}
+
+#[test]
+fn tray_mail_stays_until_the_mail_is_read(){
+    use crate::event_tray::{Item,HOLD};
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_mail=true;
+    add_unread_mail(&mut h);
+    for _ in 0..5{h.frame(vec![]);}
+    assert_eq!(h.app.tray_active(),Some(Item::Mail));
+    h.t+=HOLD+5.0;
+    for _ in 0..5{h.frame(vec![]);}
+    assert_eq!(h.app.tray_active(),Some(Item::Mail),"未读邮件在事件容器里持续到已读");
+    badge_rect(&h,crate::bar_layout::MAIL);
+    h.app.mail.recent.clear();
+    for _ in 0..5{h.frame(vec![]);}
+    assert_eq!(h.app.tray_active(),None,"已读后事件图标消失");
+    assert!(h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::bar_layout::MAIL)))).is_none(),"已读后事件图标不再绘制");
+}
+
+#[test]
+fn tray_event_starts_counting_after_the_banner(){
+    use crate::event_tray::{Item,HOLD};
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_shelf=true;
+    for _ in 0..20{h.frame(vec![]);}
+    h.app.alert("系统音量","50%",0,false);h.app.tick_alerts();
+    assert!(h.app.notice.is_some());
+    h.app.shelf_badge_until=h.app.t+10.0;
+    for _ in 0..5{h.frame(vec![]);}
+    assert!(!h.app.tray_active_items().contains(&Item::Shelf),"横幅期间不开始计时");
+    h.app.t+=3.0;h.app.tick_alerts();
+    assert!(h.app.notice.is_none());
+    for _ in 0..3{h.frame(vec![]);}
+    assert!(h.app.tray_active_items().contains(&Item::Shelf),"横幅结束后开始显示");
+    h.t+=HOLD-1.0;
+    for _ in 0..3{h.frame(vec![]);}
+    assert!(h.app.tray_active_items().contains(&Item::Shelf),"计时从横幅结束后开始");
+    h.t+=2.0;
+    for _ in 0..3{h.frame(vec![]);}
+    assert!(!h.app.tray_active_items().contains(&Item::Shelf));
+}
+
+#[test]
+fn tray_focus_opens_the_focus_page(){
+    use crate::app::FOCUS_PAGE;
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_focus=true;
+    for _ in 0..10{h.frame(vec![]);}
+    h.app.pomo.running=true;
+    for _ in 0..5{h.frame(vec![]);}
+    let rect=h.ctx.read_response(egui::Id::new(("card",true,"tray-focus"))).expect("专注应在事件容器里").rect;
+    h.click(rect.center());
+    assert_eq!(h.app.page,FOCUS_PAGE);
+}
+
+#[test]
+fn calendar_badge_lasts_until_the_meeting_starts(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.t=10.0;h.app.t=10.0;
+    let start=chrono::Local::now().timestamp()+30;
+    h.app.meeting_alert(crate::mail::Meeting{all_day:false,title:"站会".into(),start,end:None,at:String::new(),uid:"badge-until-start".into()},"本机日程".into(),7);
+    assert!(h.app.calendar_badge_until>=h.app.t+25.0,"会议徽标保留到会议开始");
+    assert!(slots(&h).contains(&crate::bar_layout::CALENDAR));
+    h.t+=31.0;
+    h.frame(vec![]);
+    assert!(!slots(&h).contains(&crate::bar_layout::CALENDAR),"会议开始后徽标消失");
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! 事件容器：成员只在数据变化时短暂出现在铃铛左侧。
+//! 事件容器：数据变化时短暂出现；邮件、健康、待办、日程持续到条件解除。
 use crate::app::App;
 use crate::bar_layout;
 use crate::paint::Card;
@@ -8,8 +8,8 @@ use std::hash::{Hash, Hasher};
 
 /// 事件后显示的秒数；不做轮换，也不需要设置项。
 pub(crate) const HOLD: f64 = 10.0;
-/// 容器内相邻成员的间距；预览编辑器用统一间距，不必跟随这里的紧凑值。
-pub(crate) const ITEM_GAP: f32 = 6.0;
+/// 容器内相邻成员的间距；与状态行的组件间距一致。
+pub(crate) const ITEM_GAP: f32 = 8.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Item {
@@ -55,13 +55,15 @@ pub(crate) struct EventTray {
     seen: [Option<u64>; 10],
     /// 上一帧的容器成员开关，用于拖入时立即触发一次。
     member: [bool; 10],
+    /// 横幅期间发生的变化先记下，等横幅结束后再开始计时。
+    pending: [bool; 10],
     /// 首帧只记录不触发，避免启动时闪一次。
     primed: bool,
 }
 
 impl Default for EventTray {
     fn default() -> Self {
-        Self { last: [f64::NEG_INFINITY; 10], seen: [None; 10], member: [false; 10], primed: false }
+        Self { last: [f64::NEG_INFINITY; 10], seen: [None; 10], member: [false; 10], pending: [false; 10], primed: false }
     }
 }
 
@@ -168,16 +170,26 @@ impl App {
         }
     }
 
-    /// 在 `tick` 之后调用：记录显示值变化，必要时点亮事件容器。
+    /// 在通知队列处理之后调用：记录显示值变化，必要时点亮事件容器。
     pub(crate) fn tray_tick(&mut self) {
         for item in Item::ALL {
             let index = item as usize;
             let value = self.tray_fingerprint(item);
             let member = self.tray_member(item);
             let possible = value.is_some();
-            if self.event_tray.primed && member && possible
-                && (!self.event_tray.member[index] || self.event_tray.seen[index] != value) {
+            let changed = self.event_tray.primed && member && possible
+                && (!self.event_tray.member[index] || self.event_tray.seen[index] != value);
+            if changed {
+                if self.notice.is_none() {
+                    self.event_tray.last[index] = self.t;
+                    self.event_tray.pending[index] = false;
+                } else {
+                    self.event_tray.pending[index] = true;
+                }
+            }
+            if self.notice.is_none() && self.event_tray.pending[index] {
                 self.event_tray.last[index] = self.t;
+                self.event_tray.pending[index] = false;
             }
             self.event_tray.seen[index] = value;
             self.event_tray.member[index] = member;
@@ -199,10 +211,13 @@ impl App {
         order.into_iter().filter_map(Item::from_slot).collect()
     }
 
-    /// 当前仍在显示窗口内的成员，按容器顺序排列；多个事件重叠时同时显示。
+    /// 当前应显示的成员，按容器顺序排列；多个事件重叠时同时显示。
     pub(crate) fn tray_active_items(&self) -> Vec<Item> {
         self.tray_order().into_iter().filter(|item| {
-            self.tray_possible(*item) && self.t - self.event_tray.last[*item as usize] <= HOLD
+            if !self.tray_possible(*item) { return false; }
+            // 需要用户处理的事件持续到条件解除，不使用 10 秒窗口。
+            matches!(item, Item::Mail | Item::Health | Item::Todo | Item::Calendar)
+                || self.t - self.event_tray.last[*item as usize] <= HOLD
         }).collect()
     }
 
@@ -211,10 +226,9 @@ impl App {
         self.tray_active_items().first().copied()
     }
 
-    /// 只在顶部胶囊行确实可见时占位。
+    /// 状态行是否给事件容器留槽位；收起和展开共用同一套位置。
     pub(crate) fn tray_visible(&self) -> bool {
-        !self.side() && !self.open && self.notice.is_none() && !self.island_lyrics_active()
-            && !self.browser_minimal_active && !self.tray_active_items().is_empty()
+        !self.tray_active_items().is_empty()
     }
 
     /// 成员在容器里的自然宽度。
@@ -244,7 +258,13 @@ impl App {
 
     fn tray_item_alpha(&self, item: Item) -> f32 {
         let age = self.t - self.event_tray.last[item as usize];
-        crate::anim::smoothstep(0.0, 0.15, age as f32) * crate::anim::smoothstep(0.0, 0.3, (HOLD - age) as f32)
+        let fade_in = crate::anim::smoothstep(0.0, 0.15, age as f32);
+        // 需要用户处理的事件持续到条件解除，不受 10 秒窗口的淡出影响。
+        if matches!(item, Item::Mail | Item::Health | Item::Todo | Item::Calendar) {
+            fade_in
+        } else {
+            fade_in * crate::anim::smoothstep(0.0, 0.3, (HOLD - age) as f32)
+        }
     }
 
     /// 按容器顺序并排画所有活跃成员；命中行为与常驻时一致。
@@ -269,9 +289,22 @@ impl App {
                         let faded = c.faded(alpha);
                         let faded = if alpha < 0.8 { faded.ghost() } else { faded };
                         crate::focus_bar::draw(&faded, item_x, 15.0, self.t, &self.pomo, self.phase_secs(self.pomo.phase), false);
+                        if crate::quota_ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-focus"), "专注 · 点击打开".into()).clicked() {
+                            self.show_page(crate::app::FOCUS_PAGE);
+                        }
                     }
-                    Item::Music => crate::paint::playback_bars(&c.faded(alpha), item_x, 15.0, self.t, self.media.playing, theme::WHITE),
-                    Item::Battery => crate::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, 1.0),
+                    Item::Music => {
+                        let faded=c.faded(alpha);
+                        crate::paint::playback_bars_box(&faded, item_x, 15.0, self.t, self.media.playing, theme::WHITE, bar_layout::GLYPH, bar_layout::MUSIC_H);
+                        if crate::quota_ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-music"), "音乐 · 点击打开".into()).clicked() {
+                            self.show_page(crate::app::MUSIC_PAGE);
+                        }
+                    }
+                    Item::Battery => {
+                        crate::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, bar_layout::BATTERY_SCALE);
+                        let level = self.resident_power.0.map(|pct| format!("{pct}%")).unwrap_or_else(|| "电量不可用".into());
+                        crate::quota_ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-battery"), format!("电量 · {level} · 只读"));
+                    }
                     Item::Mail | Item::Health | Item::Todo | Item::Shelf | Item::Calendar => self.draw_tray_badge(c, item_x, item, alpha),
                 }
             }

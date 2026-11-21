@@ -27,9 +27,27 @@ pub(crate) const DND: usize = 17;
 /// 天气徽标的基础槽宽；温度文字更长时由 `widen` 补足。
 pub(crate) const WEATHER_WIDTH: f32 = 38.0;
 /// 两端内边距与组件间距。
-const EDGE_PAD: f32 = 12.0;
-pub(crate) const GAP: f32 = 12.0;
-const WIDTHS: [f32; 18] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,14.0,crate::focus_bar::WIDTH,20.0,32.0,20.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+pub(crate) const EDGE_PAD: f32 = 10.0;
+pub(crate) const GAP: f32 = 8.0;
+/// 展开态空间不足时先压缩间距，压缩到这个值仍放不下才整体等比缩小。
+pub(crate) const MIN_GAP: f32 = 4.0;
+/// 状态行简单图标的统一视觉尺寸；外框 20 点，图形留出约 3 点内边距。
+/// 电池环、音乐柱、铃铛按自身轮廓缩放到它。
+pub(crate) const GLYPH: f32 = 14.0;
+pub(crate) const BATTERY_SCALE: f32 = GLYPH / 19.0;
+pub(crate) const BELL_SCALE: f32 = GLYPH / 9.8;
+/// 音柱外框的宽高比与图标一致，宽度取 GLYPH 时高度约为 0.875 倍。
+pub(crate) const MUSIC_H: f32 = GLYPH * 0.875;
+/// 齿轮轮廓直径约 15.2 点，月亮外圆直径约 1.24 倍 size；都归一到 GLYPH。
+pub(crate) const GEAR_SCALE: f32 = GLYPH / 15.2;
+pub(crate) const MOON_SIZE: f32 = GLYPH / 1.24;
+/// 展开态尾部控件（勿扰、设置）占用的宽度：两个槽加两个间距。
+pub(crate) const TAIL_SLOT: f32 = 20.0;
+pub(crate) const TAIL_W: f32 = TAIL_SLOT * 2.0 + GAP * 2.0;
+/// AI 状态灯是 9 点圆点，闲置圆环外径约 10 点，等待光晕 16 点；槽宽取 14 点，避免圆点两侧留下过大空白。
+pub(crate) const AGENT_SLOT: f32 = 14.0;
+/// 简单图标的统一外框 20 点，内部图形约 14 点；徽标含数量时用 30，宠物也用 20 点槽宽，带数据的组件保持各自宽度。
+const WIDTHS: [f32; 18] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,20.0,crate::focus_bar::WIDTH,20.0,20.0,AGENT_SLOT,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
 
 /// 固定槽位的基础宽度；额度溢出槽不在此列。
 pub(crate) fn slot_width(slot:usize)->f32 {WIDTHS.get(slot).copied().unwrap_or(0.0)}
@@ -94,7 +112,7 @@ impl Layout {
                 _=>{},
             }
         }
-        for (slot,on) in [(MUSIC,music&&!bell),(FOCUS,focus),(BELL,bell),(AGENT,agent)] {
+        for (slot,on) in [(MUSIC,music),(FOCUS,focus),(BELL,bell),(AGENT,agent)] {
             if on {x[slot]=Some(place(&mut cursor,WIDTHS[slot],gap));}
         }
         let width=cursor-gap+EDGE_PAD;
@@ -191,12 +209,12 @@ impl Layout {
     pub fn clearance(&self,slot:usize)->f32 {
         let Some(x)=self.x[slot] else{return 0.0;};
         let distance=self.quota_slots().filter_map(|i|self.x[i].map(|other|(other-x).abs()-(self.widths[i]-27.0)/2.0)).fold(f32::INFINITY,f32::min);
-        let quota=if slot==CLOCK {smoothstep(34.0,44.0,distance)}else{smoothstep(22.0,34.0,distance)};
+        let quota=if slot==CLOCK {smoothstep(30.0,40.0,distance)}else{smoothstep(18.0,28.0,distance)};
         quota*self.pet_clearance(slot)
     }
     pub fn pet_clearance(&self,slot:usize)->f32 {
         match (self.x[slot],self.x[PET]) {
-            (Some(x),Some(pet))=>smoothstep(self.widths[slot]/2.0+14.0,self.widths[slot]/2.0+24.0,(x-pet).abs()),
+            (Some(x),Some(pet))=>smoothstep(self.widths[slot]/2.0+10.0,self.widths[slot]/2.0+18.0,(x-pet).abs()),
             _=>1.0,
         }
     }
@@ -234,12 +252,17 @@ impl Motion {
 mod tests {
     use super::*;
     #[test]
+    fn tail_glyphs_match_the_status_row_glyph_box(){
+        assert!((GEAR_SCALE*15.2-GLYPH).abs()<0.01,"齿轮外径应归一到统一图标尺寸");
+        assert!((MOON_SIZE*1.24-GLYPH).abs()<0.01,"月亮外圆直径应归一到统一图标尺寸");
+    }
+    #[test]
     fn hidden_clock_closes_its_gap_in_custom_orders(){
         for reverse in [false,true] {for count in [0,5] {
             let mut order=DEFAULT_ORDER.to_vec();if reverse {order.reverse();}
             let mut layout=Layout::new(true,count,true,true,false,true,true,false);
             layout.reorder(&order);layout.widen_clock(64.0);
-            let width=layout.width;let removed=layout.widths[CLOCK]+12.0;
+            let width=layout.width;let removed=layout.widths[CLOCK]+GAP;
             layout.hide_clock();assert!(layout.x[CLOCK].is_none());
             assert_eq!(layout.width,(width-removed).max(96.0));
             let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
@@ -267,7 +290,7 @@ mod tests {
         for order in [DEFAULT_ORDER,[FOCUS,MUSIC,QUOTA,CLOCK,WEATHER,PET,BATTERY,AGENT]] {for quotas in 1..=6 {for battery in [false,true]{
             let mut layout=Layout::new(battery,quotas,true,true,false,true,false,false);layout.reorder(&order);layout.balance_tail(quotas-1,76.0);layout.widen_clock(40.0);
             let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|{let width=layout.widths[i];(x-width/2.0,x+width/2.0)})).collect();boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
-            assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));assert!(boxes.last().unwrap().1<=layout.width/2.0-11.9);
+            assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));assert!(boxes.last().unwrap().1<=layout.width/2.0-EDGE_PAD+0.01);
             assert!(layout.width<crate::app::WIN_W);
         }}}
     }
@@ -283,8 +306,8 @@ mod tests {
                 })).collect();
                 boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
                 assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));
-                assert!(boxes.first().unwrap().0>=-layout.width/2.0+11.9);
-                assert!(boxes.last().unwrap().1<=layout.width/2.0-11.9);
+                assert!(boxes.first().unwrap().0>=-layout.width/2.0+EDGE_PAD-0.01);
+                assert!(boxes.last().unwrap().1<=layout.width/2.0-EDGE_PAD+0.01);
             }
         }
     }
@@ -329,11 +352,11 @@ mod tests {
                 let (clock,weather)=match (layout.x[CLOCK],layout.x[WEATHER]) {(Some(c),Some(w))=>(c,w),_=>panic!("时钟与天气都应就位：{layout:?}")};
                 assert!(weather>clock+22.0+6.9,"天气应紧跟时钟右侧：时钟 {clock}，天气 {weather}");
                 // 相邻排列的时钟与天气保持标准组件间距。
-                assert!((weather-clock-(38.0+44.0)/2.0-12.0).abs()<0.01);
+                assert!((weather-clock-(38.0+44.0)/2.0-GAP).abs()<0.01);
                 let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
                 boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
                 assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));
-                assert!(boxes.last().unwrap().1<=layout.width/2.0-11.9);
+                assert!(boxes.last().unwrap().1<=layout.width/2.0-EDGE_PAD+0.01);
                 assert!(layout.clearance(WEATHER)>0.99,"天气与额度环不应对撞：{layout:?}");
             }}
         }
@@ -368,6 +391,15 @@ mod tests {
         for _ in 0..120 {motion.step(after.clone(),1.0/60.0,true);}
         assert!((motion.current().x[QUOTA].unwrap()-after.x[QUOTA].unwrap()).abs()<0.01);
         motion.step(before.clone(),1.0/60.0,false);assert_eq!(motion.current().x,before.x);
+    }
+    #[test]
+    fn music_and_bell_share_the_status_row(){
+        let layout=Layout::new(true,0,true,false,true,true,false,false);
+        assert!(layout.x[MUSIC].is_some(),"播放音乐时铃铛不能挤掉音乐入口");
+        assert!(layout.x[BELL].is_some());
+        let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
+        boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
+        assert!(boxes.windows(2).all(|pair|pair[1].0-pair[0].1>=6.9));
     }
     #[test]
     fn tray_sits_left_of_the_bell_and_keeps_components_separate(){

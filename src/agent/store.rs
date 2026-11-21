@@ -29,7 +29,10 @@ impl Default for DisplayConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NotifyConfig {
-    #[serde(default = "yes")] pub waiting: bool,
+    /// 旧配置的合并开关，仅用于迁移到 question / approval。
+    #[serde(default = "yes", skip_serializing)] pub waiting: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub question: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub approval: Option<bool>,
     #[serde(default = "yes")] pub done: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")] pub interrupted: Option<bool>,
     #[serde(default = "yes")] pub failed: bool,
@@ -39,9 +42,12 @@ pub struct NotifyConfig {
 impl NotifyConfig {
     /// 旧配置没有单独的「中断」开关，沿用「完成」的旧值。
     pub fn interrupted(&self) -> bool { self.interrupted.unwrap_or(self.done) }
+    pub fn question(&self) -> bool { self.question.unwrap_or(self.waiting) }
+    pub fn approval(&self) -> bool { self.approval.unwrap_or(self.waiting) }
     pub fn enabled(&self, kind: NoticeKind) -> bool {
         match kind {
-            NoticeKind::Approval | NoticeKind::Question => self.waiting,
+            NoticeKind::Approval => self.approval(),
+            NoticeKind::Question => self.question(),
             NoticeKind::Done => self.done,
             NoticeKind::Interrupted => self.interrupted(),
             NoticeKind::Failed => self.failed,
@@ -50,7 +56,7 @@ impl NotifyConfig {
     }
 }
 impl Default for NotifyConfig {
-    fn default() -> Self { Self { waiting: true, done: true, interrupted: None, failed: true, stale: true, auto_expand: true } }
+    fn default() -> Self { Self { waiting: true, question: Some(true), approval: Some(true), done: true, interrupted: None, failed: true, stale: true, auto_expand: true } }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -92,6 +98,9 @@ impl Config {
         config.retention_minutes = snap_retention(config.retention_minutes);
         config.display.rows = config.display.rows.clamp(3, 5);
         config.display.recent_lines = config.display.recent_lines.clamp(1, 3);
+        // 旧配置只有合并的「等待用户选择」开关，拆分后沿用旧值。
+        config.notify.question.get_or_insert(config.notify.waiting);
+        config.notify.approval.get_or_insert(config.notify.waiting);
         // 「提示音」总开关已移除：旧配置关闭时把各事件一并关掉，保持原来的静音结果。
         if !config.sound.enabled {
             config.sound.enabled = true;
@@ -132,6 +141,10 @@ pub enum SessionState { Running, WaitingApproval, WaitingAnswer, Idle, Completed
 #[derive(Debug)]
 pub enum PendingKind { Approval(super::ApprovalRequest), Question(Vec<Question>) }
 
+/// 回答 AskUserQuestion 后，Claude Code 还会为同一个工具再发一次 PermissionRequest。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QuestionFollowup { Allow, Pass }
+
 #[derive(Debug)]
 pub struct Pending {
     pub kind: PendingKind,
@@ -164,6 +177,8 @@ pub struct Session {
     pub prompt: Option<String>,
     pub reply: Option<String>,
     pub pending: Option<Pending>,
+    /// 刚回答完问题时记下选择；随后同名工具的 PermissionRequest 直接沿用，不再弹第二次。
+    question_followup: Option<(QuestionFollowup, f64)>,
     /// 最近一次 Hook 进程的祖先链（pid, 进程名），跳转时用来找窗口。
     pub hosts: Vec<(u32, String)>,
     /// 本轮任务里出现过的子代理；主会话结束或开始新一轮时清空。
@@ -181,10 +196,17 @@ impl Session {
             title_from_meta,
             state: SessionState::Running, since: now, updated_at: now,
             tool: None, detail: None, last_message: None, prompt: None, reply: None, pending: None,
+            question_followup: None,
             hosts: Vec::new(),
             subagents: HashSet::new(),
             stale_at: None, stale_notified: false,
         }
+    }
+    #[cfg(test)]
+    pub(crate) fn sample(state: SessionState) -> Self {
+        let mut session = Self::new(AgentId::Claude, "claude:sample".into(), "sample".into(), "E:\\demo".into(), 0.0);
+        session.state = state;
+        session
     }
     pub fn stale(&self) -> bool { self.stale_at.is_some() }
     pub fn waiting(&self) -> bool { matches!(self.state, SessionState::WaitingApproval | SessionState::WaitingAnswer) }
@@ -299,6 +321,7 @@ impl Store {
                     // 新会话还没有收到第一条提问，先显示为闲置，避免空会话一直亮运行灯。
                     session.state = SessionState::Idle;
                     session.pending = None;
+                    session.question_followup = None;
                     session.subagents.clear();
                     updates.push(Update { notice: None, sound: Some(SoundKind::Start) });
                 }
@@ -314,8 +337,11 @@ impl Store {
                 refresh_title(session);
                 session.state = SessionState::Running;
                 session.pending = None;
+                session.question_followup = None;
                 session.tool = None;
                 session.detail = None;
+                // 新一轮任务开始后，卡片只等本轮 Stop 的输出，不沿用上一轮回复。
+                session.reply = None;
                 updates.push(Update { notice: None, sound: Some(SoundKind::Submit) });
             }
             EventKind::ToolStart { tool, detail } => {
@@ -331,6 +357,24 @@ impl Store {
                 if !ok { session.last_message = Some("工具调用失败".into()); }
             }
             EventKind::Permission(request) => {
+                // 回答完 AskUserQuestion 后 Claude Code 会再发一次同名 PermissionRequest；
+                // 直接沿用刚才的选择，避免同一个问题弹两次。
+                if request.tool == "AskUserQuestion" {
+                    if let Some((followup, at)) = session.question_followup.take() {
+                        if now - at <= 30.0 {
+                            if let Some(reply) = reply {
+                                let _ = reply.send(match followup {
+                                    QuestionFollowup::Allow => allow_json(agent),
+                                    QuestionFollowup::Pass => "{}".into(),
+                                });
+                            }
+                            session.state = SessionState::Running;
+                            session.tool = None;
+                            session.detail = None;
+                            return updates;
+                        }
+                    }
+                }
                 session.tool = Some(request.tool.clone());
                 session.detail = Some(request.detail.clone());
                 if self.always.contains(&(session.key.clone(), request.tool.clone())) {
@@ -379,10 +423,11 @@ impl Store {
                 session.subagents.clear();
                 let was = session.state;
                 session.pending = None;
+                session.question_followup = None;
                 session.tool = None;
                 session.detail = None;
                 refresh_title(session);
-                if let Some(message) = message { session.reply = Some(message); }
+                session.reply = message;
                 session.state = SessionState::Completed;
                 if was != SessionState::Completed {
                     updates.push(Update {
@@ -399,6 +444,7 @@ impl Store {
                 session.subagents.clear();
                 let was = session.state;
                 session.pending = None;
+                session.question_followup = None;
                 session.tool = None;
                 session.detail = None;
                 session.state = SessionState::Failed;
@@ -417,6 +463,7 @@ impl Store {
                 session.subagents.clear();
                 let was = session.state;
                 session.pending = None;
+                session.question_followup = None;
                 session.tool = None;
                 session.detail = None;
                 session.state = SessionState::Interrupted;
@@ -482,6 +529,10 @@ impl Store {
         }
         let body = response_json(session.agent, &pending, &decision);
         if let Some(reply) = pending.reply { let _ = reply.send(body); }
+        if matches!(&pending.kind, PendingKind::Question(_)) {
+            let followup = if matches!(&decision, Decision::Answers(_)) { QuestionFollowup::Allow } else { QuestionFollowup::Pass };
+            session.question_followup = Some((followup, now));
+        }
         session.state = SessionState::Running;
         session.updated_at = now;
         true
@@ -539,6 +590,8 @@ pub struct AgentState {
     /// 提问自由输入框的草稿与焦点状态。
     pub free: String,
     pub free_focus: bool,
+    /// 审批详情实测换行行数（1–2），用于按内容收缩高度。
+    pub approval_lines: usize,
     /// 会话列表的内部滚动位置。
     pub scroll: f32,
     pub notice_seq: u64,
@@ -559,6 +612,7 @@ impl Default for AgentState {
             answers: Vec::new(),
             free: String::new(),
             free_focus: false,
+            approval_lines: 2,
             scroll: 0.0,
             notice_seq: 0,
             last_tick: 0.0,
@@ -580,6 +634,7 @@ impl AgentState {
         if cfg!(test) { return; }
         if self.bridge.is_none() { self.bridge = super::bridge::Bridge::start(ctx.clone()).ok(); }
         super::hooks::cleanup_legacy();
+        super::hooks::refresh_timeouts();
         self.rescan();
     }
 
@@ -676,10 +731,53 @@ mod tests {
         assert_eq!(store.sessions[0].reply.as_deref(), Some("已修复并通过测试"));
         assert_eq!(store.visible().len(), 1, "完成后的会话保留为卡片");
         assert!(store.active().is_empty(), "完成后的会话不再点亮常驻状态灯");
-        // 下一轮运行时保留上一轮的回复，新提问覆盖旧提问。
+        // 下一轮开始后清掉上一轮回复，卡片只等本轮 Stop 的输出。
         store.apply(event(AgentId::Claude, "UserPromptSubmit", serde_json::json!({"session_id":"q1","prompt":"再跑一遍"})), 2.0, true);
         assert_eq!(store.sessions[0].prompt.as_deref(), Some("再跑一遍"));
-        assert_eq!(store.sessions[0].reply.as_deref(), Some("已修复并通过测试"));
+        assert_eq!(store.sessions[0].reply, None);
+    }
+
+    #[test]
+    fn answered_question_absorbs_the_followup_permission_request() {
+        let mut store = Store::default();
+        store.apply(event(AgentId::Claude, "PreToolUse", serde_json::json!({
+            "session_id":"q2","cwd":"C:\\p","tool_name":"AskUserQuestion",
+            "tool_input":{"questions":[{"question":"选哪个？","header":"选择","multiSelect":false,
+                "options":[{"label":"A","description":""},{"label":"B","description":""}]}]}
+        })), 0.0, true);
+        assert_eq!(store.sessions[0].state, SessionState::WaitingAnswer);
+        store.respond("claude:q2", Decision::Answers(vec![vec!["A".into()]]), 1.0);
+
+        let (tx, rx) = mpsc::channel();
+        let mut followup = event(AgentId::Claude, "PermissionRequest", serde_json::json!({
+            "session_id":"q2","cwd":"C:\\p","tool_name":"AskUserQuestion","tool_input":{}
+        }));
+        followup.reply = Some(tx);
+        let updates = store.apply(followup, 2.0, true);
+        assert!(updates.is_empty(), "回答后不再弹出第二次审批");
+        assert!(rx.try_recv().unwrap().contains("\"behavior\":\"allow\""));
+        assert_eq!(store.sessions[0].state, SessionState::Running);
+        assert!(store.sessions[0].pending.is_none());
+    }
+
+    #[test]
+    fn terminal_question_absorbs_the_followup_permission_request() {
+        let mut store = Store::default();
+        store.apply(event(AgentId::Claude, "PreToolUse", serde_json::json!({
+            "session_id":"q3","cwd":"C:\\p","tool_name":"AskUserQuestion",
+            "tool_input":{"questions":[{"question":"选哪个？","header":"选择","multiSelect":false,
+                "options":[{"label":"A","description":""}]}]}
+        })), 0.0, true);
+        store.respond("claude:q3", Decision::Terminal, 1.0);
+
+        let (tx, rx) = mpsc::channel();
+        let mut followup = event(AgentId::Claude, "PermissionRequest", serde_json::json!({
+            "session_id":"q3","cwd":"C:\\p","tool_name":"AskUserQuestion","tool_input":{}
+        }));
+        followup.reply = Some(tx);
+        store.apply(followup, 2.0, true);
+        assert_eq!(rx.try_recv().unwrap(), "{}", "到终端处理后，第二次请求也交给终端");
+        assert_eq!(store.sessions[0].state, SessionState::Running);
     }
 
     #[test]
@@ -800,6 +898,22 @@ mod tests {
         assert_eq!(updates.iter().find_map(|update| update.sound), Some(SoundKind::Error));
         assert_eq!(store.visible().len(), 1);
         assert!(store.active().is_empty());
+    }
+
+    #[test]
+    fn notify_splits_question_and_approval_and_migrates_legacy_waiting() {
+        let legacy: NotifyConfig = serde_json::from_value(serde_json::json!({"waiting": false})).unwrap();
+        assert!(!legacy.enabled(NoticeKind::Question));
+        assert!(!legacy.enabled(NoticeKind::Approval));
+        let mut config = NotifyConfig::default();
+        config.question = Some(false);
+        assert!(!config.enabled(NoticeKind::Question));
+        assert!(config.enabled(NoticeKind::Approval));
+        config.approval = Some(false);
+        assert!(!config.enabled(NoticeKind::Approval));
+        let saved = serde_json::to_value(&config).unwrap();
+        assert!(saved.get("waiting").is_none(), "旧合并键不再写回");
+        assert_eq!(saved["question"], false);
     }
 
     #[test]

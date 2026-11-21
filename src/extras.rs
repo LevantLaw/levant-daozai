@@ -47,6 +47,10 @@ pub(crate) struct Alert {
     pub agent: Option<crate::agent_ui::AgentAlert>,
 }
 impl Alert {
+    /// 只有非即时通讯的 Windows 通知点亮铃铛；邮件、即时通讯和 AI 各有自己的入口。
+    pub(crate) fn lights_bell(&self)->bool {
+        matches!(&self.source,AlertSource::External(id) if crate::app::Messenger::from_notification_id(id).is_none())
+    }
     pub(crate) fn health(&self)->Option<HealthReminder> {
         if self.source!=AlertSource::Internal{return None;}
         HealthReminder::ALL.into_iter().find(|kind|self.title==kind.title())
@@ -266,7 +270,8 @@ impl App {
         self.enqueue_alert(a, system);
     }
     pub(crate) fn meeting_alert(&mut self, meeting: crate::mail::Meeting, source: String, page: usize) {
-        self.calendar_badge_until=self.t+crate::page_badges::HOLD;
+        let left=meeting.start-chrono::Local::now().timestamp();
+        self.calendar_badge_until=self.t+if left>0 {left as f64}else{crate::page_badges::HOLD};
         self.enqueue_alert(Alert {
             source: AlertSource::Internal,
             title: "会议提醒".into(), body: format!("{} · {} · {}", meeting.title, meeting.at, source),
@@ -331,9 +336,12 @@ impl App {
             };
             if a.source!=AlertSource::Internal || a.title != "蓝牙设备" { self.alerts.retain(|old| !same_event(old)); }
             if a.banner_at <= self.t && (a.source!=AlertSource::Internal || a.title != "蓝牙设备") && self.notice.as_ref().is_some_and(same_event) {
-                if a.source!=AlertSource::Internal {
+                if a.lights_bell() {
                     self.notification_bell_at=self.t;
                     self.notification_bell_until=self.t+a.duration;
+                }
+                if let Some(agent)=a.agent.clone() {
+                    if self.agent.config.notify.auto_expand { self.agent_open_after_notice=Some(agent); }
                 }
                 self.notice = Some(a);
                 return;
@@ -373,11 +381,11 @@ impl App {
     fn clear_account_notices(&mut self,source:crate::app::Messenger,pid:u32){
         let matches=|notice:&Alert|notice.unread.is_some_and(|u|u.source==source && u.pid==pid);
         self.alerts.retain(|notice|!matches(notice));
-        if self.notice.as_ref().is_some_and(matches){self.notice=None;self.notification_bell_until=0.0;}
+        if self.notice.as_ref().is_some_and(matches){self.notice=None;}
     }
     fn clear_messenger_notices(&mut self,source:crate::app::Messenger){
         self.alerts.retain(|a|a.messenger()!=Some(source));
-        if self.notice.as_ref().is_some_and(|a|a.messenger()==Some(source)){self.notice=None;self.notification_bell_until=0.0;}
+        if self.notice.as_ref().is_some_and(|a|a.messenger()==Some(source)){self.notice=None;}
     }
     fn mark_messenger(&mut self,source:crate::app::Messenger,pid:u32,window:isize){
         if let Some(index)=self.pending_messengers.iter().position(|u|u.source==source && u.pid==pid){
@@ -410,7 +418,6 @@ impl App {
         self.mark_messenger(client,unread.pid,unread.window);
         if pending{return;}
         let hold=self.settings.notice_hold_secs;
-        self.notification_bell_at=self.t;self.notification_bell_until=self.t+hold;
         self.enqueue_alert(Alert{source:AlertSource::Messenger(client),title:client.name().into(),body:format!("有新消息 · 请到{}查看",client.name()),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t,agent:None},false);
     }
     pub fn set_messenger_status(&mut self,client:crate::app::Messenger,status:String){self.messenger_statuses.insert(client,status);}
@@ -424,7 +431,7 @@ impl App {
         let known=crate::app::Messenger::from_notification_id(&id);
         let client=known.filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast);
         if known==Some(crate::app::Messenger::Qq) && !self.settings.qq_notifications {return;}
-        // QQ 等即时通讯有独立的驻岛图标；其余 Windows 通知共用铃铛，页面关闭时不再收集。
+        // QQ 等即时通讯有独立的驻岛图标；只有非即时通讯的 Windows 通知点亮铃铛。
         if known.is_none() && !self.module_on(crate::app::WINDOWS_PAGE) {return;}
         let id=client.map(|client|client.adapter().notification_id.to_string()).unwrap_or(id);
         // 岛仔自己发出的系统提醒会被通知中心回传；已在历史里的同一内容不再入队，避免重复显示。
@@ -433,14 +440,16 @@ impl App {
         let unread=client.map(|client|unread.filter(|u|u.source==client && u.pid!=0).unwrap_or(crate::app::Unread::of(client)));
         if let Some(unread)=unread{self.mark_messenger(unread.source,unread.pid,unread.window);}
         let hold=self.settings.notice_hold_secs;
-        self.notification_bell_at=self.t;
-        self.notification_bell_until=self.t+hold;
         let title=app.chars().filter(|c|!c.is_control()).take(80).collect::<String>();
         let body=if self.settings.notification_preview {
             let mut text=body.chars().filter(|c|!c.is_control()).take(300).collect::<String>();
             if let Some(code)=crate::otp::extract("",&text,&[]) {text=crate::mail_privacy::mask(&text,&code.text);}
             text
         }else{"收到新通知 · 内容已隐藏".into()};
+        if known.is_none() {
+            self.notification_bell_at=self.t;
+            self.notification_bell_until=self.t+hold;
+        }
         self.enqueue_alert(Alert{source:AlertSource::External(id.clone()),title:title.clone(),body:body.clone(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread,banner_at:self.t,agent:None},false);
         if known.is_none() {
             self.windows_notices.push(crate::app::WindowsNotice{app:title,body,time:chrono::Local::now().format("%H:%M").to_string()});
@@ -455,7 +464,6 @@ impl App {
         let source=if unread.source.adapter().capture==crate::messenger::Capture::Taskbar{AlertSource::Messenger(unread.source)}else{AlertSource::External(unread.source.adapter().notification_id.into())};
         let hold=self.settings.notice_hold_secs;
         self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t,agent:None});
-        self.notification_bell_at=self.t;self.notification_bell_until=self.t+hold;
     }
     /// Windows 通知页：即时通讯以外的系统通知汇总在这里，底部保留翻页圆点。
     pub(crate) fn page_windows(&mut self,c:&Card) {
@@ -528,9 +536,12 @@ impl App {
             if ready {
                 if let Some(mut a) = self.alerts.pop_front() {
                     a.at = self.t;
-                    if a.source!=AlertSource::Internal {
+                    if a.lights_bell() {
                         self.notification_bell_at=self.t;
                         self.notification_bell_until=self.t+a.duration;
+                    }
+                    if let Some(agent)=a.agent.clone() {
+                        if self.agent.config.notify.auto_expand { self.agent_open_after_notice=Some(agent); }
                     }
                     self.notice = Some(a);
                 }
@@ -548,18 +559,21 @@ impl App {
             if notice_button(&nc,265.0,12.0,52.0,"关闭","messenger-dismiss"){
                 // 已确认账号的未读留到打开客户端后清除；保留未确认账号的客户端只能在这里明确忽略。
                 if let Some(unread)=a.unread.filter(|unread|unread.pid==0 && unread.source.adapter().keep_unidentified){self.discard_unread(unread);}
-                self.notice=None;self.notification_bell_until=0.0;
+                self.notice=None;
             }
             return;
         }
         if a.source!=AlertSource::Internal {
-            crate::paint::bell(&nc,310.0,22.0,theme::GRAY,crate::paint::bell_swing(self.t-a.at));
-            nc.circle(314.0,17.5,2.0,Color32::from_rgb(255,72,72));
+            crate::paint::bell(&nc,322.0,22.0,theme::GRAY,crate::paint::bell_swing(self.t-a.at));
+            nc.circle(326.0,17.5,2.0,Color32::from_rgb(255,72,72));
             nc.centered_text(16.0,14.0,&nc.fit(&a.title,11.0,W::Semibold,198.0),11.0,W::Semibold,theme::WHITE,H::Left);
             nc.centered_text(16.0,30.0,&nc.fit(&a.body,10.5,W::Regular,198.0),10.5,W::Regular,theme::GRAY,H::Left);
-            if notice_button(&nc,226.0,12.0,60.0,"关闭","external-dismiss"){
+            if notice_button(&nc,220.0,12.0,44.0,"查看","external-view"){
+                self.show_page(crate::app::WINDOWS_PAGE);
+            }
+            if notice_button(&nc,270.0,12.0,44.0,"关闭","external-dismiss"){
                 self.notice=None;
-                self.notification_bell_until=0.0;
+                if a.lights_bell() {self.notification_bell_until=0.0;}
             }
             return;
         }
@@ -647,11 +661,17 @@ impl App {
             }else if is_water {
                 if notice_button(&nc,181.0,12.0,62.0,"知道了","water-confirm-read"){self.confirm_health_reminder(HealthReminder::Water);}
                 if notice_button(&nc,250.0,12.0,68.0,"喝一口","water-confirm"){self.notice=None;self.drink_water();}
+            }else if let Some(agent)=a.agent.clone() {
+                let label=if agent.waiting(){"处理"}else{"查看"};
+                if notice_button(&nc,257.0,12.0,60.0,label,"notice-action"){
+                    self.notice=None;
+                    self.agent_open_after_notice=None;
+                    self.agent_open_event(agent);
+                }
             }else{
                 let label=if is_focus{"开始"}else if is_power{"知道了"}else{"查看"};
                 if notice_button(&nc,257.0,12.0,60.0,label,"notice-action"){
                     self.notice=None;if is_power{return;}if is_focus{self.pomo.running=true;}else if a.page<PAGE_NAMES.len(){
-                        if a.page==crate::app::AI_PAGE {self.agent.detail=false;self.agent.selected=None;}
                         self.show_page(a.page);
                         if a.page==4 {
                             let order=self.todos.display_order(&self.today);
@@ -1979,6 +1999,26 @@ impl App {
                         });
                     }
                     SETTINGS_TAB_BEHAVIOR=>{
+                        settings_label(ui,"岛体组件");
+                        settings_card(ui,|ui|{
+                            settings_control_row_right(ui,"岛上显示",|ui|{
+                                if ui.add(egui::Button::new("打开 ›").frame(false)).clicked(){self.settings_tab=SETTINGS_TAB_BODY;}
+                            });
+                        });
+                        settings_label(ui,"横幅提醒");
+                        settings_card(ui,|ui|{
+                            setting_row(ui,"提醒总开关","",&mut self.settings.notifications);
+                            ui.add_enabled_ui(self.settings.notifications,|ui|{
+                                ui.separator();
+                                let mut mode:u8=if !self.settings.system_notify{0}else if self.settings.sound{2}else{1};
+                                settings_control_row_right(ui,"系统提醒",|ui|{settings_segmented(ui,&mut mode,&[(0,"仅岛上"),(1,"加系统通知"),(2,"系统通知 + 声音")],96.0);});
+                                self.settings.system_notify=mode>0;
+                                self.settings.sound=mode==2;
+                                settings_hint(ui,"只影响岛仔自己的系统提醒；即时通讯和 Windows 通知不跟随，AI 提示音跟随声音开关。");
+                                ui.separator();
+                                setting_seconds(ui,"横幅停留",&mut self.settings.notice_hold_secs);
+                            });
+                        });
                         settings_label(ui,"展开与收起");
                         settings_card(ui,|ui|{
                             settings_control_row_right(ui,"动画速度",|ui|{
@@ -1992,20 +2032,6 @@ impl App {
                             ui.separator();
                             setting_seconds(ui,"展开后停留",&mut self.settings.page_hold_secs);
                             settings_hint(ui,"同时作用于打开功能页和展开未读胶囊。");
-                        });
-                        settings_label(ui,"通知");
-                        settings_card(ui,|ui|{
-                            setting_row(ui,"提醒总开关","",&mut self.settings.notifications);
-                            ui.add_enabled_ui(self.settings.notifications,|ui|{
-                                ui.separator();
-                                let mut mode:u8=if !self.settings.system_notify{0}else if self.settings.sound{2}else{1};
-                                settings_control_row_right(ui,"提醒方式",|ui|{settings_segmented(ui,&mut mode,&[(0,"仅岛上"),(1,"加系统通知"),(2,"系统通知 + 声音")],96.0);});
-                                self.settings.system_notify=mode>0;
-                                self.settings.sound=mode==2;
-                                ui.separator();
-                                setting_seconds(ui,"横幅停留",&mut self.settings.notice_hold_secs);
-                            });
-                            settings_hint(ui,"展开结束后开始计时；常驻状态灯保持到事件处理。");
                         });
                         settings_label(ui,"避让");
                         settings_card(ui,|ui|{
@@ -2247,7 +2273,7 @@ impl App {
                     }
                     7=>{
                         let mut add_mail=false;
-                        let on=self.settings_feature_header(ui,crate::app::MAIL_PAGE,"新邮件提醒与验证码；岛上歌词模式显示右侧图标");
+                        let on=self.settings_feature_header(ui,crate::app::MAIL_PAGE,"新邮件提醒与验证码；未读邮件在岛上保留邮箱图标");
                         ui.add_enabled_ui(on,|ui|{
                         settings_label(ui,"设置");
                         settings_card(ui,|ui|{

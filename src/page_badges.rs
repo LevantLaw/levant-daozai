@@ -25,7 +25,7 @@ pub(crate) struct Badge {
 impl App {
     pub(crate) fn mail_unread_count(&self) -> usize {
         if !self.settings.mail_enabled { return 0; }
-        self.mail.recent.iter().filter(|item| self.mail_seen(item, crate::mail_manage::Folder::Inbox) == Some(false)).count()
+        self.mail.recent.iter().filter(|item| self.mail_seen(item, crate::mail_manage::Folder::Inbox) != Some(true)).count()
     }
 
     /// 已到期且未完成的待办；重复待办只看当天的时刻。
@@ -119,20 +119,22 @@ impl App {
     pub(crate) fn paint_badge(&self, c: &Card, slot: usize, x: f32, color: Color32) {
         match slot {
             bar_layout::MAIL => {
-                paint::envelope(c, x - 5.0, 15.0, 13.0, color);
+                paint::envelope(c, x - 5.0, 15.0, bar_layout::GLYPH, color);
                 c.centered_text(x + 7.0, 15.0, &self.mail_unread_count().to_string(), 9.5, crate::theme::W::Semibold, color, crate::paint::H::Center);
             }
             bar_layout::HEALTH => {
-                if let Some(kind) = self.health_badges().first() { kind.icon(c, x, 15.0, 0.75); }
-                else { crate::paint::droplet(c, x, 15.0, 12.0, color); }
+                if let Some(kind) = self.health_badges().first() { kind.icon(c, x, 15.0, 0.68); }
+                else { crate::paint::droplet(c, x, 15.0, bar_layout::GLYPH, color); }
             }
             bar_layout::TODO => {
-                paint::checklist(c, x - 5.0, 15.0, 12.0, color, Color32::TRANSPARENT);
+                paint::checklist(c, x - 5.0, 15.0, bar_layout::GLYPH, color, Color32::TRANSPARENT);
                 c.centered_text(x + 7.0, 15.0, &self.todo_due_count().to_string(), 9.5, crate::theme::W::Semibold, color, crate::paint::H::Center);
             }
-            bar_layout::SHELF => paint::tray(c, x, 15.0, 12.0, 0.0, color, theme::GRAY),
-            bar_layout::CALENDAR => paint::calendar(c, x, 15.0, 13.0, color),
-            bar_layout::DND => paint::moon(c, x, 15.0, 9.0, color),
+            // 托盘前唇和日历顶部挂钩让墨迹上下不对称，按视觉中线微调回 15 点。
+            bar_layout::SHELF => paint::tray(c, x, 14.2, bar_layout::GLYPH, 0.0, color, theme::GRAY),
+            bar_layout::CALENDAR => paint::calendar(c, x, 15.5, bar_layout::GLYPH, color),
+            // 月亮外圆比同尺寸图标大，按统一图标尺寸折算。
+            bar_layout::DND => paint::moon(c, x, 15.0, bar_layout::MOON_SIZE, color),
             _ => {}
         }
     }
