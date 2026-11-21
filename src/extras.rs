@@ -103,6 +103,16 @@ pub(crate) fn notice_badge(c:&Card,x:f32,y:f32,a:&Alert){
     }else{notice_icon(&c.scaled(x,y,0.85),x,y,a);}
 }
 pub(crate) fn messenger_icon(c:&Card,x:f32,y:f32,source:crate::app::Messenger){(source.adapter().paint_icon)(c,x,y);}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FallbackIcon { Agent(crate::agent::AgentId), Page(usize) }
+
+/// 内部提醒的默认图标：AI 用对应 Agent 的品牌图标，其余用来源功能页的图标。
+fn fallback_icon(a:&Alert)->FallbackIcon {
+    a.agent.as_ref().and_then(|alert|alert.key.split(':').next()).and_then(crate::agent::AgentId::from_key)
+        .map(FallbackIcon::Agent).unwrap_or(FallbackIcon::Page(a.page))
+}
+
 fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
     if a.source!=AlertSource::Internal{crate::paint::bell(c,x,y,theme::WHITE,0.0);return;}
     match a.title.as_str() {
@@ -146,7 +156,8 @@ fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
                 c.poly(&[(x+0.5,y-0.8),(x+4.0,y-0.8),(x-1.0,y+4.5)],ink);
             }else{c.fill(x-8.0,y-3.5,12.0,7.0,1.0,ink);}
         },
-        "喝水时间到了"=>HealthReminder::Water.icon(c,x,y,1.0),
+        "新邮件"|"收到新邮件"|"邮件验证码"=>crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Mail(""),x-14.0,y-14.0,28.0),
+        "喝水时间到了"|"今日饮水目标达成"=>HealthReminder::Water.icon(c,x,y,1.0),
         crate::app::SIT_TITLE=>HealthReminder::Sit.icon(c,x,y,1.0),
         "待办到时间了"=>crate::paint::checklist(c,x,y,23.0,Color32::from_rgb(190,180,255),Color32::from_rgb(43,35,66)),
         "会议提醒"=>{
@@ -156,7 +167,11 @@ fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
             crate::calendar_ui::source_icon(c,source,x-14.0,y-14.0,28.0);
         },
         "专注计时"=>crate::paint::stopwatch(&c.scaled(x,y,0.65),x,y,8.0,0.0,theme::RED_TOP),
-        _=>crate::paint::bell(&c.scaled(x,y,1.7),x,y,theme::GRAY,0.0),
+        "岛仔已暂停音乐功能"=>page_icon(c,crate::app::MUSIC_PAGE,x,y,24.0),
+        _=>match fallback_icon(a) {
+            FallbackIcon::Agent(agent)=>crate::agent_ui::agent_icon(c,agent,x,y,24.0),
+            FallbackIcon::Page(page)=>page_icon(c,page,x,y,24.0),
+        },
     }
 }
 
@@ -817,6 +832,18 @@ mod tests {
             if i<4{assert_eq!(value,100);}else{assert_ne!(value,100);}
         }
     }
+    #[test]
+    fn internal_banner_fallback_uses_agent_or_page_icon(){
+        let alert=|title:&str,key:Option<&str>,page| Alert{
+            source:AlertSource::Internal,title:title.into(),body:String::new(),page,at:0.0,duration:0.0,
+            bluetooth:None,meeting:None,unread:None,banner_at:0.0,
+            agent:key.map(|key|crate::agent_ui::AgentAlert{key:key.into(),kind:crate::agent::store::NoticeKind::Done}),
+        };
+        assert_eq!(fallback_icon(&alert("会话完成",Some("claude:abc"),9)),FallbackIcon::Agent(crate::agent::AgentId::Claude));
+        assert_eq!(fallback_icon(&alert("会话中断",Some("codex:abc"),9)),FallbackIcon::Agent(crate::agent::AgentId::Codex));
+        assert_eq!(fallback_icon(&alert("未知系统提醒",None,4)),FallbackIcon::Page(4));
+    }
+
     #[test]
     fn number_stepper_clicks_follow_steps_and_limits() {
         for (initial,step,x,expected) in [(5u32,1,127.0,6),(5,1,13.0,4),(0,1,13.0,0),(10,1,127.0,10),(9,3,127.0,10),(1,3,13.0,0)] {
@@ -1480,6 +1507,17 @@ fn settings_page_icon(page:usize)->egui::ImageSource<'static>{
         _=>("weather",include_bytes!("../assets/settings-icons/system/weather.svg")),
     };
     egui::ImageSource::Bytes{uri:format!("bytes://settings-header-{name}.svg").into(),bytes:bytes.into()}
+}
+
+/// 把功能页图标画到横幅图标位；按实际像素加载，避免与设置页纹理互相拉伸。
+fn page_icon(c:&Card,page:usize,x:f32,y:f32,size:f32){
+    let egui::ImageSource::Bytes{uri,bytes}=settings_page_icon(page) else{return;};
+    let rect=c.rect(x-size/2.0,y-size/2.0,size,size);
+    let pixels=(rect.width()*c.ui.ctx().pixels_per_point()).ceil() as u32;
+    let icon=egui::Image::from_bytes(format!("{uri}/{pixels}.svg"),bytes);
+    if let Ok(egui::load::TexturePoll::Ready{texture})=icon.fit_to_exact_size(rect.size()).load_for_size(c.ui.ctx(),rect.size()) {
+        c.painter.image(texture.id,rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);
+    }
 }
 
 /// 设置分页对应的功能模块（页面序号）；通用、岛体、行为、提醒、关于不属于任何模块。

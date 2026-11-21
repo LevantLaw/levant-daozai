@@ -787,7 +787,7 @@ fn health_text(health: Health, note: &str) -> (Color32, String) {
     (color, note.to_string())
 }
 
-fn agent_icon(c: &Card, agent: AgentId, x: f32, y: f32, size: f32) {
+pub(crate) fn agent_icon(c: &Card, agent: AgentId, x: f32, y: f32, size: f32) {
     let ctx = c.ui.ctx();
     let ppp = ctx.pixels_per_point();
     let pixels = (size * c.s * ppp).round().max(1.0) as u32;
