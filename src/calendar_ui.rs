@@ -3,6 +3,12 @@ use crate::{app::{App, Cmd, Env, CALENDAR_PAGE}, calendar, mail, paint::{self,Ca
 use chrono::{Datelike, NaiveDate};
 use eframe::egui::{self,Color32};
 
+/// 右侧日程列表的起点、行高和同屏条数；展开卡片占两行。
+const LIST_TOP: f32 = 52.0;
+const ROW_H: f32 = 18.8;
+const EXPANDED_H: f32 = 44.0;
+const VISIBLE_ROWS: usize = 6;
+
 pub(crate) struct State {
     pub month: NaiveDate,
     pub day: NaiveDate,
@@ -84,10 +90,11 @@ fn calendar_now(env:&Env)->i64{
             .and_then(|at|at.and_local_timezone(chrono::Local).earliest()).map(|at|at.timestamp()).unwrap_or_else(||chrono::Local::now().timestamp())
 }
 
-fn featured_index(events:&[Entry<'_>],focus:Option<&str>,now:i64)->Option<usize> {
-    let eligible=|event:&mail::Meeting|!event.all_day && !has_ended(event,now);
-    events.iter().position(|entry|eligible(entry.event) && focus==Some(entry_key(entry.event).as_str()))
-        .or_else(||events.iter().enumerate().filter(|(_,entry)|eligible(entry.event)).min_by_key(|(_,entry)|(entry.event.start>now,entry.event.start)).map(|(i,_)|i))
+/// 当前展开的日程：优先用户选中的卡片，否则默认展开下一场未开始的定时日程。
+/// 选中卡片只在本行放大，不改变列表顺序。
+fn expanded_index(events:&[Entry<'_>],focus:Option<&str>,now:i64)->Option<usize> {
+    events.iter().position(|entry| focus==Some(entry_key(entry.event).as_str()))
+        .or_else(||events.iter().enumerate().filter(|(_,entry)|!entry.event.all_day && !has_ended(entry.event,now)).min_by_key(|(_,entry)|(entry.event.start>now,entry.event.start)).map(|(i,_)|i))
 }
 
 fn event_status(event:&mail::Meeting,now:i64,today:NaiveDate)->String {
@@ -113,13 +120,16 @@ pub(crate) fn source_icon(c:&Card,source:Source<'_>,x:f32,y:f32,size:f32) {
         Source::Calendar(Some(calendar::Provider::WeCom))=>egui::include_image!("../assets/calendar/wecom.svg"),
         Source::Mail(_)=>egui::include_image!("../assets/calendar/mail.svg"),
         Source::Calendar(Some(calendar::Provider::Feishu))=>egui::include_image!("../assets/calendar/feishu.svg"),
+        Source::Calendar(Some(calendar::Provider::ICloud))=>egui::include_image!("../assets/calendar/icloud.svg"),
+        Source::Calendar(Some(calendar::Provider::Exchange))=>egui::include_image!("../assets/calendar/outlook.svg"),
+        Source::Local=>egui::include_image!("../assets/calendar/windows.svg"),
         _=>egui::include_image!("../assets/settings-icons/calendar-days.svg"),
     };
     let egui::ImageSource::Bytes{uri,bytes}=icon else{return};
     let pixels=(rect.width()*c.ui.ctx().pixels_per_point()).ceil() as u32;
     let icon=egui::Image::from_bytes(format!("{uri}/{pixels}.svg"),bytes);
     if let Ok(egui::load::TexturePoll::Ready{texture})=icon.fit_to_exact_size(rect.size()).load_for_size(c.ui.ctx(),rect.size()) {
-        let tint=if matches!(source,Source::Calendar(None|Some(calendar::Provider::ICloud|calendar::Provider::Custom|calendar::Provider::Exchange))|Source::Local){source.color()}else{Color32::WHITE};
+        let tint=if matches!(source,Source::Calendar(None|Some(calendar::Provider::Custom))){source.color()}else{Color32::WHITE};
         c.painter.image(texture.id,rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),tint);
     }
 }
@@ -128,19 +138,20 @@ pub(crate) fn source_icon(c:&Card,source:Source<'_>,x:f32,y:f32,size:f32) {
 mod tests {
     use super::*;
     #[test]
-    fn featured_calendar_excludes_ended_and_all_day_events() {
+    fn expanded_calendar_excludes_ended_and_all_day_by_default() {
         let make=|uid:&str,start,end,all_day|mail::Meeting{uid:uid.into(),title:uid.into(),start,end:Some(end),all_day,at:String::new()};
         let events=[make("全天",0,86400,true),make("已结束",10,20,false),make("下一场",200,300,false),make("进行中",80,150,false)];
         let entries:Vec<_>=events.iter().map(|event|Entry{event,sources:vec![Source::Local]}).collect();
-        assert_eq!(featured_index(&entries,None,100),Some(3));
-        assert_eq!(featured_index(&entries,None,160),Some(2));
-        assert_eq!(featured_index(&entries,Some(entry_key(&events[0]).as_str()),160),Some(2));
-        assert_eq!(featured_index(&entries,None,400),None);
+        assert_eq!(expanded_index(&entries,None,100),Some(3));
+        assert_eq!(expanded_index(&entries,None,160),Some(2));
+        assert_eq!(expanded_index(&entries,Some(entry_key(&events[0]).as_str()),160),Some(0));
+        assert_eq!(expanded_index(&entries,Some(entry_key(&events[1]).as_str()),160),Some(1));
+        assert_eq!(expanded_index(&entries,None,400),None);
         assert!(has_ended(&events[1],20));
     }
     #[test]
     fn source_svg_rasterizes_at_notification_size_and_screen_scale() {
-        for source in [Source::Mail("test"),Source::Calendar(Some(calendar::Provider::Feishu)),Source::Calendar(Some(calendar::Provider::WeCom))] {
+        for source in [Source::Mail("test"),Source::Calendar(Some(calendar::Provider::Feishu)),Source::Calendar(Some(calendar::Provider::WeCom)),Source::Calendar(Some(calendar::Provider::ICloud)),Source::Calendar(Some(calendar::Provider::Exchange)),Source::Calendar(Some(calendar::Provider::Custom)),Source::Calendar(None),Source::Local] {
         let ctx=egui::Context::default();egui_extras::install_image_loaders(&ctx);
         let raw=egui::RawInput{viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
         let output=ctx.run(raw,|ctx|{
@@ -188,8 +199,7 @@ impl App {
         let now=calendar_now(env);
         let events:Vec<_>=self.calendar_entries(self.calendar.view.day).into_iter()
             .filter(|entry|self.calendar.view.show_ended || !has_ended(entry.event,now)).collect();
-        let featured=featured_index(&events,self.calendar.view.focus.as_deref(),now).is_some();
-        events.len().saturating_sub(usize::from(featured)+4)
+        events.len().saturating_sub(VISIBLE_ROWS)
     }
 
     pub(crate) fn mail_event_ignored(&self,event:&mail::Meeting)->bool {
@@ -270,8 +280,8 @@ impl App {
         source_icon(c,Source::Calendar(None),43.0,13.0,10.0);
         c.centered_text(69.0,18.0,"日程",10.0,W::Semibold,theme::WHITE,H::Center);
         if c.hit(37.0,9.0,54.0,18.0,"calendar-today").on_hover_text("回到今天").clicked(){self.select_calendar_day(today);}
-        let (add,b)=paint::capsule(c,101.0,9.0,46.0,18.0,"calendar-add-local",theme::BTN,theme::BTN_HOVER);
-        b.centered_text(124.0,18.0,"＋ 新增",9.0,W::Regular,theme::WHITE,H::Center);
+        let (add,b)=paint::capsule(c,97.0,9.0,54.0,18.0,"calendar-add-local",theme::BTN,theme::BTN_HOVER);
+        b.centered_text(124.0,18.0,"＋ 添加日程",8.4,W::Regular,theme::WHITE,H::Center);
         if add.clicked(){self.open_calendar_editor(None);return;}
         c.seg((155.0,36.0),(155.0,208.0),0.6,Color32::from_gray(38));
         let day=self.calendar.view.day;
@@ -328,23 +338,17 @@ impl App {
         let show_ended=self.calendar.view.show_ended;
         let mut events:Vec<_>=all_events.into_iter().filter(|entry|show_ended || !has_ended(entry.event,now)).collect();
         events.sort_by_key(|entry|(has_ended(entry.event,now),!entry.event.all_day,entry.event.start));
-        let mut connect=false;let mut add_local=false;let mut toggle_ended=false;
-        let featured_index=featured_index(&events,focus.as_deref(),now);
-        let remaining_count=events.len()-usize::from(featured_index.is_some());
-        let max=remaining_count.saturating_sub(4);
-        if scroll_to_focus {first=0;}
+        let mut connect=false;let mut toggle_ended=false;
+        let expanded=expanded_index(&events,focus.as_deref(),now);
+        let max=events.len().saturating_sub(VISIBLE_ROWS);
+        if scroll_to_focus {first=expanded.map(|index|index.min(max)).unwrap_or(0);}
         first=first.min(max);
-        if featured_index.is_none() {
-            let message=if self.calendar.view.loading && events.is_empty(){"正在获取日程…"}else if !self.calendar.view.error.is_empty() && events.is_empty(){"暂时无法获取日程"}else if !self.calendar.view.warning.is_empty() && events.is_empty(){"部分日程未同步"}else if ended_count>0 && events.is_empty(){"当天日程已结束"}else if events.is_empty(){"当天暂无日程"}else{"暂无待开始的定时日程"};
+        if events.is_empty() {
+            let message=if self.calendar.view.loading{"正在获取日程…"}else if !self.calendar.view.error.is_empty(){"暂时无法获取日程"}else if !self.calendar.view.warning.is_empty(){"部分日程未同步"}else if ended_count>0{"当天日程已结束"}else{"当天暂无日程"};
             c.centered_text(271.0,76.0,message,11.0,W::Regular,theme::GRAY,H::Center);
-            if events.is_empty(){
-                let (button,b)=paint::capsule(c,214.0,93.0,70.0,20.0,"calendar-empty-add",theme::BTN,theme::BTN_HOVER);
-                b.centered_text(249.0,103.0,"＋ 添加日程",9.0,W::Regular,theme::WHITE,H::Center);
-                if button.clicked(){add_local=true;}
-                if self.calendar_configs().is_empty(){
-                    c.centered_text(326.0,103.0,"连接日历",9.0,W::Regular,muted,H::Center);
-                    if c.hit(290.0,93.0,72.0,20.0,"calendar-connect").clicked(){connect=true;}
-                }
+            if self.calendar_configs().is_empty(){
+                c.centered_text(271.0,103.0,"连接日历",9.0,W::Regular,muted,H::Center);
+                if c.hit(235.0,93.0,72.0,20.0,"calendar-connect").clicked(){connect=true;}
             }
         }
         if ended_count>0 {
@@ -352,58 +356,87 @@ impl App {
             if c.hit(242.0,34.0,76.0,18.0,"calendar-toggle-ended").clicked(){toggle_ended=true;}
         }
         let mut clicked=None;let mut ignored=None;let mut edit_local=None;
-        let featured=featured_index.and_then(|i|events.get(i)).into_iter().map(|entry|(entry,true));
-        let remaining=events.iter().enumerate().filter(|(index,_)|Some(*index)!=featured_index).map(|(_,entry)|(entry,false)).skip(first).take(4);
-        for (i,(entry,featured)) in featured.chain(remaining).enumerate() {
+        let mut y=LIST_TOP;
+        for (index,entry) in events.iter().enumerate().skip(first).take(VISIBLE_ROWS) {
             let event=entry.event;
-            let (y,height,cy,size,mut x,icon_size)=if featured{(52.0,68.0,93.0,14.0,168.0,16.0)}else{let y=130.0+(i-usize::from(featured_index.is_some())) as f32*18.8;(y,18.8,y+8.0,10.2,204.0,13.0)};
-            let selected=focus.as_deref()==Some(entry_key(event).as_str());
-            let hit=c.hit(164.0,y,214.0,height,("calendar-event",entry_key(event)));
+            let expanded_card=Some(index)==expanded;
+            let height=if expanded_card{EXPANDED_H}else{ROW_H};
+            let key=entry_key(event);
+            let selected=focus.as_deref()==Some(key.as_str());
+            let hit=c.hit(164.0,y,214.0,height,("calendar-event",key.clone()));
             if selected || hit.hovered(){c.fill(164.0,y,214.0,height,5.0,Color32::from_gray(if selected{29}else{20}));}
             let time=if event.all_day{"全天".to_string()}else if event_day(event)!=Some(day){"跨天".to_string()}else{chrono::DateTime::from_timestamp(event.start,0).unwrap().with_timezone(&chrono::Local).format("%H:%M").to_string()};
-            if featured {
-                c.centered_text(167.0,68.0,&time,23.0,W::Semibold,theme::WHITE,H::Left);
-                let status=event_status(event,now,today);
-                let width=(c.text_w(&status,7.5,W::Semibold)+14.0).max(46.0);
-                let ended=event.end.is_some_and(|end|end<=now);
-                c.fill(366.0-width,60.0,width,14.0,7.0,if ended{theme::BTN}else{Color32::from_rgb(28,48,68)});
-                c.centered_text(366.0-width/2.0,67.0,&status,7.5,W::Semibold,if ended{muted}else{accent},H::Center);
-                if let Some(end)=event.end.and_then(|end|chrono::DateTime::from_timestamp(end,0)).map(|end|end.with_timezone(&chrono::Local)) {
-                    let label=if event.all_day {format!("截至 {}",(end-chrono::Duration::seconds(1)).format("%m-%d"))}else{format!("{} 结束",end.format(if end.date_naive()==day{"%H:%M"}else{"%m-%d %H:%M"}))};
-                    c.centered_text(168.0,110.0,&label,8.4,W::Regular,muted,H::Left);
-                }
-                c.seg((167.0,121.0),(376.0,121.0),0.6,Color32::from_gray(39));
-            }else{c.centered_text(169.0,cy,&time,8.7,W::Regular,if selected{accent}else{muted},H::Left);}
             let sources=entry.sources.iter().map(|source|source.label()).collect::<Vec<_>>().join(" · ");
-            let mut kinds=Vec::new();
-            for source in &entry.sources {
-                let key=source.icon_key();
-                if kinds.contains(&key){continue;}
-                kinds.push(key);
-                source_icon(c,*source,x,cy-icon_size/2.0,icon_size);
-                x+=icon_size+if featured{5.0}else{2.0};
-            }
             let can_ignore=entry.sources.iter().any(|source|matches!(source,Source::Mail(_)));
             let is_local=entry.sources.contains(&Source::Local);
-            let title_right=if can_ignore || is_local{352.0}else{371.0};
-            c.centered_text(x+2.0,cy,&c.fit(&event.title,size,W::Semibold,title_right-x-2.0),size,W::Semibold,if has_ended(event,now){muted}else{theme::WHITE},H::Left);
-            if is_local {
-                c.centered_text(365.0,cy,"编辑",7.5,W::Regular,accent,H::Center);
-                if c.hit(354.0,cy-8.0,23.0,16.0,("calendar-edit-local",event.uid.as_str())).clicked(){edit_local=Some(event.uid.clone());}
+            if expanded_card {
+                // 展开卡片固定两行：时间、名称、状态同一行，结束时间与编辑同一行。
+                let title_size=14.0;
+                let title_color=if has_ended(event,now){muted}else{theme::WHITE};
+                let status=event_status(event,now,today);
+                let status_width=(c.text_w(&status,7.5,W::Semibold)+14.0).max(46.0);
+                let capsule_x=366.0-status_width;
+                let ended=event.end.is_some_and(|end|end<=now);
+                c.fill(capsule_x,y+6.0,status_width,14.0,7.0,if ended{theme::BTN}else{Color32::from_rgb(28,48,68)});
+                c.centered_text(capsule_x+status_width/2.0,y+13.0,&status,7.5,W::Semibold,if ended{muted}else{accent},H::Center);
+                c.centered_text(167.0,y+13.0,&time,title_size,W::Semibold,title_color,H::Left);
+                let mut x=167.0+c.text_w(&time,title_size,W::Semibold)+8.0;
+                let mut kinds=Vec::new();
+                for source in &entry.sources {
+                    let icon_key=source.icon_key();
+                    if kinds.contains(&icon_key){continue;}
+                    kinds.push(icon_key);
+                    source_icon(c,*source,x,y+6.0,14.0);
+                    x+=14.0+4.0;
+                }
+                if !kinds.is_empty(){x+=2.0;}
+                let title_right=(capsule_x-8.0).max(x+20.0);
+                c.centered_text(x,y+13.0,&c.fit(&event.title,title_size,W::Semibold,title_right-x),title_size,W::Semibold,title_color,H::Left);
+                if let Some(end)=event.end.and_then(|end|chrono::DateTime::from_timestamp(end,0)).map(|end|end.with_timezone(&chrono::Local)) {
+                    let label=if event.all_day {format!("截至 {}",(end-chrono::Duration::seconds(1)).format("%m-%d"))}else{format!("{} 结束",end.format(if end.date_naive()==day{"%H:%M"}else{"%m-%d %H:%M"}))};
+                    c.centered_text(167.0,y+33.0,&label,8.4,W::Regular,muted,H::Left);
+                }
+                if is_local {
+                    c.centered_text(365.0,y+33.0,"编辑",7.5,W::Regular,accent,H::Center);
+                    if c.hit(354.0,y+25.0,23.0,16.0,("calendar-edit-local",event.uid.as_str())).clicked(){edit_local=Some(event.uid.clone());}
+                }
+                if can_ignore {
+                    let button=c.hit(357.0,y+25.0,18.0,16.0,("calendar-ignore-mail",key.clone())).on_hover_text("忽略此邮件日程；可在邮件详情恢复");
+                    paint::close(c,366.0,y+33.0,3.0,if button.hovered(){theme::WHITE}else{muted});
+                    if button.clicked(){ignored=Some(event.clone());}
+                }
+            } else {
+                let cy=y+8.0;
+                c.centered_text(169.0,cy,&time,8.7,W::Regular,if selected{accent}else{muted},H::Left);
+                let mut x=204.0;
+                let mut kinds=Vec::new();
+                for source in &entry.sources {
+                    let icon_key=source.icon_key();
+                    if kinds.contains(&icon_key){continue;}
+                    kinds.push(icon_key);
+                    source_icon(c,*source,x,cy-6.5,13.0);
+                    x+=13.0+2.0;
+                }
+                let title_right=if can_ignore || is_local{352.0}else{371.0};
+                c.centered_text(x+2.0,cy,&c.fit(&event.title,10.2,W::Semibold,title_right-x-2.0),10.2,W::Semibold,if has_ended(event,now){muted}else{theme::WHITE},H::Left);
+                if is_local {
+                    c.centered_text(365.0,cy,"编辑",7.5,W::Regular,accent,H::Center);
+                    if c.hit(354.0,cy-8.0,23.0,16.0,("calendar-edit-local",event.uid.as_str())).clicked(){edit_local=Some(event.uid.clone());}
+                }
+                if can_ignore {
+                    let button=c.hit(357.0,cy-8.0,18.0,16.0,("calendar-ignore-mail",key.clone())).on_hover_text("忽略此邮件日程；可在邮件详情恢复");
+                    paint::close(c,366.0,cy,3.0,if button.hovered(){theme::WHITE}else{muted});
+                    if button.clicked(){ignored=Some(event.clone());}
+                }
             }
-            if can_ignore {
-                let button=c.hit(357.0,cy-8.0,18.0,16.0,("calendar-ignore-mail",entry_key(event))).on_hover_text("忽略此邮件日程；可在邮件详情恢复");
-                paint::close(c,366.0,cy,3.0,if button.hovered(){theme::WHITE}else{muted});
-                if button.clicked(){ignored=Some(event.clone());}
-            }
-            if hit.on_hover_text(format!("{}\n{}\n{}",event.title,event.at,sources)).clicked(){clicked=Some(entry_key(event));}
+            if hit.on_hover_text(format!("{}\n{}\n{}",event.title,event.at,sources)).clicked(){clicked=Some(key);}
+            y+=height;
         }
-        if remaining_count>4 {c.text(376.0,208.0,&format!("列表 {}–{} / {}",first+1,(first+4).min(remaining_count),remaining_count),7.0,W::Regular,muted,H::Right);}
+        if events.len()>VISIBLE_ROWS {c.text(376.0,208.0,&format!("列表 {}–{} / {}",first+1,(first+VISIBLE_ROWS).min(events.len()),events.len()),7.0,W::Regular,muted,H::Right);}
         self.calendar.view.first=first;
         if toggle_ended{self.calendar.view.show_ended=!show_ended;self.calendar.view.first=0;}
         if let Some(key)=clicked{self.calendar.view.focus=Some(key);}
         if let Some(uid)=edit_local{self.open_calendar_editor(Some(&uid));}
-        if add_local{self.open_calendar_editor(None);}
         if let Some(event)=ignored{self.toggle_mail_event(&event);}
         // 从日程窗口「连接日历」进来：直接打开设置页的添加日历弹窗。
         if connect {self.settings_tab=8;self.calendar.form.open=true;self.calendar.form.guide_open=true;self.open_settings();}
