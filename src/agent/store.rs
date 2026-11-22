@@ -165,8 +165,14 @@ pub struct Session {
     pub id: String,
     pub cwd: String,
     pub title: String,
-    /// 标题来自 Claude Code 的会话元数据，不再被项目名/提问覆盖。
+    /// 标题来自 Claude Code 的会话元数据或 transcript，不再被项目名/提问覆盖。
     title_from_meta: bool,
+    /// Claude Code 的 transcript 路径；标题从其中的 `custom-title` / `ai-title` 读取。
+    transcript: String,
+    /// 已读到的 transcript 字节位置，后续只读追加内容。
+    transcript_offset: u64,
+    /// 已读到用户命名的标题，后续自动标题不再覆盖。
+    title_from_custom: bool,
     pub state: SessionState,
     pub since: f64,
     pub updated_at: f64,
@@ -188,12 +194,12 @@ pub struct Session {
 }
 
 impl Session {
-    fn new(agent: AgentId, key: String, id: String, cwd: String, now: f64) -> Self {
+    fn new(agent: AgentId, key: String, id: String, cwd: String, transcript: String, now: f64) -> Self {
         let meta_title = super::hooks::session_title(agent, &id);
         let title_from_meta = meta_title.is_some();
         Self {
             key, agent, id, title: meta_title.unwrap_or_else(|| project_title(&cwd, agent)), cwd,
-            title_from_meta,
+            title_from_meta, transcript, transcript_offset: 0, title_from_custom: false,
             state: SessionState::Running, since: now, updated_at: now,
             tool: None, detail: None, last_message: None, prompt: None, reply: None, pending: None,
             question_followup: None,
@@ -204,7 +210,7 @@ impl Session {
     }
     #[cfg(test)]
     pub(crate) fn sample(state: SessionState) -> Self {
-        let mut session = Self::new(AgentId::Claude, "claude:sample".into(), "sample".into(), "E:\\demo".into(), 0.0);
+        let mut session = Self::new(AgentId::Claude, "claude:sample".into(), "sample".into(), "E:\\demo".into(), String::new(), 0.0);
         session.state = state;
         session
     }
@@ -228,8 +234,20 @@ fn project_title(cwd: &str, agent: AgentId) -> String {
     std::path::Path::new(cwd).file_name().and_then(|name| name.to_str()).filter(|name| !name.is_empty()).unwrap_or(agent.display()).to_string()
 }
 
-/// 会话标题以 Claude Code 的自动标题为准；拿不到时保留项目名/首条提问。
+/// 会话标题以 Claude Code transcript 里的标题为准；拿不到时退回进程名、项目名或首条提问。
 fn refresh_title(session: &mut Session) {
+    if session.agent == AgentId::Claude && !session.transcript.is_empty() {
+        if let Some(name) = super::hooks::transcript_title(
+            std::path::Path::new(&session.transcript),
+            &mut session.transcript_offset,
+            &mut session.title_from_custom,
+        ) {
+            session.title = name;
+            session.title_from_meta = true;
+            return;
+        }
+        if session.title_from_custom { return; }
+    }
     if let Some(name) = super::hooks::session_title(session.agent, &session.id) {
         session.title = name;
         session.title_from_meta = true;
@@ -291,16 +309,24 @@ impl Store {
             return updates;
         }
         let cwd = super::cwd(&payload);
+        let transcript = super::string_field(&payload, &["transcript_path", "transcriptPath"]);
         let index = match self.sessions.iter().position(|session| session.key == key) {
             Some(index) => index,
             None => {
-                self.sessions.push(Session::new(agent, key.clone(), id, cwd.clone(), now));
+                let mut session = Session::new(agent, key.clone(), id, cwd.clone(), transcript.clone(), now);
+                refresh_title(&mut session);
+                self.sessions.push(session);
                 self.sessions.len() - 1
             }
         };
         let session = &mut self.sessions[index];
         if !hosts.is_empty() { session.hosts = hosts; }
         if let Some(id) = &subagent { session.subagents.insert(id.clone()); }
+        if !transcript.is_empty() && session.transcript != transcript {
+            session.transcript = transcript;
+            session.transcript_offset = 0;
+            session.title_from_custom = false;
+        }
         session.updated_at = now;
         session.stale_at = None;
         session.stale_notified = false;
@@ -309,9 +335,9 @@ impl Store {
             session.cwd = cwd;
             if session.prompt.is_none() && !session.title_from_meta { session.title = project_title(&session.cwd, agent); }
         }
+        refresh_title(session);
         match kind {
             EventKind::SessionStart { source, .. } => {
-                refresh_title(session);
                 if source == "compact" {
                     // 压缩不是新会话：非运行中不恢复状态、不发声。
                     if subagent.is_none() && session.state == SessionState::Running {
@@ -334,7 +360,6 @@ impl Store {
                     if session.prompt.is_none() && !session.title_from_meta { session.title = text.chars().take(28).collect(); }
                     session.prompt = Some(text);
                 }
-                refresh_title(session);
                 session.state = SessionState::Running;
                 session.pending = None;
                 session.question_followup = None;
@@ -426,7 +451,6 @@ impl Store {
                 session.question_followup = None;
                 session.tool = None;
                 session.detail = None;
-                refresh_title(session);
                 session.reply = message;
                 session.state = SessionState::Completed;
                 if was != SessionState::Completed {

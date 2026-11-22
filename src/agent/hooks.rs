@@ -25,8 +25,61 @@ fn home() -> PathBuf {
     std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).map(PathBuf::from).unwrap_or_default()
 }
 
-/// Claude Code 把会话的自动标题写在 `~/.claude/sessions/<pid>.json` 的 `name` 里；
-/// 按 session_id 找到它。其他 Agent 没有等价的元数据。
+/// Claude Code 的会话标题写在 transcript 的 `custom-title` / `ai-title` 记录里，
+/// 与界面显示一致；`~/.claude/sessions/<pid>.json` 的 `name` 只是进程名，
+/// 自动生成时形如「目录-随机后缀」，不能当标题用。
+///
+/// 从 `offset` 继续读新追加的内容，返回最后一条标题。`custom-title`（用户改名）
+/// 优先于 `ai-title`，后续的自动标题不再覆盖；`custom` 记录这个状态。
+pub(crate) fn transcript_title(path: &Path, offset: &mut u64, custom: &mut bool) -> Option<String> {
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    if len < *offset {
+        *offset = 0;
+        *custom = false;
+    }
+    if len <= *offset { return None; }
+    file.seek(SeekFrom::Start(*offset)).ok()?;
+    let mut reader = BufReader::new(file);
+    let mut line = String::new();
+    let mut consumed = 0u64;
+    let mut latest_custom = None;
+    let mut custom_seen = false;
+    let mut latest_ai = None;
+    loop {
+        line.clear();
+        let Ok(read) = reader.read_line(&mut line) else { break; };
+        if read == 0 || !line.ends_with('\n') { break; }
+        consumed += read as u64;
+        if !line.contains("\"custom-title\"") && !line.contains("\"ai-title\"") { continue; }
+        let Ok(value) = serde_json::from_str::<Value>(&line) else { continue; };
+        let text = match value.get("type").and_then(Value::as_str) {
+            Some("custom-title") => value.get("customTitle"),
+            Some("ai-title") => value.get("aiTitle"),
+            _ => continue,
+        }.and_then(Value::as_str).unwrap_or("").trim();
+        match value.get("type").and_then(Value::as_str) {
+            // 同一段里以最后一条为准；空的自定义标题表示用户清除了命名。
+            Some("custom-title") => {
+                custom_seen = true;
+                latest_custom = (!text.is_empty()).then(|| text.chars().take(40).collect::<String>());
+            }
+            Some("ai-title") if !text.is_empty() => latest_ai = Some(text.chars().take(40).collect::<String>()),
+            _ => {}
+        }
+    }
+    *offset += consumed;
+    if custom_seen {
+        *custom = latest_custom.is_some();
+        return latest_custom.or(latest_ai);
+    }
+    if *custom { return None; }
+    latest_ai
+}
+
+/// 会话进程名（`~/.claude/sessions/<pid>.json` 的 `name`）。自动生成的名字只是
+/// 「目录-随机后缀」，跳过；用户命名或后台任务名仍可作为兜底标题。
 pub(crate) fn session_title(agent: AgentId, id: &str) -> Option<String> {
     if cfg!(test) || agent != AgentId::Claude || id.is_empty() { return None; }
     title_in(&home().join(".claude").join("sessions"), agent, id)
@@ -40,6 +93,7 @@ fn title_in(dir: &Path, agent: AgentId, id: &str) -> Option<String> {
         let Ok(raw) = std::fs::read(&path) else { continue; };
         let Ok(value) = serde_json::from_slice::<Value>(&raw) else { continue; };
         if value.get("sessionId").and_then(Value::as_str) == Some(id) {
+            if matches!(value.get("nameSource").and_then(Value::as_str), Some("derived" | "collision")) { continue; }
             let name = value.get("name").and_then(Value::as_str).unwrap_or("").trim();
             if !name.is_empty() { return Some(name.chars().take(40).collect()); }
         }
@@ -458,9 +512,45 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("123.json"), r#"{"sessionId":"abc","name":"灵动岛Agent会话监控PRD"}"#).unwrap();
         assert_eq!(title_in(&dir, AgentId::Claude, "abc").as_deref(), Some("灵动岛Agent会话监控PRD"));
+        std::fs::write(dir.join("456.json"), r#"{"sessionId":"def","name":"xiaotang-daozai-2b","nameSource":"derived"}"#).unwrap();
+        assert_eq!(title_in(&dir, AgentId::Claude, "def"), None, "自动派生的进程名不是会话标题");
         assert_eq!(title_in(&dir, AgentId::Claude, "missing"), None);
         assert_eq!(title_in(&dir, AgentId::Codex, "abc"), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn transcript_title_reads_new_records_and_keeps_user_names() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "daozai-agent-transcript-{}-{}.jsonl",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::write(&path, "{\"type\":\"ai-title\",\"aiTitle\":\"README 精简\",\"sessionId\":\"x\"}\n").unwrap();
+        let mut offset = 0;
+        let mut custom = false;
+        assert_eq!(transcript_title(&path, &mut offset, &mut custom).as_deref(), Some("README 精简"));
+        assert_eq!(transcript_title(&path, &mut offset, &mut custom), None, "没有新内容时不重复读");
+        // 追加新标题：自动标题更新；用户命名后优先保留用户标题。
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        writeln!(file, "{{\"type\":\"ai-title\",\"aiTitle\":\"README 重写\",\"sessionId\":\"x\"}}").unwrap();
+        writeln!(file, "{{\"type\":\"custom-title\",\"customTitle\":\"我的会话\",\"sessionId\":\"x\"}}").unwrap();
+        writeln!(file, "{{\"type\":\"ai-title\",\"aiTitle\":\"迟到的新标题\",\"sessionId\":\"x\"}}").unwrap();
+        assert_eq!(transcript_title(&path, &mut offset, &mut custom).as_deref(), Some("我的会话"));
+        // 只有自动标题的会话，后续追加仍会更新。
+        let path2 = path.with_extension("jsonl.2");
+        std::fs::write(&path2, "{\"type\":\"ai-title\",\"aiTitle\":\"旧标题\",\"sessionId\":\"y\"}\n").unwrap();
+        let mut offset = 0;
+        let mut custom = false;
+        assert_eq!(transcript_title(&path2, &mut offset, &mut custom).as_deref(), Some("旧标题"));
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path2).unwrap();
+        writeln!(file, "{{\"type\":\"ai-title\",\"aiTitle\":\"新标题\",\"sessionId\":\"y\"}}").unwrap();
+        assert_eq!(transcript_title(&path2, &mut offset, &mut custom).as_deref(), Some("新标题"));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&path2);
     }
 
     #[test]
