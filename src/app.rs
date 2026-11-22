@@ -178,6 +178,8 @@ pub use crate::messenger::{Messenger,Unread};
 #[derive(Clone, Debug)]
 pub struct WindowsNotice {
     pub app: String,
+    /// 应用标识（AUMID 或名称），用来取应用图标。
+    pub id: String,
     pub body: String,
     pub time: String,
 }
@@ -205,7 +207,6 @@ pub enum Cmd {
     Copy(String),
     Notify(String, String, NotificationSound),
     RequestNotifications,
-    RequestQqNotifications,
     DisconnectNotifications,
     ToggleAutostart,
     AddFiles,
@@ -870,6 +871,7 @@ pub struct App {
     pub(crate) windows_notices: Vec<WindowsNotice>,
     pub(crate) windows_unread: bool,
     pub(crate) windows_first: usize,
+    pub(crate) app_icons: HashMap<String,Option<egui::TextureHandle>>,
     messenger_scroll: f32,
     pub(crate) alerts: std::collections::VecDeque<Alert>,
     pub(crate) history: std::collections::VecDeque<Alert>,
@@ -1038,7 +1040,7 @@ impl App {
             music_artwork: None,
             forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, settings_focus_requested:false, settings_tab:0, settings_category:0, pending_page_order:None, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
             listener_status: "尚未连接".into(),
-            notification_bell_until: 0.0, notification_bell_at: -10.0, notice: None, hud_notice: None, hud_alpha: 0.0, notice_width:Spring::new(0.0,NOTICE_CLOSE.0,NOTICE_CLOSE.1), notice_details:false, pending_messengers:Vec::new(), windows_notices:Vec::new(), windows_unread:false, windows_first:0, messenger_scroll:0.0, alerts: Default::default(), history: Default::default(), pending: vec![],
+            notification_bell_until: 0.0, notification_bell_at: -10.0, notice: None, hud_notice: None, hud_alpha: 0.0, notice_width:Spring::new(0.0,NOTICE_CLOSE.0,NOTICE_CLOSE.1), notice_details:false, pending_messengers:Vec::new(), windows_notices:Vec::new(), windows_unread:false, windows_first:0, app_icons:Default::default(), messenger_scroll:0.0, alerts: Default::default(), history: Default::default(), pending: vec![],
             todo_first: 0, todo_choosing: false, pet: Default::default(), last_drink: None,
             toast: None, toast_below: false,
             last_input: 0.0, system_idle: None,

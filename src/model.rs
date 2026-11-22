@@ -295,7 +295,6 @@ pub struct Settings {
     pub dingtalk_notifications:bool,
     /// 微信缩在托盘时，点提醒通过系统托盘按钮唤起微信（默认关闭）。
     pub wechat_tray_open:bool,
-    pub qq_only:bool,
     /// QQ 的 Windows 通知提醒；需要先连接 Windows 通知监听。
     pub qq_notifications:bool,
     pub notification_preview:bool,
@@ -358,7 +357,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 12], page_order: [0,1,2,3,11,4,5,6,7,8,9,10], show_clock: true, show_battery: true, show_weather: true, show_music: true, show_focus: true, tray_weather: true, tray_quota: true, tray_focus: true, tray_mail: false, tray_health: false, tray_shelf: false, tray_todo: false, tray_calendar: false, tray_music: false, tray_battery: false, tray_order: Vec::new(), show_mail: true, show_health: true, show_todo: true, show_shelf: true, show_calendar: true, show_dnd: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), hud_volume: true, hud_power: true, hud_network: true, hud_keyboard: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, qq_notifications:true, notification_preview:false, notifications: true, notice_hold_secs: 4.5, page_hold_secs: 4.0, motion_speed: MotionSpeed::Normal, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 12], page_order: [0,1,2,3,11,4,5,6,7,8,9,10], show_clock: true, show_battery: true, show_weather: true, show_music: true, show_focus: true, tray_weather: true, tray_quota: true, tray_focus: true, tray_mail: false, tray_health: false, tray_shelf: false, tray_todo: false, tray_calendar: false, tray_music: false, tray_battery: false, tray_order: Vec::new(), show_mail: true, show_health: true, show_todo: true, show_shelf: true, show_calendar: true, show_dnd: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), hud_volume: true, hud_power: true, hud_network: true, hud_keyboard: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_notifications:true, notification_preview:false, notifications: true, notice_hold_secs: 4.5, page_hold_secs: 4.0, motion_speed: MotionSpeed::Normal, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -479,7 +478,6 @@ impl Settings {
                 "feishu_notifications" => s.feishu_notifications=v=="1",
                 "dingtalk_notifications" => s.dingtalk_notifications=v=="1",
                 "wechat_tray_open" => s.wechat_tray_open=v=="1",
-                "qq_only" => s.qq_only=v=="1",
                 "qq_notifications" => s.qq_notifications=v!="0",
                 "notification_preview" => s.notification_preview=v=="1",
                 // 旧版总开关：四类系统提醒一起开关。
@@ -595,7 +593,6 @@ impl Settings {
                 ("feishu_notifications".into(),(self.feishu_notifications as u8).to_string()),
                 ("dingtalk_notifications".into(),(self.dingtalk_notifications as u8).to_string()),
                 ("wechat_tray_open".into(),(self.wechat_tray_open as u8).to_string()),
-                ("qq_only".into(),(self.qq_only as u8).to_string()),
                 ("qq_notifications".into(),(self.qq_notifications as u8).to_string()),
                 ("notification_preview".into(),(self.notification_preview as u8).to_string()),
                 ("hud_volume".into(), (self.hud_volume as u8).to_string()),

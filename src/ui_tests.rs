@@ -6941,19 +6941,6 @@ fn external_notice_respects_permissions_masks_preview_and_never_reemits(){
 }
 
 #[test]
-fn qq_only_notifications_filter_by_app_id_before_display_and_respect_preview(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.settings.read_notifications=true;h.app.settings.qq_only=true;h.app.settings.save();
-    assert!(crate::model::Settings::load().qq_only);
-    h.app.receive_notification("QQ".into(),"QQMusic".into(),"不属于 QQ 聊天".into());assert!(h.app.alerts.is_empty());
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试联系人 · 测试消息".into());
-    assert!(!h.app.alerts.back().unwrap().body.contains("测试联系人"));
-    h.app.settings.notification_preview=true;
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试联系人 · 测试消息".into());
-    assert_eq!(h.app.alerts.back().unwrap().body,"测试联系人 · 测试消息");assert!(h.app.history.is_empty());
-}
-
-#[test]
 fn wechat_notifications_work_without_toast_permission_and_stop_when_disabled(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.receive_wechat_reminder();assert!(h.app.alerts.is_empty());

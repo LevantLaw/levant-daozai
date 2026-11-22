@@ -777,8 +777,8 @@ impl eframe::App for Shell {
                         if let Some(tray)=&self.tray {tray.notify(&title,&body,sound==app::NotificationSound::System);}
                     }
                 },
-                cmd @ (Cmd::RequestNotifications|Cmd::RequestQqNotifications)=>{
-                    #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
+                Cmd::RequestNotifications=>{
+                    #[cfg(windows)] {self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
                 Cmd::MailSync=>if let Some(mail)=&self.mail {

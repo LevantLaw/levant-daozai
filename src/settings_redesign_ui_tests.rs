@@ -76,6 +76,17 @@ fn settings_every_tab_renders_with_modules_on_and_off(){
     }
 }
 
+/// Windows 通知的系统开关放在提醒页：开启即自动监听，胶囊显示监听状态。
+#[test]
+fn reminder_windows_section_has_system_switch_and_listener_chip(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let texts=settings_text(crate::extras::SETTINGS_TAB_REMINDERS);
+    for label in ["Windows 通知","系统通知","关闭后所有应用的横幅都会被 Windows 拦截；开启后岛仔自动监听。"] {
+        assert!(texts.iter().any(|text|text==label),"提醒页缺少「{label}」");
+    }
+    assert!(texts.iter().any(|text|text=="监听中"||text=="未监听"),"系统通知需要监听状态胶囊");
+}
+
 /// 设置窗口拉到最小（600×450）时，侧栏 17 项都在可见区内，「关于」不会被挤出去。
 #[test]
 fn settings_sidebar_keeps_about_visible_at_minimum_height(){

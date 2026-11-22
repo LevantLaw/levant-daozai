@@ -222,6 +222,20 @@ fn file_icon(_path: &Path, _is_dir: bool) -> Option<ColorImage> {
     None
 }
 
+/// 应用图标：AUMID 对应开始菜单里的应用条目；取不到返回 None。
+#[cfg(windows)]
+pub(crate) fn app_icon(aumid:&str)->Option<ColorImage>{icon_at(&format!("shell:AppsFolder\\{aumid}"))}
+#[cfg(not(windows))]
+pub(crate) fn app_icon(_aumid:&str)->Option<ColorImage>{None}
+
+#[cfg(windows)]
+fn icon_at(parsing_name:&str)->Option<ColorImage>{
+    use windows::Win32::System::Com::{CoInitializeEx,COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::SIIGBF_ICONONLY;
+    let _=unsafe{CoInitializeEx(None,COINIT_APARTMENTTHREADED)};
+    thumbnail(&PathBuf::from(parsing_name),64,SIIGBF_ICONONLY).and_then(|(w,h,px)|preview_image(w,h,px))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,5 +302,13 @@ mod tests {
         assert!(ctx.tex_manager().read().num_allocated()<=33,"滚动大量文件不能无限保留 GPU 缩略图");
         cache.clear();
         assert!(ctx.tex_manager().read().num_allocated()<=1,"清空置物架后应释放缩略图纹理");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn app_icon_extracts_the_executable_icon(){
+        let path=std::env::current_exe().unwrap().to_string_lossy().into_owned();
+        let image=icon_at(&path).unwrap();
+        assert!(image.size[0]>0&&image.size[1]>0);
     }
 }

@@ -112,7 +112,6 @@ pub fn suppresses_toast(app:&str,id:&str,mask:u8)->bool{
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum NotificationFilter {All,Only(Messenger)}
 impl NotificationFilter {
-    pub fn for_settings(settings:&Settings)->Self{if settings.qq_only{Self::Only(Messenger::Qq)}else{Self::All}}
     pub fn allows(self,id:&str)->bool{match self{Self::All=>true,Self::Only(client)=>Messenger::from_notification_id(id)==Some(client)}}
 }
 

@@ -104,6 +104,18 @@ pub(crate) fn notice_badge(c:&Card,x:f32,y:f32,a:&Alert){
 }
 pub(crate) fn messenger_icon(c:&Card,x:f32,y:f32,source:crate::app::Messenger){(source.adapter().paint_icon)(c,x,y);}
 
+/// 应用图标：有纹理就画纹理，否则用名称首字占位，不用 Windows 铃铛。
+fn app_icon_badge(c:&Card,x:f32,y:f32,size:f32,name:&str,texture:Option<&egui::TextureHandle>){
+    if let Some(texture)=texture {
+        let rect=c.rect(x-size/2.0,y-size/2.0,size,size);
+        c.painter.image(texture.id(),rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);
+        return;
+    }
+    c.fill(x-size/2.0,y-size/2.0,size,size,size*0.25,Color32::from_gray(58));
+    c.centered_text(x,y,&app_initial(name),size*0.55,W::Semibold,theme::WHITE,H::Center);
+}
+fn app_initial(name:&str)->String{name.chars().next().map(|ch|ch.to_uppercase().to_string()).unwrap_or_default()}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FallbackIcon { Agent(crate::agent::AgentId), Page(usize) }
 
@@ -441,7 +453,7 @@ impl App {
         self.receive_notification_from(app,id,body,None);
     }
     pub fn receive_notification_from(&mut self,app:String,id:String,body:String,unread:Option<crate::app::Unread>){
-        if !self.settings.read_notifications || id.is_empty() || !crate::messenger::NotificationFilter::for_settings(&self.settings).allows(&id){return;}
+        if !self.settings.read_notifications || id.is_empty(){return;}
         if crate::messenger::suppresses_toast(&app,&id,crate::messenger::toast_suppression(&self.settings)){return;}
         let known=crate::app::Messenger::from_notification_id(&id);
         let client=known.filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast);
@@ -467,7 +479,7 @@ impl App {
         }
         self.enqueue_alert(Alert{source:AlertSource::External(id.clone()),title:title.clone(),body:body.clone(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread,banner_at:self.t,agent:None},false);
         if known.is_none() {
-            self.windows_notices.push(crate::app::WindowsNotice{app:title,body,time:chrono::Local::now().format("%H:%M").to_string()});
+            self.windows_notices.push(crate::app::WindowsNotice{app:title,id,body,time:chrono::Local::now().format("%H:%M").to_string()});
             if self.windows_notices.len()>30 {self.windows_notices.remove(0);}
             if !(self.open && self.page==crate::app::WINDOWS_PAGE) {self.windows_unread=true;}
         }
@@ -480,8 +492,19 @@ impl App {
         let hold=self.settings.notice_hold_secs;
         self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t,agent:None});
     }
-    /// Windows 通知页：即时通讯以外的系统通知汇总在这里，底部保留翻页圆点。
+    /// 应用图标纹理：首次用到时从开始菜单取，失败也缓存，避免每帧重试。
+    fn app_icon(&mut self,ctx:&egui::Context,id:&str)->Option<egui::TextureHandle>{
+        if let Some(icon)=self.app_icons.get(id){return icon.clone();}
+        if self.app_icons.len()>=32{self.app_icons.clear();}
+        let icon=crate::icons::app_icon(id).map(|image|ctx.load_texture(format!("app-icon:{id}"),image,egui::TextureOptions::LINEAR));
+        self.app_icons.insert(id.to_string(),icon.clone());
+        icon
+    }
+    /// Windows 通知页：即时通讯以外的系统通知汇总在这里，每行带应用图标。
     pub(crate) fn page_windows(&mut self,c:&Card) {
+        const ROW_H:f32=33.0;
+        const ROW_GAP:f32=5.0;
+        const LIST_TOP:f32=56.0;
         let count=self.windows_notices.len();
         let header=if count==0 {"暂无通知".to_string()} else {format!("{count} 条通知")};
         c.text(15.0,45.0,&header,10.5,W::Regular,theme::GRAY,H::Left);
@@ -496,19 +519,24 @@ impl App {
         let max=count.saturating_sub(crate::app::WINDOWS_ROWS);
         self.windows_first=self.windows_first.min(max);
         let first=self.windows_first;
-        for (slot,notice) in self.windows_notices.iter().skip(first).take(crate::app::WINDOWS_ROWS).enumerate() {
-            let top=56.0+slot as f32*34.0;
-            c.fill(40.0,top,320.0,30.0,8.0,Color32::from_white_alpha(8));
-            c.text(48.0,top+12.0,&c.fit(&notice.app,10.5,W::Semibold,250.0),10.5,W::Semibold,theme::WHITE,H::Left);
-            c.text(352.0,top+12.0,&notice.time,9.0,W::Regular,theme::GRAY,H::Right);
-            c.text(48.0,top+24.0,&c.fit(&notice.body,9.5,W::Regular,300.0),9.5,W::Regular,theme::GRAY,H::Left);
+        let rows:Vec<_>=self.windows_notices.iter().skip(first).take(crate::app::WINDOWS_ROWS)
+            .map(|notice|(notice.app.clone(),notice.id.clone(),notice.body.clone(),notice.time.clone())).collect();
+        let ctx=c.ui.ctx();
+        let icons:Vec<_>=rows.iter().map(|(_,id,_,_)|self.app_icon(ctx,id)).collect();
+        for (slot,(app,_,body,time)) in rows.iter().enumerate() {
+            let top=LIST_TOP+slot as f32*(ROW_H+ROW_GAP);
+            c.fill(40.0,top,320.0,ROW_H,10.0,Color32::from_white_alpha(8));
+            app_icon_badge(c,52.0,top+ROW_H/2.0,20.0,app,icons[slot].as_ref());
+            c.text(68.0,top+14.0,&c.fit(app,11.5,W::Semibold,230.0),11.5,W::Semibold,theme::WHITE,H::Left);
+            c.text(352.0,top+14.0,time,9.5,W::Regular,theme::GRAY,H::Right);
+            c.text(68.0,top+27.0,&c.fit(body,9.5,W::Regular,280.0),9.5,W::Regular,theme::GRAY,H::Left);
         }
         if max>0 {
             let track_x=367.0;
-            let viewport=crate::app::WINDOWS_ROWS as f32*34.0;
-            let thumb_h=(crate::app::WINDOWS_ROWS as f32/count as f32*viewport).max(18.0);
-            let thumb_y=56.0+first as f32/max as f32*(viewport-thumb_h);
-            c.fill(track_x,56.0,3.0,viewport,1.5,Color32::from_white_alpha(14));
+            let viewport=crate::app::WINDOWS_ROWS as f32*ROW_H+(crate::app::WINDOWS_ROWS-1) as f32*ROW_GAP;
+            let thumb_h=((crate::app::WINDOWS_ROWS as f32/count as f32)*viewport).max(18.0);
+            let thumb_y=LIST_TOP+first as f32/max as f32*(viewport-thumb_h);
+            c.fill(track_x,LIST_TOP,3.0,viewport,1.5,Color32::from_white_alpha(14));
             c.fill(track_x,thumb_y,3.0,thumb_h,1.5,Color32::from_white_alpha(64));
         }
     }
@@ -520,7 +548,7 @@ impl App {
         let allowed=|a:&Alert|match &a.source {
             AlertSource::Internal=>!self.fullscreen_hidden || a.health().is_none(),
             AlertSource::Messenger(client)=>client.enabled(&self.settings),
-            AlertSource::External(id)=>self.settings.read_notifications && crate::messenger::NotificationFilter::for_settings(&self.settings).allows(id) && self.settings.notifications
+            AlertSource::External(id)=>self.settings.read_notifications && self.settings.notifications
                 && (crate::messenger::Messenger::from_notification_id(id)!=Some(crate::app::Messenger::Qq) || self.settings.qq_notifications)
                 && !crate::messenger::suppresses_toast(&a.title,id,crate::messenger::toast_suppression(&self.settings)) && self.notification_apps.items.iter().any(|(key,_,on)|key==id && *on),
         };
@@ -831,6 +859,12 @@ mod tests {
             });
             if i<4{assert_eq!(value,100);}else{assert_ne!(value,100);}
         }
+    }
+    #[test]
+    fn app_icon_falls_back_to_the_name_initial(){
+        assert_eq!(app_initial("Telegram"),"T");
+        assert_eq!(app_initial("应用0"),"应");
+        assert_eq!(app_initial(""),"");
     }
     #[test]
     fn internal_banner_fallback_uses_agent_or_page_icon(){
@@ -2216,7 +2250,6 @@ impl App {
                         };
                         let listening=|status:&str|status.starts_with("正在监听");
                         let status_tip=|status:&str|if status.is_empty(){"未监听".to_string()}else{status.to_string()};
-                        let mut open_connect=false;
                         settings_card(ui,|ui|{
                             ui.add_enabled_ui(master,|ui|{
                                 for client in crate::messenger::Messenger::ALL {
@@ -2245,13 +2278,18 @@ impl App {
                         if !ai_on {settings_hint(ui,"「AI 会话」功能已在功能页面中关闭。");}
                         settings_label(ui,"Windows 通知");
                         settings_card(ui,|ui|{
-                            let listener_on=self.settings.read_notifications && listening(&self.listener_status);
-                            settings_action_row(ui,|ui|{
-                                if self.settings.read_notifications {
-                                    if ui.add(settings_danger_button("关闭")).clicked(){self.pending.push(Cmd::DisconnectNotifications);}
-                                } else if ui.add(settings_primary_button("开启")).clicked(){open_connect=true;}
-                                settings_chip(ui,if listener_on{"监听中"}else{"未监听"},listener_on).on_hover_text(&self.listener_status);
-                            });
+                            // 系统通知就是监听开关：开启后自动监听，关闭时无需监听。
+                            let current=crate::system::system_notifications_enabled();
+                            let mut system_on=current;
+                            let listener_on=current && self.settings.read_notifications && listening(&self.listener_status);
+                            setting_row_chip(ui,"系统通知",if listener_on{"监听中"}else{"未监听"},listener_on,&status_tip(&self.listener_status),&mut system_on);
+                            if system_on!=current {
+                                match crate::system::set_system_notifications(system_on) {
+                                    Ok(())=>self.pending.push(if system_on{Cmd::RequestNotifications}else{Cmd::DisconnectNotifications}),
+                                    Err(error)=>self.say(error),
+                                }
+                            }
+                            settings_hint(ui,"关闭后所有应用的横幅都会被 Windows 拦截；开启后岛仔自动监听。");
                             ui.separator();
                             setting_row(ui,"显示通知正文","可能包含私密消息，屏幕共享时建议关闭",&mut self.settings.notification_preview);
                             ui.separator();
@@ -2291,23 +2329,6 @@ impl App {
                                 }
                             });
                         });
-                        let connect_id=egui::Id::new("settings-notify-connect");
-                        if open_connect {ctx.data_mut(|d|d.insert_temp(connect_id,true));}
-                        if ctx.data(|d|d.get_temp::<bool>(connect_id)).unwrap_or(false) {
-                            let mut close=false;
-                            let modal=egui::Modal::new(connect_id.with("modal")).frame(settings_modal_frame(ctx)).backdrop_color(Color32::from_black_alpha(110)).show(ctx,|ui|{
-                                ui.set_width(360.0);
-                                settings_apply_style(ui);if settings_modal_title(ui,"连接 QQ 与其他应用"){close=true;}
-                                if ui.add_sized([ui.available_width(),30.0],egui::Button::new("只连接 QQ")).clicked(){self.pending.push(Cmd::RequestQqNotifications);close=true;}
-                                settings_hint(ui,&format!("QQ 需开启系统通知；新通知在岛上显示约 {} 秒，默认隐藏正文。",self.settings.notice_hold_secs));
-                                ui.add_space(6.0);
-                                if ui.add_sized([ui.available_width(),30.0],egui::Button::new("连接所有应用通知")).clicked(){self.pending.push(Cmd::RequestNotifications);close=true;}
-                                settings_hint(ui,"只接收 Windows 通知中心可见的内容；应用会在收到通知后出现在列表里。");
-                                ui.add_space(8.0);
-                                if ui.button("取消").clicked(){close=true;}
-                            });
-                            if close || modal.should_close() {ctx.data_mut(|d|d.remove::<bool>(connect_id));}
-                        }
                     }
                     7=>{
                         let mut add_mail=false;

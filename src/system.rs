@@ -712,12 +712,46 @@ pub(crate) fn notification_enabled(id:&str)->Option<bool>{
     }
 }
 
+const NOTIFICATIONS_KEY:&str="Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications";
+
+/// Windows 全局通知开关；注册表没有这个值时系统按开启处理。
+pub(crate) fn system_notifications_enabled()->bool{
+    use windows::core::{w,HSTRING};
+    use windows::Win32::System::Registry::{RegCloseKey,RegOpenKeyExW,RegQueryValueExW,HKEY,HKEY_CURRENT_USER,KEY_QUERY_VALUE};
+    let path=HSTRING::from(NOTIFICATIONS_KEY);
+    unsafe {
+        let mut key=HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER,&path,0,KEY_QUERY_VALUE,&mut key).0!=0{return true;}
+        let mut value=1u32;let mut size=4u32;
+        let rc=RegQueryValueExW(key,w!("ToastEnabled"),None,None,Some(&mut value as *mut u32 as *mut u8),Some(&mut size));
+        let _=RegCloseKey(key);
+        rc.0!=0||value!=0
+    }
+}
+
+/// 写入 Windows 全局通知开关（设置 → 系统 → 通知）。
+pub(crate) fn set_system_notifications(on:bool)->std::result::Result<(),String>{
+    use windows::core::{w,HSTRING};
+    use windows::Win32::System::Registry::{RegCloseKey,RegCreateKeyExW,RegSetValueExW,HKEY,HKEY_CURRENT_USER,KEY_SET_VALUE,REG_DWORD,REG_OPTION_NON_VOLATILE};
+    let path=HSTRING::from(NOTIFICATIONS_KEY);
+    let value=u32::from(on);
+    unsafe {
+        let mut key=HKEY::default();
+        let rc=RegCreateKeyExW(HKEY_CURRENT_USER,&path,0,None,REG_OPTION_NON_VOLATILE,KEY_SET_VALUE,None,&mut key,None);
+        if rc.0!=0{return Err(format!("无法打开通知设置：{}",rc.0));}
+        let rc=RegSetValueExW(key,w!("ToastEnabled"),0,REG_DWORD,Some(&value.to_ne_bytes()));
+        let _=RegCloseKey(key);
+        if rc.0!=0{return Err(format!("无法写入通知开关：{}",rc.0));}
+        Ok(())
+    }
+}
+
 /// 必须由窗口线程发起权限请求，后台仅读取新增或更新的通知。
 pub fn connect(ctx:eframe::egui::Context,filter:crate::messenger::NotificationFilter) -> Result<Notifications> {
     connect_inner(ctx,filter,crate::messenger::toast_suppression(&crate::model::Settings::default()))
 }
 pub fn connect_with_settings(ctx:eframe::egui::Context,settings:&crate::model::Settings)->Result<Notifications>{
-    connect_inner(ctx,crate::messenger::NotificationFilter::for_settings(settings),crate::messenger::toast_suppression(settings))
+    connect_inner(ctx,crate::messenger::NotificationFilter::All,crate::messenger::toast_suppression(settings))
 }
 fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::NotificationFilter,mask:u8)->Result<Notifications>{
     let baseline=NotificationBaseline::default();
