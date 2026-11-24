@@ -52,6 +52,9 @@ struct Shell {
     input_keys:Option<daozai::input::Shortcuts>,
     #[cfg(windows)]
     incoming: Option<daozai::system::Notifications>,
+    /// 当前是否已临时静音 Windows 默认通知音；None 表示本进程尚未同步过。
+    #[cfg(windows)]
+    system_mute: Option<bool>,
     #[cfg(windows)]
     messengers:messenger::Runtime,
     #[cfg(windows)]
@@ -107,6 +110,17 @@ impl Shell {
             self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
         }
         self.app.reconcile_agent_monitor(ctx);
+    }
+
+    /// 接管外部通知期间临时静音 Windows 默认通知音；相关开关关闭或监听断开时恢复。
+    #[cfg(windows)]
+    fn sync_notification_mute(&mut self){
+        let desired=self.app.settings.notifications && self.app.settings.sound
+            && self.app.settings.read_notifications && self.app.module_on(app::WINDOWS_PAGE)
+            && self.incoming.is_some();
+        if self.system_mute!=Some(desired) && daozai::tray::set_system_notification_muted(desired) {
+            self.system_mute=Some(desired);
+        }
     }
 
     #[cfg(windows)]
@@ -207,6 +221,7 @@ impl Shell {
             input_state:daozai::input::Monitor::new(initial_input),
             #[cfg(windows)] input_keys:daozai::input::Shortcuts::start(),
             #[cfg(windows)] incoming,
+            #[cfg(windows)] system_mute:None,
             #[cfg(windows)] messengers:Default::default(),
             #[cfg(windows)] unread_at:PollClock::default(),
             #[cfg(windows)] opening_messenger:None,
@@ -339,6 +354,14 @@ impl Shell {
     }
 }
 
+impl Drop for Shell {
+    fn drop(&mut self) {
+        // 窗口关闭等正常退出路径也要恢复系统通知音；没有备份时是空操作。
+        #[cfg(windows)]
+        daozai::tray::set_system_notification_muted(false);
+    }
+}
+
 impl eframe::App for Shell {
     fn raw_input_hook(&mut self,_ctx:&egui::Context,input:&mut egui::RawInput) {
         if input.viewport_id==egui::ViewportId::ROOT {self.app.filter_todo_input(input);}
@@ -380,6 +403,8 @@ impl eframe::App for Shell {
         }
         #[cfg(windows)]
         self.poll_tray();
+        #[cfg(windows)]
+        self.sync_notification_mute();
         #[cfg(windows)]
         let foreground_changed=self.native.as_mut().is_some_and(|window|window.take_foreground_change());
         #[cfg(windows)]
@@ -718,6 +743,7 @@ impl eframe::App for Shell {
                     if diagnostics::spawn_replacement(){
                         self.app.save_window_before_exit();
                         #[cfg(windows)] if let Some(tray)=&self.tray {tray.exit_process();}
+                        #[cfg(windows)] daozai::tray::set_system_notification_muted(false);
                         std::process::exit(0);
                     }else{self.app.say("无法重新启动岛仔，请从托盘退出后手动打开");}
                 }
@@ -773,9 +799,12 @@ impl eframe::App for Shell {
                 Cmd::Copy(text)=>{ctx.copy_text(text);self.app.say("已复制");},
                 Cmd::Notify(title,body,sound)=>{
                     #[cfg(windows)] {
-                        if sound==app::NotificationSound::Health {daozai::tray::play_health_sound();}
-                        if let Some(tray)=&self.tray {tray.notify(&title,&body,sound==app::NotificationSound::System);}
+                        daozai::tray::play_notification_sound(sound);
+                        if let Some(tray)=&self.tray {tray.notify(&title,&body,false);}
                     }
+                },
+                Cmd::PlayNotificationSound(sound)=>{
+                    #[cfg(windows)] daozai::tray::play_notification_sound(sound);
                 },
                 Cmd::RequestNotifications=>{
                     #[cfg(windows)] {self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}

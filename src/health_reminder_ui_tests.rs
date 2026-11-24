@@ -276,7 +276,7 @@ fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
     use crate::app::{Cmd, NotificationSound};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for (enabled,system,sound,expected) in [
-        (true,true,true,Some(NotificationSound::Health)),
+        (true,true,true,Some(NotificationSound::Reminder)),
         (true,true,false,Some(NotificationSound::Silent)),
         (true,false,true,None),
         (false,true,true,None),
@@ -296,6 +296,68 @@ fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
             assert_eq!(sounds,expected.into_iter().collect::<Vec<_>>());
         }
     }
+}
+
+#[test]
+fn fixed_notification_sound_mapping(){
+    use crate::app::{Cmd, NotificationSound};
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.frame(vec![]);
+    h.app.settings.notifications=true;
+    h.app.settings.system_notify=true;
+    h.app.settings.sound=true;
+
+    for (title,expected) in [
+        ("专注计时",NotificationSound::Complete),
+        ("待办到时间了",NotificationSound::Complete),
+        ("今日饮水目标达成",NotificationSound::Complete),
+        ("喝水时间到了",NotificationSound::Reminder),
+        (crate::app::SIT_TITLE,NotificationSound::Reminder),
+        ("会议提醒",NotificationSound::Reminder),
+        ("电量偏低",NotificationSound::Reminder),
+        ("未分类提醒",NotificationSound::Sonar),
+    ] {
+        h.app.pending.clear();
+        h.app.alert(title,"测试",5,true);
+        let sounds:Vec<_>=h.app.pending.iter().filter_map(|cmd|match cmd {
+            Cmd::Notify(t,_,sound) if t.as_str()==title=>Some(*sound),
+            _=>None,
+        }).collect();
+        assert_eq!(sounds,vec![expected],"title={title}");
+    }
+
+    h.app.pending.clear();
+    h.app.alert("新邮件","测试",5,false);
+    assert!(h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(NotificationSound::Email))),"新邮件应播放岛内铃声");
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::Notify(..))),"新邮件不应发 Windows Toast");
+
+    h.app.settings.sound=false;
+    h.app.pending.clear();
+    h.app.alert("专注计时","测试",1,true);
+    assert!(h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::Notify(_,_,NotificationSound::Silent))),"关闭声音后 Toast 应静音");
+}
+
+#[test]
+fn external_notifications_ring_sonar_and_im_stays_silent(){
+    use crate::app::{Cmd, NotificationSound};
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();h.frame(vec![]);
+    h.app.settings.read_notifications=true;
+    h.app.settings.notifications=true;
+    h.app.settings.sound=true;
+
+    h.app.pending.clear();
+    h.app.receive_notification_from("测试应用".into(),"test.notification".into(),"外部通知".into(),None);
+    assert!(h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(NotificationSound::Sonar))),"外部通知播放 sonar");
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::Notify(..))),"接管时不再叠加 Windows Toast");
+
+    h.app.settings.sound=false;h.app.pending.clear();
+    h.app.receive_notification_from("测试应用".into(),"test.notification".into(),"第二条".into(),None);
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(..))),"关闭声音后不播放");
+
+    h.app.settings.sound=true;h.app.settings.qq_notifications=true;h.app.pending.clear();
+    h.app.receive_notification_from("QQ".into(),"QQ".into(),"新消息".into(),Some(crate::app::Unread::of(crate::app::Messenger::Qq)));
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(..))),"即时通讯保持静音");
 }
 
 #[test]

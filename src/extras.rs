@@ -55,6 +55,15 @@ impl Alert {
         if self.source!=AlertSource::Internal{return None;}
         HealthReminder::ALL.into_iter().find(|kind|self.title==kind.title())
     }
+    /// 固定铃声映射：完成类、提醒类、邮件，其余走默认。
+    pub(crate) fn notification_sound(&self)->NotificationSound {
+        match self.title.as_str() {
+            "专注计时"|"待办到时间了"|"今日饮水目标达成"=>NotificationSound::Complete,
+            "喝水时间到了"|crate::app::SIT_TITLE|"会议提醒"|"电量偏低"=>NotificationSound::Reminder,
+            "新邮件"|"收到新邮件"|"邮件验证码"=>NotificationSound::Email,
+            _=>NotificationSound::Sonar,
+        }
+    }
     pub(crate) fn messenger(&self)->Option<crate::app::Messenger>{
         match &self.source {
             AlertSource::Messenger(client)=>Some(*client),
@@ -347,11 +356,16 @@ impl App {
         self.history.truncate(50);
         if self.fullscreen_hidden && a.health().is_some(){return;}
         if self.settings.notifications {
-            if system && a.source==AlertSource::Internal && self.settings.system_notify {
-                let sound = if !self.settings.sound { NotificationSound::Silent }
-                    else if a.health().is_some() { NotificationSound::Health }
-                    else { NotificationSound::System };
-                self.pending.push(Cmd::Notify(a.title.clone(), a.body.clone(), sound));
+            if a.source==AlertSource::Internal && a.agent.is_none() {
+                let sound = if self.settings.sound { a.notification_sound() } else { NotificationSound::Silent };
+                if system {
+                    if self.settings.system_notify {
+                        self.pending.push(Cmd::Notify(a.title.clone(), a.body.clone(), sound));
+                    }
+                } else if sound==NotificationSound::Email {
+                    // 新邮件不发 Windows Toast，只播放岛内铃声。
+                    self.pending.push(Cmd::PlayNotificationSound(sound));
+                }
             }
             let same_event=|old:&Alert| match (&a.agent,&old.agent) {
                 (Some(next),Some(previous))=>next==previous,
@@ -476,6 +490,8 @@ impl App {
         if known.is_none() {
             self.notification_bell_at=self.t;
             self.notification_bell_until=self.t+hold;
+            // 来源 Toast 的声音已被临时静音，外部通知统一改播 sonar；即时通讯保持静音。
+            if self.settings.sound {self.pending.push(Cmd::PlayNotificationSound(NotificationSound::Sonar));}
         }
         self.enqueue_alert(Alert{source:AlertSource::External(id.clone()),title:title.clone(),body:body.clone(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread,banner_at:self.t,agent:None},false);
         if known.is_none() {

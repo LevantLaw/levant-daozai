@@ -360,6 +360,7 @@ pub struct Tray {
 impl Tray {
     /// 与托盘菜单「退出」相同：先摘图标再结束进程（用于「立即重启」）。
     pub fn exit_process(&self) -> ! {
+        set_system_notification_muted(false);
         unsafe { remove_icon(self.hwnd); ExitProcess(0); }
     }
 }
@@ -497,12 +498,94 @@ impl Drop for Tray {
     }
 }
 
-/// 健康提醒独立播放，托盘气泡被 Windows 隐藏时也能听到。
-pub fn play_health_sound() {
+/// 播放固定映射的铃声；托盘气泡被 Windows 隐藏时也能听到。
+pub fn play_notification_sound(sound: crate::app::NotificationSound) {
+    use crate::app::NotificationSound;
     use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_MEMORY, SND_NODEFAULT, SND_NOSTOP};
     // 异步播放期间 Windows 仍会读取这段内嵌的 WAV。
-    let wav = include_bytes!("../assets/health-reminder.wav");
+    let wav: &[u8] = match sound {
+        NotificationSound::Silent => return,
+        NotificationSound::Complete => include_bytes!("../assets/notification-sounds/complete.wav"),
+        NotificationSound::Reminder => include_bytes!("../assets/notification-sounds/reminder.wav"),
+        NotificationSound::Email => include_bytes!("../assets/notification-sounds/email.wav"),
+        NotificationSound::Sonar => include_bytes!("../assets/notification-sounds/sonar.wav"),
+    };
     unsafe { let _ = PlaySoundW(PCWSTR(wav.as_ptr().cast()), None, SND_MEMORY | SND_ASYNC | SND_NODEFAULT | SND_NOSTOP); }
+}
+
+const NOTIFICATION_SOUND_KEY: PCWSTR =
+    w!("AppEvents\\Schemes\\Apps\\.Default\\Notification.Default\\.Current");
+
+fn notification_sound_backup() -> std::path::PathBuf {
+    crate::model::config_dir().join("notification-sound.backup")
+}
+
+/// 当前系统默认通知音；`None` 表示读不到。
+fn read_notification_sound() -> Option<String> {
+    unsafe {
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER, NOTIFICATION_SOUND_KEY, 0, KEY_QUERY_VALUE, &mut key).0 != 0 {
+            return None;
+        }
+        let mut size = 0u32;
+        if RegQueryValueExW(key, PCWSTR::null(), None, None, None, Some(&mut size)).0 != 0 || size == 0 {
+            let _ = RegCloseKey(key);
+            return None;
+        }
+        let mut buf = vec![0u8; size as usize];
+        let rc = RegQueryValueExW(key, PCWSTR::null(), None, None, Some(buf.as_mut_ptr()), Some(&mut size));
+        let _ = RegCloseKey(key);
+        if rc.0 != 0 {
+            return None;
+        }
+        let units: Vec<u16> = buf[..size as usize].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        Some(String::from_utf16_lossy(&units).trim_end_matches('\0').to_string())
+    }
+}
+
+fn write_notification_sound(value: &str) -> bool {
+    let bytes: Vec<u8> = wide(value).iter().flat_map(|unit| unit.to_le_bytes()).collect();
+    unsafe {
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER, NOTIFICATION_SOUND_KEY, 0, KEY_SET_VALUE, &mut key).0 != 0 {
+            return false;
+        }
+        let rc = RegSetValueExW(key, PCWSTR::null(), 0, REG_SZ, Some(&bytes));
+        let _ = RegCloseKey(key);
+        rc.0 == 0
+    }
+}
+
+/// 外部通知接管期间临时静音 Windows 默认通知音；关闭接管或退出时恢复。
+///
+/// 备份文件记录接管前的铃声。上次异常退出时，下次启动按备份恢复；若用户期间
+/// 改过系统铃声，以新值为准，不覆盖用户的选择。返回是否已达到目标状态。
+pub fn set_system_notification_muted(muted: bool) -> bool {
+    let path = notification_sound_backup();
+    let current = read_notification_sound();
+    let saved = std::fs::read_to_string(&path).ok();
+    // 当前值已不是空串：说明用户改过铃声，旧备份作废。
+    let saved = if saved.is_some() && current.as_deref().is_some_and(|value| !value.is_empty()) {
+        let _ = std::fs::remove_file(&path);
+        None
+    } else {
+        saved
+    };
+    if muted {
+        let Some(current) = current else { return false };
+        if current.is_empty() { return true; }
+        if saved.is_none() {
+            if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+            if std::fs::write(&path, &current).is_err() { return false; }
+        }
+        write_notification_sound("")
+    } else if let Some(saved) = saved {
+        let restored = write_notification_sound(&saved);
+        if restored { let _ = std::fs::remove_file(&path); }
+        restored
+    } else {
+        true
+    }
 }
 
 /// 单实例：已有岛仔实例时返回 false。

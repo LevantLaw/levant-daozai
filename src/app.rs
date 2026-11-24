@@ -192,7 +192,7 @@ pub(crate) const UNREAD_SLOT: f32 = 36.0;
 fn unread_step(_horizontal: bool) -> f32 { 22.0 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NotificationSound { Silent, System, Health }
+pub enum NotificationSound { Silent, Complete, Reminder, Email, Sonar }
 
 /// 交给外壳执行的副作用。
 #[derive(Clone, Debug, PartialEq)]
@@ -206,6 +206,8 @@ pub enum Cmd {
     Reveal(PathBuf),
     Copy(String),
     Notify(String, String, NotificationSound),
+    /// 只播放岛内铃声，不发 Windows Toast（新邮件）。
+    PlayNotificationSound(NotificationSound),
     RequestNotifications,
     DisconnectNotifications,
     ToggleAutostart,
@@ -1594,7 +1596,10 @@ impl App {
     pub fn start_tray(&self,state:crate::tray::State)->Option<crate::tray::Tray>{
         let layout=self.settings_window.clone();
         // 原生文件选择框会占用界面线程，托盘退出时直接保存最近一次观察到的布局。
-        crate::tray::Tray::start_with_exit(state,move||layout.lock().unwrap_or_else(|e|e.into_inner()).close())
+        crate::tray::Tray::start_with_exit(state,move||{
+            layout.lock().unwrap_or_else(|e|e.into_inner()).close();
+            crate::tray::set_system_notification_muted(false);
+        })
     }
 
     pub fn open_settings(&mut self){
