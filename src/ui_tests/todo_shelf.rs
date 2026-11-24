@@ -70,7 +70,7 @@ fn wheel_overflowing_shelf_stays_at_both_edges(){
 fn wheel_overflowing_todos_stay_at_both_edges(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     for count in [4,8]{
-        h.app.todos.items=(0..count).map(|i|crate::model::TodoItem{text:format!("任务 {i}"),..Default::default()}).collect();
+        h.app.todos.items=(0..count).map(|i|crate::todo::TodoItem{text:format!("任务 {i}"),..Default::default()}).collect();
         h.app.todo_first=0;h.app.show_page(4);
         let last=count-3;
         for (delta,first) in [(40.0_f32,0),(-40.0,1),(-400.0,last),(-40.0,last),(40.0,last-1),(400.0,0),(40.0,0)]{
@@ -90,14 +90,14 @@ fn wheel_overflowing_todos_stay_at_both_edges(){
 fn empty_todo_draft_can_be_cancelled_by_clicking_elsewhere(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for text in ["","   "]{
-        let mut h=H::new();let mut r=feature_raster();h.app.todos.items=vec![crate::model::TodoItem{text:"保留任务".into(),due:None,done_on:None,reminded:false,..Default::default()}];h.app.todos.save();
+        let mut h=H::new();let mut r=feature_raster();h.app.todos.items=vec![crate::todo::TodoItem{text:"保留任务".into(),due:None,done_on:None,reminded:false,..Default::default()}];h.app.todos.save();
         h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);h.click(H::local(70.0,109.0));
         assert!(h.app.adding,"点击添加后应保留空白输入框");
         if !text.is_empty(){h.frame(vec![egui::Event::Text(text.into())]);}
         h.cmds.clear();h.click(H::local(65.0,60.0));
         assert!(!h.app.is_editing(),"空白草稿点击岛内其他位置应退出");
         assert!(h.app.buf.is_empty());assert_eq!(h.app.todos.items.len(),1);assert_eq!(h.app.todos.items[0].text,"保留任务");
-        assert_eq!(crate::model::TodoList::load().items.len(),1,"不能保存空白待办");
+        assert_eq!(crate::todo::TodoList::load().items.len(),1,"不能保存空白待办");
         h.hover(H::local(65.0,60.0),0.3);
         assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Focus)),"取消后不能反复激活窗口");
     }
@@ -244,7 +244,7 @@ fn shelf_remove_keeps_original_file() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let file=crate::model::config_dir().join("保留文件.txt");std::fs::create_dir_all(file.parent().unwrap()).unwrap();std::fs::write(&file,"内容").unwrap();
     h.app.shelf.add(&file).unwrap();h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.app.go(3,1.0);h.hover(H::local(300.0,60.0),0.8);
-    h.click(H::local(233.0,39.0));assert!(h.app.shelf.items.is_empty());assert!(file.exists());assert!(crate::model::Shelf::load().items.is_empty());
+    h.click(H::local(233.0,39.0));assert!(h.app.shelf.items.is_empty());assert!(file.exists());assert!(crate::shelf::Shelf::load().items.is_empty());
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn shelf_duplicate_drop_reports_existing_files_and_preserves_the_current_page() 
     h.app.on_drop(vec![files[0].clone(),files[1].clone()]);h.hover(H::local(300.0,60.0),0.3);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="这些文件已在置物架中")));
     assert_eq!(h.app.shelf_first,0,"重复添加不应将列表跳到最后");
-    assert_eq!(h.app.shelf.items,files);assert_eq!(crate::model::Shelf::load().items,files);
+    assert_eq!(h.app.shelf.items,files);assert_eq!(crate::shelf::Shelf::load().items,files);
 }
 
 #[test]
@@ -278,16 +278,16 @@ fn shelf_drop_distinguishes_new_duplicate_and_missing_files() {
 #[test]
 fn todo_due_roundtrip_and_fires_only_once(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.todos.items.push(crate::model::TodoItem{text:"会议 | 准备".into(),done_on:None,due:Some("2026-10-28 09:40".into()),reminded:false,..Default::default()});h.app.todos.save();
-    let loaded=crate::model::TodoList::load();assert_eq!(loaded.items[0].text,"会议 | 准备");assert_eq!(loaded.items[0].due.as_deref(),Some("2026-10-28 09:40"));
-    h.frame(vec![]);assert!(h.app.todos.items[0].reminded);let n=h.cmds.len();h.frame(vec![]);assert_eq!(n,h.cmds.len());assert!(crate::model::TodoList::load().items[0].reminded);
+    h.app.todos.items.push(crate::todo::TodoItem{text:"会议 | 准备".into(),done_on:None,due:Some("2026-10-28 09:40".into()),reminded:false,..Default::default()});h.app.todos.save();
+    let loaded=crate::todo::TodoList::load();assert_eq!(loaded.items[0].text,"会议 | 准备");assert_eq!(loaded.items[0].due.as_deref(),Some("2026-10-28 09:40"));
+    h.frame(vec![]);assert!(h.app.todos.items[0].reminded);let n=h.cmds.len();h.frame(vec![]);assert_eq!(n,h.cmds.len());assert!(crate::todo::TodoList::load().items[0].reminded);
 }
 
 #[test]
 fn todo_completed_items_move_down_and_undo_restores_the_original_order(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.todos.items=["已完成甲","待做甲","周一重复","已完成乙","每日待办"].into_iter().map(crate::model::TodoItem::new).collect();
-    h.app.todos.items[0].done_on=Some("2026-10-28".into());h.app.todos.items[3].done_on=Some("2026-10-28".into());h.app.todos.items[2].repeat=1;h.app.todos.items[4].repeat=crate::model::REPEAT_ALL;
+    h.app.todos.items=["已完成甲","待做甲","周一重复","已完成乙","每日待办"].into_iter().map(crate::todo::TodoItem::new).collect();
+    h.app.todos.items[0].done_on=Some("2026-10-28".into());h.app.todos.items[3].done_on=Some("2026-10-28".into());h.app.todos.items[2].repeat=1;h.app.todos.items[4].repeat=crate::todo::REPEAT_ALL;
     let original=h.app.todos.items.iter().map(|t|t.text.clone()).collect::<Vec<_>>();assert_eq!(h.app.todos.display_order("2026-10-28"),vec![1,4,2,0,3],"今天未完成优先，其次其他日期任务，已完成沉底");
     h.app.todos.items[0].toggle("2026-10-28");assert_eq!(h.app.todos.display_order("2026-10-28"),vec![0,1,4,2,3],"取消完成应恢复原有相对顺序");
     h.app.todos.items[4].toggle("2026-10-28");assert_eq!(h.app.todos.display_order("2026-10-28"),vec![0,1,2,3,4]);assert_eq!(h.app.todos.display_order("2026-10-29"),vec![0,1,4,2,3],"重复任务到下一天应回到未完成区");
@@ -297,7 +297,7 @@ fn todo_completed_items_move_down_and_undo_restores_the_original_order(){
 #[test]
 fn todo_edit_choice_can_edit_other_rows_and_completed_items(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.todos.items=["第一项","第二项","已完成任务"].into_iter().map(crate::model::TodoItem::new).collect();h.app.todos.items[2].done_on=Some("2026-10-28".into());
+    h.app.todos.items=["第一项","第二项","已完成任务"].into_iter().map(crate::todo::TodoItem::new).collect();h.app.todos.items[2].done_on=Some("2026-10-28".into());
     h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);h.click_text("改一下");
     assert!(h.app.editing.is_none(),"多条待办应先选择，不能默认修改第一项");h.frame(vec![]);h.click_text("第二项");
     assert_eq!(h.app.editing,Some(1));h.app.buf="第二项已修改".into();h.frame(vec![egui::Event::Key{key:egui::Key::Enter,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);
@@ -308,13 +308,13 @@ fn todo_edit_choice_can_edit_other_rows_and_completed_items(){
 
 #[test]
 fn todo_edit_choice_keeps_a_single_completed_task_editable(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=vec![crate::model::TodoItem::new("已完成任务")];h.app.todos.items[0].done_on=Some("2026-10-28".into());
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=vec![crate::todo::TodoItem::new("已完成任务")];h.app.todos.items[0].done_on=Some("2026-10-28".into());
     h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);h.click_text("改一下");assert_eq!(h.app.editing,Some(0),"只有一条时可直接编辑，完成状态不能禁用编辑");
 }
 
 #[test]
 fn todo_edit_choice_reaches_scrolled_items_and_cancels_without_changes(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=(0..7).map(|i|crate::model::TodoItem::new(format!("任务 {i}"))).collect();
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=(0..7).map(|i|crate::todo::TodoItem::new(format!("任务 {i}"))).collect();
     h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);h.click_text("改一下");assert!(h.app.editing.is_none());
     h.hover(H::local(300.0,60.0),0.2);for _ in 0..7{h.wheel(-24.0);}assert_eq!(h.app.page(),4,"选择事项时滚到末尾也不能翻页");h.frame(vec![]);h.click_text("任务 6");assert_eq!(h.app.editing,Some(6));
     h.frame(vec![egui::Event::Key{key:egui::Key::Escape,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);assert!(!h.app.is_editing());assert_eq!(h.app.todos.items[6].text,"任务 6");assert!(h.app.todos.items.iter().all(|t|t.done_on.is_none()));
@@ -322,7 +322,7 @@ fn todo_edit_choice_reaches_scrolled_items_and_cancels_without_changes(){
 
 #[test]
 fn todo_completed_reordering_does_not_complete_the_next_item_on_a_double_click(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=["任务甲","任务乙","任务丙"].into_iter().map(crate::model::TodoItem::new).collect();h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=["任务甲","任务乙","任务丙"].into_iter().map(crate::todo::TodoItem::new).collect();h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
     let point=H::local(212.0,46.0);h.click(point);h.frame(vec![]);h.click(point);h.frame(vec![]);
     assert!(h.app.todos.items[0].done_on.is_some());assert!(h.app.todos.items[1].done_on.is_none(),"首项下移后，快速连点不能误完成下一项");
     h.click_text("任务甲");h.frame(vec![]);assert!(h.app.todos.items.iter().all(|t|t.done_on.is_none()));assert_eq!(h.app.todos.display_order("2026-10-28"),vec![0,1,2]);
@@ -330,14 +330,14 @@ fn todo_completed_reordering_does_not_complete_the_next_item_on_a_double_click()
 
 #[test]
 fn todo_edit_choice_can_cancel_without_toggling_or_deleting_items(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=["任务甲","任务乙"].into_iter().map(crate::model::TodoItem::new).collect();h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=["任务甲","任务乙"].into_iter().map(crate::todo::TodoItem::new).collect();h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
     h.click_text("改一下");h.frame(vec![]);h.click_text("取消");assert!(!h.app.is_editing());assert_eq!(h.app.todos.items.len(),2);assert!(h.app.todos.items.iter().all(|t|t.done_on.is_none()));
     h.frame(vec![]);h.click_text("改一下");h.frame(vec![egui::Event::Key{key:egui::Key::Escape,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);assert!(!h.app.is_editing());assert_eq!(h.app.todos.items.len(),2);
 }
 
 #[test]
 fn todo_edit_choice_keeps_the_selected_item_when_an_earlier_item_is_deleted(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=["第一项","第二项","第三项"].into_iter().map(crate::model::TodoItem::new).collect();h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.todos.items=["第一项","第二项","第三项"].into_iter().map(crate::todo::TodoItem::new).collect();h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
     h.click_text("改一下");h.frame(vec![]);h.click_text("第二项");h.frame(vec![]);h.click(h.ctx.read_response(egui::Id::new(("card",true,("todo-delete",0usize)))).unwrap().rect.center());
     assert_eq!(h.app.editing,Some(0),"删除前面的条目后，编辑目标仍须是第二项");h.app.buf="第二项已修改".into();h.frame(vec![egui::Event::Key{key:egui::Key::Enter,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);assert_eq!(h.app.todos.items.iter().map(|t|t.text.as_str()).collect::<Vec<_>>(),["第二项已修改","第三项"]);
 }
@@ -347,7 +347,7 @@ fn todo_edit_choice_keeps_the_selected_item_when_an_earlier_item_is_deleted(){
 fn todo_edit_choice_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_TODO_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     for skin in [crate::model::Skin::Classic,crate::model::Skin::Cream]{for choosing in [false,true]{
-        let mut h=H::new();h.app.settings.skin=skin;h.app.todos.items=["整理会议资料","确认本周安排","已经完成的任务"].into_iter().map(crate::model::TodoItem::new).collect();h.app.todos.items[2].done_on=Some("2026-11-06".into());h.app.show_page(4);h.app.todo_choosing=choosing;
+        let mut h=H::new();h.app.settings.skin=skin;h.app.todos.items=["整理会议资料","确认本周安排","已经完成的任务"].into_iter().map(crate::todo::TodoItem::new).collect();h.app.todos.items[2].done_on=Some("2026-11-06".into());h.app.show_page(4);h.app.todo_choosing=choosing;
         let mut raster=feature_raster();shoot_feature(&mut h,&mut raster,&dest,&format!("todo-{}-{}",skin.key(),if choosing{"choose"}else{"list"}),90,Some(H::local(175.0,70.0)),"2026-11-06");
     }}
 }
@@ -355,7 +355,7 @@ fn todo_edit_choice_gallery(){
 #[test]
 fn task_editor_saves_and_cancels_inside_island(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.app.todos.items.push(crate::model::TodoItem{text:"准备会议".into(),done_on:None,due:None,reminded:false,..Default::default()});h.app.go(4,1.0);h.hover(H::local(300.0,60.0),0.8);h.app.open_task_dialog(0);
+    h.app.todos.items.push(crate::todo::TodoItem{text:"准备会议".into(),done_on:None,due:None,reminded:false,..Default::default()});h.app.go(4,1.0);h.hover(H::local(300.0,60.0),0.8);h.app.open_task_dialog(0);
     h.hover(H::local(300.0,60.0),0.2);assert!(h.app.is_editing());h.click(H::local(326.0,110.0));assert!(!h.app.is_editing());assert_eq!(h.app.todos.items[0].text,"准备会议");
     h.app.open_task_dialog(0);h.frame(vec![egui::Event::Key{key:egui::Key::Escape,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);assert!(!h.app.is_editing());
 }
@@ -370,7 +370,7 @@ fn adding_a_todo_saves_content_then_offers_an_optional_reminder() {
         assert_eq!(h.app.todos.items[0].text,"提交产品方案");
         assert!(h.app.todos.items[0].due.is_none());
         assert!(h.app.task_dialog.is_some(),"保存内容后应进入可选提醒步骤");
-        assert_eq!(crate::model::TodoList::load().items[0].text,"提交产品方案");
+        assert_eq!(crate::todo::TodoList::load().items[0].text,"提交产品方案");
         h.frame(vec![egui::Event::Key{key:egui::Key::Enter,physical_key:None,pressed:false,repeat:false,modifiers:Default::default()}]);
         if remind {
             let initial=chrono::NaiveDateTime::parse_from_str(&h.app.task_dialog.as_ref().unwrap().picker.due(),"%Y-%m-%d %H:%M").unwrap();
@@ -380,14 +380,14 @@ fn adding_a_todo_saves_content_then_offers_an_optional_reminder() {
         }else{h.picker_click("暂不提醒");assert!(h.app.todos.items[0].due.is_none());}
         assert!(h.app.task_dialog.is_none());
         assert!(h.app.todos.items[0].done_on.is_none());
-        assert_eq!(crate::model::TodoList::load().items[0].due,h.app.todos.items[0].due);
+        assert_eq!(crate::todo::TodoList::load().items[0].due,h.app.todos.items[0].due);
     }
 }
 
 #[test]
 fn todo_reminder_picker_is_embedded_in_the_island(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.todos.items=vec![crate::model::TodoItem{text:"准备会议".into(),done_on:None,due:None,reminded:false,..Default::default()}];
+    h.app.todos.items=vec![crate::todo::TodoItem{text:"准备会议".into(),done_on:None,due:None,reminded:false,..Default::default()}];
     h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
     h.ctx.set_embed_viewports(false);
     egui::Context::set_immediate_viewport_renderer(|_,_|panic!("待办提醒必须在岛内选择，不能创建独立窗口"));
@@ -410,7 +410,7 @@ fn todo_reminder_picker_is_embedded_in_the_island(){
 fn reminder_wheels_select_date_hour_and_minute_without_typing(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let day=chrono::Local::now().date_naive()+chrono::Duration::days(2);let original=format!("{day} 09:00");
-    h.app.todos.items=vec![crate::model::TodoItem{text:"准备方案".into(),due:Some(original.clone()),done_on:None,reminded:false,..Default::default()}];
+    h.app.todos.items=vec![crate::todo::TodoItem{text:"准备方案".into(),due:Some(original.clone()),done_on:None,reminded:false,..Default::default()}];
     h.app.open_task_reminder(0);
     for x in [235.0,290.0,346.0] {h.hover(H::local(x,77.0),0.4);h.wheel(-40.0);}
     assert_eq!(h.app.todos.items[0].due,Some(original),"调整时不能提前写入提醒");
@@ -424,7 +424,7 @@ fn reminder_wheels_select_date_hour_and_minute_without_typing(){
 fn reminder_wheels_accumulate_small_trackpad_movements(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let day=chrono::Local::now().date_naive()+chrono::Duration::days(2);
-    h.app.todos.items=vec![crate::model::TodoItem{text:"检查进度".into(),due:Some(format!("{day} 10:30")),done_on:None,reminded:false,..Default::default()}];
+    h.app.todos.items=vec![crate::todo::TodoItem{text:"检查进度".into(),due:Some(format!("{day} 10:30")),done_on:None,reminded:false,..Default::default()}];
     h.app.open_task_reminder(0);h.hover(H::local(346.0,77.0),1.0);
     for _ in 0..80{h.wheel(-0.5);}
     h.picker_click("完成");
@@ -436,7 +436,7 @@ fn reminder_wheels_accumulate_small_trackpad_movements(){
 fn reminder_picker_rejects_past_time_and_cancel_preserves_the_task(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let old=format!("{} 09:00",chrono::Local::now().date_naive()-chrono::Duration::days(1));
-    h.app.todos.items=vec![crate::model::TodoItem{text:"保留任务".into(),due:Some(old.clone()),done_on:None,reminded:true,..Default::default()}];
+    h.app.todos.items=vec![crate::todo::TodoItem{text:"保留任务".into(),due:Some(old.clone()),done_on:None,reminded:true,..Default::default()}];
     h.app.open_task_reminder(0);h.picker_click("完成");h.picker_frame(vec![]);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="请选择晚于当前的时间")));
     assert_eq!(h.app.todos.items[0].due,Some(old.clone()));

@@ -256,7 +256,7 @@ fn minimal_hover_does_not_catch_tabs_during_collapse() {
 #[test]
 fn wheel_scrolls_lists_only_inside_content_and_respects_edges(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.todos.items=(0..4).map(|i|crate::model::TodoItem{text:format!("任务 {i}"),done_on:None,due:None,reminded:false,..Default::default()}).collect();
+    h.app.todos.items=(0..4).map(|i|crate::todo::TodoItem{text:format!("任务 {i}"),done_on:None,due:None,reminded:false,..Default::default()}).collect();
     h.app.shelf.items=(0..6).map(|i|std::path::PathBuf::from(format!("scroll-test-{i}.txt"))).collect();
     for (page,next) in [(3,11),(4,5)] {
         h.app.show_page(page);h.hover(H::local(300.0,60.0),1.0);
@@ -351,7 +351,7 @@ fn remove_icons_are_centered_in_their_buttons_at_each_scale(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for scale in [1.0,1.25,1.5,2.0]{
         let mut h=H::new();h.ctx.set_pixels_per_point(scale);
-        h.app.todos.items=["第一项","第二项","第三项"].into_iter().map(|text|crate::model::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
+        h.app.todos.items=["第一项","第二项","第三项"].into_iter().map(|text|crate::todo::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
         h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);
         for i in 0..3usize{
             let button=h.ctx.read_response(egui::Id::new(("card",true,("todo-delete",i)))).unwrap().rect;
@@ -377,7 +377,7 @@ fn ui_alignment_layout_gallery(){
     fn fixture()->H{
         let mut h=H::new();h.app.settings.pet=false;h.app.settings.island_lyrics=false;h.power=(Some(76),false);
         h.media=crate::music::NowPlaying{title:"愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光".into(),artist:"The Lanterns · Live Session".into(),duration:240.0,position:65.0,playing:true,..Default::default()};
-        h.app.todos.items=["整理会议资料","Review design details","确认项目需求与下一阶段开发排期"].into_iter().map(|text|crate::model::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
+        h.app.todos.items=["整理会议资料","Review design details","确认项目需求与下一阶段开发排期"].into_iter().map(|text|crate::todo::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
         h.app.shelf.items=["项目设计方案与交付说明.pdf","design-preview.png","本周工作安排.docx","project-files.zip","notes.md"].into_iter().map(std::path::PathBuf::from).collect();
         h.app.mail.accounts=vec![crate::mail::Account {custom: None, email:"product-team@example.com".into(),provider:crate::mail::Provider::Qq,enabled:true}];
         h.app.mail.recent=(0..3).map(|uid|crate::mail::Item {received_unix: None, account:"product-team@example.com".into(),from:"产品与设计协作团队".into(),subject:"请确认下阶段的设计方案和开发排期，评审前同步最新进度".into(),time:"11-01 09:41".into(),code:if uid==0{Some("123456".into())}else{None},html: String::new().into(), summary:"这是一段邮件正文，需要确认当前需求与后续的产品设计安排。".repeat(20).into(),links:vec![],meeting:None,uid}).collect();

@@ -333,7 +333,7 @@ fn mascot_wakes_before_returning_to_idle(){
 #[test]
 fn mascot_keeps_task_celebration_until_panel_closes(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.todos.items.push(crate::model::TodoItem{text:"完成测试任务".into(),done_on:None,due:None,reminded:false,..Default::default()});
+    h.app.todos.items.push(crate::todo::TodoItem{text:"完成测试任务".into(),done_on:None,due:None,reminded:false,..Default::default()});
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.app.go(4,1.0);h.hover(H::local(300.0,60.0),1.0);h.click(H::local(250.0,47.0));
     assert!(h.app.todos.items[0].done_on.is_some());
     h.hover(H::local(300.0,60.0),4.0);assert_eq!(format!("{:?}",h.app.pet_state()),"Happy");
@@ -465,7 +465,7 @@ fn lunch_break_silences_water_and_sit_reminders(){
     h.frame(vec![]);assert!(h.app.notice.is_none(),"午休中不应弹喝水或久坐提醒");
     h.app.settings.lunch_rest=false;h.frame(vec![]);
     assert!(h.app.notice.is_some(),"关闭午休后应恢复提醒");
-    h.app.notice=None;h.app.alerts.clear();h.app.water.remind=false;h.app.confirm_health_reminder(crate::island::extras::HealthReminder::Sit);h.app.sit_start=h.t-2.0*3600.0;
+    h.app.notice=None;h.app.alerts.clear();h.app.water.remind=false;h.app.confirm_health_reminder(crate::health::HealthReminder::Sit);h.app.sit_start=h.t-2.0*3600.0;
     h.app.settings.lunch_rest=true;h.app.settings.lunch_start=10*60;h.app.settings.lunch_end=13*60;
     h.frame(vec![]);assert!(h.app.notice.as_ref().is_some_and(|a|a.title==SIT_TITLE),"午休以外照常提醒");
 }
@@ -492,7 +492,7 @@ fn sit_reminder_waits_for_confirmation_before_restarting(){
     let count=h.app.history.len();
     h.screen_locked=true;h.system_idle=Some(40.0*60.0);h.t+=500.0*60.0;h.frame(vec![]);
     assert!(h.app.notice.is_none());assert_eq!(h.app.history.len(),count,"锁屏和长时间未处理都只保留一次提醒");
-    h.app.confirm_health_reminder(crate::island::extras::HealthReminder::Sit);assert_eq!(h.app.sat_minutes(),0);
+    h.app.confirm_health_reminder(crate::health::HealthReminder::Sit);assert_eq!(h.app.sat_minutes(),0);
     h.screen_locked=false;h.system_idle=Some(0.0);h.t+=59.0*60.0;h.frame(vec![]);assert!(h.app.notice.is_none());
     h.t+=61.0;h.frame(vec![]);assert!(h.app.notice.as_ref().is_some_and(|a|a.title==SIT_TITLE));
 }

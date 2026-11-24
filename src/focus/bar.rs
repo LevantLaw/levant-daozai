@@ -1,5 +1,7 @@
 //! 常驻岛的番茄水位、休息茶杯与倒计时。
-use crate::{island::{Phase,Pomo},visuals,visuals::paint::{Card,H},visuals::theme::{self,W}};
+use crate::focus::Pomo;
+use crate::island::Phase;
+use crate::{visuals,visuals::paint::{Card,H},visuals::theme::{self,W}};
 use eframe::egui::{self,Color32};
 
 pub(crate) const WIDTH:f32=68.0;

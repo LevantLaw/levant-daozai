@@ -15,8 +15,13 @@ pub mod agent;
 pub mod messenger;
 pub mod calendar;
 pub mod mail;
+pub mod clipboard;
+pub mod focus;
+pub mod health;
 pub mod model;
 pub mod music;
+pub mod shelf;
+pub mod todo;
 pub mod quota;
 pub mod weather;
 #[cfg(windows)]

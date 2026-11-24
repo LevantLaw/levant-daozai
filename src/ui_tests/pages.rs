@@ -105,10 +105,10 @@ fn wheel_clipboard_stays_at_both_edges() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.show_page(crate::island::CLIPBOARD_PAGE);
-    for count in [crate::island::pages::CLIP_ROWS+1] {
+    for count in [crate::clipboard::page::CLIP_ROWS+1] {
         h.app.clipboard.lock().items.clear();
         for i in 0..count { h.app.clipboard.lock().push(&i.to_string(), "09:00"); }
-        let last=count.saturating_sub(crate::island::pages::CLIP_ROWS);
+        let last=count.saturating_sub(crate::clipboard::page::CLIP_ROWS);
         for (delta, first) in [(40.0,0),(-40.0,last),(-40.0,last),(40.0,0),(40.0,0)] {
             h.hover(H::local(300.0,60.0),0.4);
             h.wheel(delta);
@@ -261,10 +261,10 @@ fn feature_gallery(){
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_FEATURE_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     let today="2026-11-04";// 周三
     let todos=||{
-        let mut a=crate::model::TodoItem::new("写周报");a.repeat=0b001_0000;
-        let mut b=crate::model::TodoItem::new("站会");b.repeat=crate::model::REPEAT_WORKDAYS;b.due=Some("2026-11-04 09:30".into());b.done_on=Some("2026-11-04".into());
-        let mut c=crate::model::TodoItem::new("健身");c.repeat=0b000_0101;
-        let d=crate::model::TodoItem::new("回复设计评审意见");
+        let mut a=crate::todo::TodoItem::new("写周报");a.repeat=0b001_0000;
+        let mut b=crate::todo::TodoItem::new("站会");b.repeat=crate::todo::list::REPEAT_WORKDAYS;b.due=Some("2026-11-04 09:30".into());b.done_on=Some("2026-11-04".into());
+        let mut c=crate::todo::TodoItem::new("健身");c.repeat=0b000_0101;
+        let d=crate::todo::TodoItem::new("回复设计评审意见");
         vec![a,b,c,d]
     };
     let mut h=H::new();let mut r=feature_raster();h.app.todos.items=todos();h.app.show_page(4);
@@ -304,13 +304,13 @@ fn wheel_short_lists_turn_pages(){
         }
     }
     for count in [0,1,3]{
-        h.app.todos.items=(0..count).map(|i|crate::model::TodoItem{text:format!("任务 {i}"),..Default::default()}).collect();
+        h.app.todos.items=(0..count).map(|i|crate::todo::TodoItem{text:format!("任务 {i}"),..Default::default()}).collect();
         for (delta,page) in [(-40.0,5),(40.0,11)]{
             h.app.show_page(4);h.hover(H::local(300.0,60.0),0.5);h.wheel(delta);
             assert_eq!(h.app.page,page,"待办未溢出应翻页，条数 {count}");
         }
     }
-    for count in [0,1,crate::island::pages::CLIP_ROWS]{
+    for count in [0,1,crate::clipboard::page::CLIP_ROWS]{
         h.app.clipboard.lock().items.clear();
         for i in 0..count{h.app.clipboard.lock().push(&i.to_string(),"09:00");}
         for (delta,page) in [(-40.0,4),(40.0,3)]{

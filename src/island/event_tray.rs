@@ -236,7 +236,7 @@ impl App {
         match item {
             Item::Weather => bar_layout::WEATHER_WIDTH + self.weather_pill_extra(ctx).unwrap_or(0.0).max(0.0),
             Item::Quota => self.quota_tray_width(ctx),
-            Item::Focus => crate::island::focus_bar::WIDTH,
+            Item::Focus => crate::focus::bar::WIDTH,
             Item::Mail => crate::island::page_badges::badge_width(bar_layout::MAIL),
             Item::Health => crate::island::page_badges::badge_width(bar_layout::HEALTH),
             Item::Todo => crate::island::page_badges::badge_width(bar_layout::TODO),
@@ -288,7 +288,7 @@ impl App {
                     Item::Focus => {
                         let faded = c.faded(alpha);
                         let faded = if alpha < 0.8 { faded.ghost() } else { faded };
-                        crate::island::focus_bar::draw(&faded, item_x, 15.0, self.t, &self.pomo, self.phase_secs(self.pomo.phase), false);
+                        crate::focus::bar::draw(&faded, item_x, 15.0, self.t, &self.pomo, self.phase_secs(self.pomo.phase), false);
                         if crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-focus"), "专注 · 点击打开".into()).clicked() {
                             self.show_page(crate::island::FOCUS_PAGE);
                         }

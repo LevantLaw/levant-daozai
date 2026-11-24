@@ -403,7 +403,7 @@ fn language_notice_text_is_vertically_centered() {
 fn todo_notice_view_locates_the_reminded_task() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.app.todos.items=(0..7).map(|i|crate::model::TodoItem{text:format!("任务 {i}"),done_on:None,due:if i==6{Some("2026-10-28 09:40".into())}else{None},reminded:false,..Default::default()}).collect();
+    h.app.todos.items=(0..7).map(|i|crate::todo::TodoItem{text:format!("任务 {i}"),done_on:None,due:if i==6{Some("2026-10-28 09:40".into())}else{None},reminded:false,..Default::default()}).collect();
     for _ in 0..60 {h.frame(vec![]);}
     h.click_text("查看");
     assert_eq!(h.app.page,4);

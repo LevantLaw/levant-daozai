@@ -1,6 +1,5 @@
 //! Windows 平台接入：窗口、输入、托盘、系统数据与诊断。
 pub mod bt;
-pub mod clipboard;
 pub mod display_layout;
 pub mod diagnostics_tool;
 pub mod icons;

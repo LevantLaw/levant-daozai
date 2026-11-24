@@ -1,5 +1,5 @@
 //! 横幅、HUD 与通知队列：提醒入队、横幅绘制、音量条与未读管理。
-use crate::island::extras::HealthReminder;
+use crate::health::HealthReminder;
 use crate::island::settings::page_icon;
 use crate::island::{App, Cmd, NotificationSound, HUD_TRACK_W, HUD_TRACK_X, HUD_W, PAGE_NAMES};
 use crate::visuals::paint::{Card, H};

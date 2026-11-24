@@ -132,7 +132,7 @@ impl crate::island::App {
         let members:Vec<(usize,bool,f32)>=tray_order.iter().copied()
             .map(|slot|{
                 let width=match slot{
-                    WEATHER=>weather_width,QUOTA=>quota_width,FOCUS=>crate::island::focus_bar::WIDTH,
+                    WEATHER=>weather_width,QUOTA=>quota_width,FOCUS=>crate::focus::bar::WIDTH,
                     MAIL|HEALTH|TODO|SHELF|CALENDAR=>crate::island::page_badges::badge_width(slot),
                     MUSIC|BATTERY=>slot_width(slot),_=>0.0,
                 };
@@ -207,7 +207,7 @@ impl crate::island::App {
                 WEATHER=>if let Some(snapshot)=weather_snapshot.as_ref(){let mut paint=layout.clone();paint.widths[WEATHER]=weather_width;self.paint_pill_weather(&c,x,&paint,snapshot);}else{crate::weather::ui::icon(&c,x,15.0,16.0,crate::weather::Kind::Partly);},
                 QUOTA if count>0=>self.draw_quota_tray(&c,x),
                 QUOTA=>{c.ring(x,15.0,10.0,2.0,visuals::theme::GRAY);c.text(x,18.0,"AI",7.0,W::Bold,visuals::theme::WHITE,H::Center);},
-                FOCUS=>crate::island::focus_bar::draw(&c,x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false),
+                FOCUS=>crate::focus::bar::draw(&c,x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false),
                 MUSIC=>paint::playback_bars_box(&c,x,15.0,self.t,self.media.playing,visuals::theme::WHITE,GLYPH,MUSIC_H),
                 BATTERY=>paint::battery(&c,x,15.0,self.resident_power.0,self.resident_power.1,BATTERY_SCALE),
                 MAIL|HEALTH|TODO|SHELF|CALENDAR=>self.paint_badge(&c,slot,x,visuals::theme::WHITE),
@@ -224,7 +224,7 @@ impl crate::island::App {
         for &slot in &order{
             let Some(x)=layout.x[slot] else {continue;};
             let x=cx+x;
-            let width=match slot{CLOCK=>layout.widths[CLOCK],BATTERY=>20.0,WEATHER=>layout.widths[WEATHER],PET=>32.0,MUSIC=>GLYPH,FOCUS=>crate::island::focus_bar::WIDTH,AGENT=>layout.widths[AGENT],_=>{
+            let width=match slot{CLOCK=>layout.widths[CLOCK],BATTERY=>20.0,WEATHER=>layout.widths[WEATHER],PET=>32.0,MUSIC=>GLYPH,FOCUS=>crate::focus::bar::WIDTH,AGENT=>layout.widths[AGENT],_=>{
                 let left=layout.quota_slots().filter_map(|i|layout.x[i].map(|x|x-layout.widths[i]/2.0)).fold(f32::INFINITY,f32::min);
                 let right=layout.quota_slots().filter_map(|i|layout.x[i].map(|x|x+layout.widths[i]/2.0)).fold(f32::NEG_INFINITY,f32::max);
                 right-left
@@ -250,7 +250,7 @@ impl crate::island::App {
                 WEATHER=>if let Some(snapshot)=weather_snapshot.as_ref(){self.paint_pill_weather(&c,x,&layout,snapshot);}else{crate::weather::ui::icon(&c,x,15.0,16.0,crate::weather::Kind::Partly);},
                 PET=>self.pet.draw(&c,x,self.pet.clock,self.skin_palette()),
                 MUSIC=>paint::playback_bars_box(&c,x,15.0,self.t,self.media.playing,visuals::theme::WHITE,GLYPH,MUSIC_H),
-                FOCUS=>crate::island::focus_bar::draw(&c,x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false),
+                FOCUS=>crate::focus::bar::draw(&c,x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false),
                 QUOTA if count>0=>self.draw_quota_bar(&c,cx,&layout,&indices),
                 AGENT=>self.draw_agent_light(&c,x,15.0),
                 _=>{c.ring(x,15.0,10.0,2.0,visuals::theme::GRAY);c.text(x,18.0,"AI",7.0,W::Bold,visuals::theme::WHITE,H::Center);},

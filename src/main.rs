@@ -86,7 +86,7 @@ struct Shell {
     cal: Option<daozai::calendar::Service>,
     cal_sig: Option<(Vec<daozai::calendar::Config>, bool)>,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
-    clipboard_watch: Option<daozai::os::clipboard::Watcher>,
+    clipboard_watch: Option<daozai::clipboard::Watcher>,
     quota: daozai::quota::Service,
     quota_sig: Option<(bool,Vec<daozai::quota::Account>)>,
     quota_at: PollClock,
@@ -103,7 +103,7 @@ impl Shell {
         if cal_on!=self.cal.is_some() {self.cal=cal_on.then(daozai::calendar::Service::start);self.cal_sig=None;}
         let clipboard_on=self.app.clipboard_active();
         if clipboard_on!=self.clipboard_watch.is_some() {
-            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::os::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
+            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
         }
         self.app.reconcile_agent_monitor(ctx);
     }

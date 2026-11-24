@@ -12,7 +12,7 @@ fn add_unread_mail(h:&mut H) {
 }
 
 fn add_due_todo(h:&mut H) {
-    h.app.todos.items.push(crate::model::TodoItem{text:"检查周报".into(),done_on:None,due:Some("2026-10-28 09:40".into()),reminded:true,..Default::default()});
+    h.app.todos.items.push(crate::todo::TodoItem{text:"检查周报".into(),done_on:None,due:Some("2026-10-28 09:40".into()),reminded:true,..Default::default()});
 }
 
 fn slots(h:&H)->Vec<usize>{h.app.page_badges().iter().map(|badge|badge.slot).collect()}

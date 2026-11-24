@@ -1,7 +1,6 @@
 //! 设置页与设置控件。
 use super::*;
 use crate::island::settings_theme::color as settings_color;
-use crate::island::extras::HealthReminder;
 
 mod reminders;
 
@@ -414,10 +413,10 @@ pub(crate) fn number_stepper<N:egui::emath::Numeric>(ui:&mut egui::Ui,value:&mut
 }
 /// 时段行的宽度：两个加减器（−、输入框、+ 各间隔 6）加中间的「至」和两侧间距。
 /// 区域刚好装下内容，靠右放置时右边缘就和单个加减器对齐。
-const TIME_RANGE_HOURS_W:f32=(26.0+6.0+48.0+6.0+26.0)*2.0+8.0+13.0+8.0;
-const TIME_RANGE_CLOCK_W:f32=(26.0+6.0+56.0+6.0+26.0)*2.0+8.0+13.0+8.0;
+pub(crate) const TIME_RANGE_HOURS_W:f32=(26.0+6.0+48.0+6.0+26.0)*2.0+8.0+13.0+8.0;
+pub(crate) const TIME_RANGE_CLOCK_W:f32=(26.0+6.0+56.0+6.0+26.0)*2.0+8.0+13.0+8.0;
 /// 时刻加减器（一天中的分钟数，15 分钟一档，跨午夜循环），中间可直接输入 12:30。
-fn time_stepper(ui:&mut egui::Ui,value:&mut u32,id:&str)->bool{
+pub(crate) fn time_stepper(ui:&mut egui::Ui,value:&mut u32,id:&str)->bool{
     let ctx=&ui.ctx().clone();
     let mut changed=false;
     ui.push_id(id,|ui|{
@@ -858,91 +857,11 @@ impl App {
                         });
                     }
                     1=>self.music_settings(ui),
-                    2=>{
-                        let on=self.settings_feature_header(ui,crate::island::FOCUS_PAGE,"番茄钟与休息计时");
-                        ui.add_enabled_ui(on,|ui|{
-                            settings_card(ui,|ui|{
-                                setting_number(ui,"专注",&mut self.settings.focus_minutes,1,180," 分钟",1.0);
-                                ui.separator();
-                                setting_number(ui,"休息",&mut self.settings.rest_minutes,1,60," 分钟",1.0);
-                                settings_hint(ui,"调整后从下一阶段开始生效。");
-                            });
-                        });
-                    }
-                    3=>{
-                        let on=self.settings_feature_header(ui,crate::island::WATER_PAGE,"喝水与久坐提醒");
-                        ui.add_enabled_ui(on,|ui|{
-                            settings_card(ui,|ui|{
-                                // 喝水：开关一行，数量与间隔紧随其后。
-                                let old_remind=self.water.remind;
-                                setting_row(ui,"喝水提醒","确认或喝水后重新计时；达标后停止提醒",&mut self.water.remind);
-                                if self.water.remind!=old_remind{self.water.save();self.confirm_health_reminder(HealthReminder::Water);}
-                                ui.add_enabled_ui(self.water.remind,|ui|{
-                                    setting_number(ui,"提醒间隔",&mut self.settings.water_minutes,5,180," 分钟",1.0);
-                                    setting_number(ui,"每次记录",&mut self.settings.serving_ml,50,1000," ml",25.0);
-                                    if setting_number(ui,"每日目标",&mut self.water.goal_ml,500,6000," ml",50.0){self.water.save();}
-                                });
-                                ui.separator();
-                                let old_sit=self.settings.sit_remind;
-                                setting_row(ui,"久坐提醒","确认提醒或点「起身了」后重新计时",&mut self.settings.sit_remind);
-                                if self.settings.sit_remind!=old_sit {self.confirm_health_reminder(HealthReminder::Sit);}
-                                ui.add_enabled_ui(self.settings.sit_remind,|ui|{
-                                    setting_number(ui,"久坐时长",&mut self.settings.sit_minutes,15,180," 分钟",1.0);
-                                });
-                                ui.separator();
-                                // 提醒时段与午休对喝水和久坐都生效。
-                                // 喝水和久坐提醒都关掉时，时段和午休不起作用，一起置灰。
-                                let any_reminder=self.water.remind||self.settings.sit_remind;
-                                ui.add_enabled_ui(any_reminder,|ui|{
-                                    settings_control_row(ui,"提醒时段",80.0,|ui|{
-                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-                                            // 区域宽度正好等于两个加减器加「至」，靠右放置后与上面单个加减器的右边缘对齐。
-                                            ui.allocate_ui_with_layout(egui::vec2(TIME_RANGE_HOURS_W,30.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{
-                                                number_stepper(ui,&mut self.settings.water_start,0,23," 时",1,48.0);
-                                                ui.label("至");
-                                                number_stepper(ui,&mut self.settings.water_end,0,24," 时",1,48.0);
-                                            });
-                                        }).response
-                                    });
-                                    setting_row(ui,"午休不提醒","午休时间内喝水和久坐都不弹提醒",&mut self.settings.lunch_rest);
-                                    if self.settings.lunch_rest {
-                                        settings_control_row(ui,"午休时间",80.0,|ui|{
-                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-                                                ui.allocate_ui_with_layout(egui::vec2(TIME_RANGE_CLOCK_W,30.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{
-                                                    time_stepper(ui,&mut self.settings.lunch_start,"lunch-start");
-                                                    ui.label("至");
-                                                    time_stepper(ui,&mut self.settings.lunch_end,"lunch-end");
-                                                });
-                                            }).response
-                                        });
-                                    }
-                                    settings_hint(ui,"提醒时段和午休对喝水、久坐都生效；专注计时进行中不打扰，结束后再提醒。");
-                                });
-                            });
-                        });
-                    }
-                    4=>{
-                        let on=self.settings_feature_header(ui,crate::island::TODO_PAGE,"任务清单与到期提醒");
-                        let _=on;
-                    }
-                    5=>{
-                        let on=self.settings_feature_header(ui,crate::island::SHELF_PAGE,"临时收纳文件位置");
-                        ui.add_enabled_ui(on,|ui|{
-                            settings_card(ui,|ui|{
-                                ui.label(egui::RichText::new(format!("当前 {} 项 · 移除条目不会删除原文件",self.shelf.items.len())).size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
-                            });
-                        });
-                    }
-                    SETTINGS_TAB_CLIPBOARD=>{
-                        let on=self.settings_feature_header(ui,crate::island::CLIPBOARD_PAGE,"记录最近复制的文字，点一下再次复制");
-                        ui.add_enabled_ui(on,|ui|{
-                            settings_card(ui,|ui|{
-                                setting_row(ui,"记录剪贴板","在剪贴板页查看，点一下再次复制",&mut self.settings.clipboard_history);
-                                settings_hint(ui,&format!("本机保存最近 {} 条；密码管理器标记为敏感的内容不会记录。",crate::os::clipboard::MAX_RECENT));
-                                if ui.button("打开剪贴板").clicked(){self.settings_open=false;self.show_page(crate::island::CLIPBOARD_PAGE);}
-                            });
-                        });
-                    }
+                    2=>self.focus_settings(ui),
+                    3=>self.health_settings(ui),
+                    4=>self.todo_settings(ui),
+                    5=>self.shelf_settings(ui),
+                    SETTINGS_TAB_CLIPBOARD=>self.clipboard_settings(ui),
                     6=>self.reminders_settings(ui,ctx),
                     7=>{
                         let mut add_mail=false;

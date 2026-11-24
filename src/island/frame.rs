@@ -193,7 +193,7 @@ impl App {
                             4 if Rect::from_min_max(Pos2::new(196.0,31.0),Pos2::new(377.0,124.0)).contains(cursor)
                                 =>Some((&mut self.todo_first,self.todos.items.len().saturating_sub(3))),
                             CLIPBOARD_PAGE if clipboard_body
-                                =>Some((&mut self.clip_first,self.clipboard.lock().items.len().saturating_sub(crate::island::pages::CLIP_ROWS))),
+                                =>Some((&mut self.clip_first,self.clipboard.lock().items.len().saturating_sub(crate::clipboard::page::CLIP_ROWS))),
                             SHELF_PAGE if Rect::from_min_max(Pos2::new(36.0,28.0),Pos2::new(383.0,128.0)).contains(cursor)
                                 =>Some((&mut self.shelf_first,self.shelf.items.len().saturating_sub(5))),
                             WINDOWS_PAGE if Rect::from_min_max(Pos2::new(40.0,52.0),Pos2::new(378.0,160.0)).contains(cursor)

@@ -219,7 +219,7 @@ fn health_amounts_and_time_window_support_direct_input(){
         h.frame(vec![egui::Event::Text(input.into())]);
         h.frame(vec![egui::Event::Key{key:egui::Key::Enter,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);h.frame(vec![]);
     }
-    assert_eq!(crate::model::Water::load("2026-10-28").goal_ml,2750);
+    assert_eq!(crate::health::Water::load("2026-10-28").goal_ml,2750);
     assert_eq!(crate::model::Settings::load().serving_ml,300);
     h.app.show_health_time();h.hover(H::local(300.0,55.0),0.5);
     for (label,input) in [("09:00","8"),("22:00","24:00"),("12:00","12:35")]{
@@ -285,7 +285,7 @@ fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
         h.app.settings.notifications=enabled;
         h.app.settings.system_notify=system;
         h.app.settings.sound=sound;
-        for kind in crate::island::extras::HealthReminder::ALL {
+        for kind in crate::health::HealthReminder::ALL {
             h.app.pending.clear();
             h.app.alert(kind.title(),"到时间了",2,true);
             h.app.alert(kind.title(),"到时间了",2,true);

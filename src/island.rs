@@ -3,8 +3,9 @@
 //!
 //! 时间一律来自 `Env::t`（秒），不直接读系统时钟，所以录屏可逐帧复现。
 
+use crate::focus::Pomo;
 use crate::island::banner::Alert;
-use crate::island::extras::{HealthReminder, PetState};
+use crate::island::extras::PetState;
 use crate::visuals::anim::{self, lerp, smoothstep, Spring};
 use crate::island::bar_layout::{self as bar, Layout};
 use crate::calendar;
@@ -28,11 +29,9 @@ pub(crate) mod pages;
 pub(crate) mod banner;
 pub(crate) mod extras;
 pub(crate) mod event_tray;
-pub(crate) mod focus_bar;
 mod resident_settings;
 pub(crate) mod avoidance;
 pub mod side_dock;
-pub(crate) mod task_picker;
 pub(crate) mod dnd;
 pub(crate) mod page_badges;
 pub(crate) mod settings_window;
@@ -403,12 +402,6 @@ impl Phase {
     }
 }
 
-pub(crate) struct Pomo {
-    pub phase: Phase,
-    pub remaining: f32,
-    pub running: bool,
-}
-
 /// 本地歌词（酷狗、汽水）每 5 秒复查，最多约 1 分钟；网络失败每 30 秒重试，最多约 5 分钟。手动点重试会重新计数。
 const NATIVE_RETRIES:u32=12;
 const NETWORK_RETRIES:u32=10;
@@ -653,9 +646,9 @@ pub struct App {
     pub settings: model::Settings,
     /// 本次运行实际使用兼容渲染（Direct3D 12）；设置里的开关与它不同时提示重启。
     pub render_compat_running: bool,
-    pub(crate) todos: model::TodoList,
-    pub(crate) water: model::Water,
-    pub(crate) shelf: model::Shelf,
+    pub(crate) todos: crate::todo::TodoList,
+    pub(crate) water: crate::health::Water,
+    pub(crate) shelf: crate::shelf::Shelf,
 
     // 形变
     pub(crate) w: Spring,
@@ -701,7 +694,7 @@ pub struct App {
     // 拖入
     pub(crate) drag_hot: bool,
     pub(crate) drag_a: f32,
-    drag_saved: Option<usize>,
+    pub(crate) drag_saved: Option<usize>,
 
     // 置物架
     pub(crate) shelf_scroll: Spring,
@@ -712,7 +705,7 @@ pub struct App {
     pub(crate) icons: crate::os::icons::Cache,
     pub(crate) avoidance: crate::island::avoidance::Picker,
     pub(crate) confirm_clear: Option<f64>,
-    pub clipboard: crate::os::clipboard::Shared,
+    pub clipboard: crate::clipboard::Shared,
     pub(crate) clip_first: usize,
     pub(crate) clip_confirm_clear: Option<f64>,
 
@@ -779,7 +772,7 @@ pub struct App {
     pub messenger_statuses:std::collections::HashMap<Messenger,String>,
     pub(crate) notification_apps:model::NotificationApps,
     pub(crate) subpage:Option<usize>,
-    pub(crate) task_dialog:Option<crate::island::extras::TaskDraft>,
+    pub(crate) task_dialog:Option<crate::todo::TaskDraft>,
     pub listener_status: String,
     pub(crate) notification_bell_until: f64,
     pub(crate) notification_bell_at: f64,
@@ -885,9 +878,9 @@ impl App {
             opts,
             render_compat_running: settings.render_compat,
             settings,
-            todos: model::TodoList::load(),
-            water: model::Water::default(),
-            shelf: model::Shelf::load(),
+            todos: crate::todo::TodoList::load(),
+            water: crate::health::Water::default(),
+            shelf: crate::shelf::Shelf::load(),
             w: Spring::new(bw, CLOSE.0, CLOSE.1),
             h: Spring::new(bh, CLOSE.0, CLOSE.1),
             open: false,
@@ -927,7 +920,7 @@ impl App {
             shelf_born: HashMap::new(),
             icons: Default::default(), avoidance: Default::default(),
             confirm_clear: None,
-            clipboard: crate::os::clipboard::Shared::new(clipboard_on),
+            clipboard: crate::clipboard::Shared::new(clipboard_on),
             clip_first: 0,
             clip_confirm_clear: None,
             water_ring: Spring::new(0.0, 120.0, 0.9),
@@ -1746,7 +1739,7 @@ impl App {
 
     pub(crate) fn pet_enabled(&self)->bool {self.settings.pet && !self.browser_minimal_active && !self.side()}
     pub(crate) fn pet_space(&self)->f32 {if self.pet_enabled(){44.0}else{0.0}}
-    fn lyric_focus_space(&self)->f32 {if self.pomo.running && self.settings.show_focus{crate::island::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
+    fn lyric_focus_space(&self)->f32 {if self.pomo.running && self.settings.show_focus{crate::focus::bar::LYRIC_WIDTH+10.0}else{0.0}}
     fn lyric_bar_width(&self)->f32 {LYRIC_BAR_W+if self.pet_enabled(){48.0}else{0.0}+self.lyric_focus_space()}
     fn notice_size(&self,a:&Alert)->(f32,f32) {
         let (width,height)=if a.meeting.is_some(){(360.0,136.0)}else if a.source==crate::island::banner::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
@@ -2457,7 +2450,7 @@ impl App {
             paint::playback_bars(&c,left+content_width-21.0,center_y,self.t,self.media.playing,theme::WHITE);
             if self.pomo.running && self.settings.show_focus {
                 let alpha=smoothstep(0.88,1.0,(width-content_width)/self.lyric_focus_space());
-                crate::island::focus_bar::draw(&c.faded(alpha),left+width-14.0-crate::island::focus_bar::LYRIC_WIDTH/2.0,center_y,self.t,&self.pomo,self.phase_secs(self.pomo.phase),true);
+                crate::focus::bar::draw(&c.faded(alpha),left+width-14.0-crate::focus::bar::LYRIC_WIDTH/2.0,center_y,self.t,&self.pomo,self.phase_secs(self.pomo.phase),true);
             }
         }
         if lyric_alpha>=0.997 {return;}
@@ -2511,7 +2504,7 @@ impl App {
             if crate::quota::ui::bar_tooltip(pill,hint).clicked(){self.show_page(AI_PAGE);}
         }
         if let Some(x)=layout.x[bar::FOCUS] {
-            crate::island::focus_bar::draw(base,row_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
+            crate::focus::bar::draw(base,row_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
         }
         if tail>0.003 {
             let c=status.faded(tail);
@@ -2778,45 +2771,13 @@ impl App {
         if self.music_restart_at.is_some_and(|at|self.t>=at+1.5){self.music_restart_at=None;}
         if env.today != self.today {
             self.today = env.today.clone();
-            self.water = model::Water::load(&env.today);
-            self.last_drink=None;
-            self.water_ml = self.water.drunk_ml as f32;
-            self.water_ring.snap(self.water.percent() / 100.0);
+            self.reload_water(&env.today);
         }
-        if self.pomo.running && !self.module_on(FOCUS_PAGE) {self.pomo.running=false;}
-        if self.pomo.running {
-            self.pomo.remaining -= elapsed;
-            if self.pomo.remaining <= 0.0 {
-                let next = match self.pomo.phase {
-                    Phase::Focus => {
-                        self.pet.react(PetState::Happy);
-                        Phase::Rest
-                    }
-                    Phase::Rest => Phase::Focus,
-                };
-                self.pomo.phase = next;
-                self.pomo.remaining = self.phase_secs(next);
-                self.pomo.running = false;
-                self.alert("专注计时", format!("该{}了", next.label()), 1, true);
-            }
-        }
-        self.ring_shown.target = (self.pomo.remaining / self.phase_secs(self.pomo.phase)).clamp(0.0, 1.0);
-        self.ring_shown.step(dt);
+        self.tick_focus(dt, elapsed);
         self.reset_spin.step(dt);
         self.todo_pop.step(dt);
-
-        if self.module_on(WATER_PAGE) && self.water.remind && !self.health_pending[HealthReminder::Water as usize] && self.water.percent() < 100.0 && self.remind_window(env) && self.t - self.last_reminder >= self.settings.water_minutes as f64 * 60.0 {
-            self.alert("喝水时间到了", format!("休息一下，喝 {} ml 水吧", self.settings.serving_ml), 2, true);
-        }
-        // 专注阶段不打断，等专注结束（通常正好进入休息）再提醒。
-        let focusing = self.pomo.running && self.pomo.phase == Phase::Focus;
-        if self.module_on(WATER_PAGE) && self.settings.sit_remind && !self.health_pending[HealthReminder::Sit as usize] && !focusing && self.remind_window(env) && self.t >= self.sit_due() {
-            self.alert(SIT_TITLE, "起来走走，休息一下", 2, true);
-        }
-        let now = format!("{} {}", env.today, env.clock.get(..5).unwrap_or("00:00"));
-        let todo_on=self.module_on(TODO_PAGE);
-        let due: Vec<_> = self.todos.items.iter().enumerate().filter(|(_, item)| todo_on && item.reminder_due(&now)).map(|(i,item)| (i,item.text.clone())).collect();
-        for (i,text) in due { self.todos.items[i].mark_reminded(&now); self.todos.save(); self.alert("待办到时间了", text, 4, true); }
+        self.tick_health(env, dt);
+        self.todo_reminders(env);
         // v0.5.5 会议提醒：.ics 里的开始时间，默认提前 15 分钟（可设 5/15/30）。
         // v0.5.6 起日历（CalDAV）事件走同一套：同一场会（UID + DTSTART）只提醒一次，
         // 邮件和日历两条来源撞上了也只弹一次。
@@ -2855,17 +2816,6 @@ impl App {
             self.mail.fired.insert(key);
             self.meeting_alert(meeting, source, page);
         }
-        self.water_ring.target = self.water.percent() / 100.0;
-        self.water_ring.step(dt);
-        self.water_ml = anim::approach(self.water_ml, self.water.drunk_ml as f32, 9.0, dt);
-        self.water_view_t.target = self.water_view as f32;
-        self.water_view_t.step(dt);
-        self.sit_view_t.target = if self.sit_mode { 1.0 } else { 0.0 };
-        self.sit_view_t.step(dt);
-        self.remind_t.target = if self.water.remind { 1.0 } else { 0.0 };
-        self.remind_t.step(dt);
-        self.sit_t.target = if self.settings.sit_remind { 1.0 } else { 0.0 };
-        self.sit_t.step(dt);
         // 剪贴板记录开关：关闭时同时清掉未固定的记录。
         if self.clipboard.is_enabled() != self.clipboard_active() {
             self.clipboard.set_enabled(self.clipboard_active());
@@ -3044,43 +2994,6 @@ impl App {
         self.ly = LyricsState { key: format!("{title}|{artist}|{duration:.0}"), lyrics: Some(l), ..Default::default() };
     }
 
-    pub fn on_drop(&mut self, files: Vec<PathBuf>) {
-        if !self.settings.visible_pages[3] || files.is_empty() { return; }
-        self.drag_hot = false;
-        self.drag_saved = None;
-        if self.page != 3 {
-            self.go(3, 1.0);
-        }
-        let (mut added,mut duplicate,mut failed) = (0,0,0);
-        for p in files {
-            if !p.exists() {failed+=1;continue;}
-            if self.shelf.items.contains(&p) {
-                duplicate+=1;
-                continue;
-            }
-            if self.shelf.add(&p).is_ok() {
-                self.shelf_born.insert(p.clone(), self.t);
-                added += 1;
-            }else{failed+=1;}
-        }
-        let message=if added==0 && failed==0 {
-            if duplicate==1{"该文件已在置物架中".into()}else{"这些文件已在置物架中".into()}
-        }else if added==0 && duplicate==0 {"文件不存在或无法访问".into()}
-        else {
-            let mut parts=Vec::new();
-            if added>0{parts.push(format!("已添加 {added} 个文件"));}
-            if duplicate>0{parts.push(format!("{duplicate} 个已存在"));}
-            if failed>0{parts.push(format!("{failed} 个无法添加"));}
-            parts.join("，")
-        };
-        self.say(message);
-        if added>0 {
-            self.shelf_badge_until=self.t+crate::island::page_badges::HOLD;
-            self.pet.react(PetState::Happy);
-            self.shelf_first = self.shelf.items.len().saturating_sub(5);
-        }
-    }
-
     /// 待办输入框：真正的 egui 文本框，放在待办卡片顶部那一行。
     fn input_field(&mut self, ui: &mut egui::Ui, origin: Pos2, cmds: &mut Vec<Cmd>) {
         let rect = Rect::from_min_size(origin + Vec2::new(222.0, 37.0), Vec2::new(142.0, 18.0));
@@ -3118,7 +3031,7 @@ impl App {
                 }
             } else if !text.is_empty() {
                 self.todo_first = 0;
-                self.todos.items.insert(0, model::TodoItem::new(text));
+                self.todos.items.insert(0, crate::todo::TodoItem::new(text));
                 self.todos.save();
                 self.todo_pop.vel += 6.0;
                 added=true;

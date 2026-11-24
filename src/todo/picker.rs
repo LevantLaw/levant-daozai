@@ -1,4 +1,4 @@
-//! 岛内右侧的日期、小时和分钟滚轮。
+//! 待办提醒的日期、小时和分钟滚轮。
 use chrono::{Datelike,Duration,Local,NaiveDate,NaiveDateTime,Timelike};
 use eframe::egui::{self,Color32};
 use crate::visuals::paint::{capsule,Card,H};

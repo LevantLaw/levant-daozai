@@ -423,7 +423,7 @@ fn focus_settings_are_inside_focus_page(){
 #[test]
 fn todo_clock_button_sets_a_reminder_without_completing_the_task() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.todos.items=vec![crate::model::TodoItem{text:"已有任务".into(),done_on:None,due:None,reminded:false,..Default::default()}];
+    h.app.todos.items=vec![crate::todo::TodoItem{text:"已有任务".into(),done_on:None,due:None,reminded:false,..Default::default()}];
     h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);h.click(H::local(343.0,46.0));
     assert!(h.app.task_dialog.is_some(),"每项待办应有可见的提醒入口");
     assert!(h.app.todos.items[0].done_on.is_none(),"时钟入口不能同时勾选任务");
@@ -435,7 +435,7 @@ fn todo_clock_button_sets_a_reminder_without_completing_the_task() {
 fn reminder_wheels_support_clicks_and_dragging(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let day=chrono::Local::now().date_naive()+chrono::Duration::days(2);
-    h.app.todos.items=vec![crate::model::TodoItem{text:"确认方案".into(),due:Some(format!("{day} 10:30")),done_on:None,reminded:false,..Default::default()}];
+    h.app.todos.items=vec![crate::todo::TodoItem{text:"确认方案".into(),due:Some(format!("{day} 10:30")),done_on:None,reminded:false,..Default::default()}];
     h.app.open_task_reminder(0);h.hover(H::local(300.0,60.0),1.0);
     h.click(H::local(346.0,96.0));h.click(H::local(290.0,58.0));
     let start=H::local(235.0,77.0);h.cursor=Some(start);
@@ -1075,8 +1075,8 @@ fn skin_gallery_pages(){
         for page in 0..9usize {
             let mut h=H::new();h.app.settings.skin=skin;h.app.settings.island_shape=crate::model::IslandShape::Pill;
             h.quota_accounts(2);
-            h.app.todos.items.push(crate::model::TodoItem{text:"整理岛仔皮肤反馈".into(),done_on:None,due:Some("2026-11-05 10:00".into()),reminded:false,..Default::default()});
-            h.app.todos.items.push(crate::model::TodoItem{text:"已完成的事项".into(),done_on:Some("2026-11-04".into()),due:None,reminded:false,..Default::default()});
+            h.app.todos.items.push(crate::todo::TodoItem{text:"整理岛仔皮肤反馈".into(),done_on:None,due:Some("2026-11-05 10:00".into()),reminded:false,..Default::default()});
+            h.app.todos.items.push(crate::todo::TodoItem{text:"已完成的事项".into(),done_on:Some("2026-11-04".into()),due:None,reminded:false,..Default::default()});
             h.media=crate::music::NowPlaying{title:"Paper Boats".into(),artist:"The Lanterns".into(),position:64.0,duration:201.0,playing:true,..Default::default()};
             let (w,hgt)=((crate::island::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize);
             let mut raster=crate::preview_raster::Raster::new(w,hgt);
@@ -1294,7 +1294,7 @@ fn closed_modules_stop_their_reminders_and_timers(){
         h.app.pomo.running=true;h.app.pomo.remaining=0.5;
         for page in [FOCUS_PAGE,TODO_PAGE,WATER_PAGE] {h.app.set_page_visible(page,open);}
         h.app.water.remind=true;h.app.water.drunk_ml=0;h.app.last_reminder=h.t-1e6;
-        h.app.todos.items.push(crate::model::TodoItem{text:"交周报".into(),due:Some("2026-10-28 09:40".into()),..Default::default()});
+        h.app.todos.items.push(crate::todo::TodoItem{text:"交周报".into(),due:Some("2026-10-28 09:40".into()),..Default::default()});
         if !open {assert!(!h.app.pomo.running,"关闭专注模块时立即停止计时");h.app.pomo.running=true;}
         for _ in 0..60 {h.frame(vec![]);}
         assert_eq!(raised(&h,"喝水时间到了"),open,"饮水模块开启={open}");
