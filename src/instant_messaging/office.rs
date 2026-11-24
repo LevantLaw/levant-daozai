@@ -1,6 +1,6 @@
 //! 办公客户端只监听任务栏事件；唤起时仅处理已确认的原窗口。
 use super::{Messenger,OpenError,Target,Unread};
-use super::windows::*;
+use super::client::*;
 use windows::{core::Owned,Win32::{Foundation::{BOOL,HWND,LPARAM},System::Threading::{OpenProcess,PROCESS_QUERY_LIMITED_INFORMATION},UI::WindowsAndMessaging::*}};
 
 pub(crate) const WECOM:NativeAdapter=NativeAdapter{
@@ -17,7 +17,7 @@ pub(crate) const DINGTALK:NativeAdapter=NativeAdapter{
 };
 fn paths(client:Messenger)->Vec<String>{client.adapter().process_names.iter().map(|name|format!("*{}",name.to_ascii_lowercase())).collect()}
 fn start(client:Messenger,ctx:eframe::egui::Context)->Result<Box<dyn TaskbarSource>,String>{
-    Ok(Box::new(crate::messenger::wechat::Listener::for_client(client,ctx)?))
+    Ok(Box::new(crate::instant_messaging::wechat::Listener::for_client(client,ctx)?))
 }
 fn main_frame(client:Messenger,class:&str,style:u32,extended:u32)->bool{
     if style&WS_CHILD.0!=0 || extended&(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE).0!=0{return false;}
@@ -204,9 +204,9 @@ mod tests{
         let [target]=accounts.as_slice() else{panic!("应只有一个飞书主窗口：{}",accounts.len())};
         let window=HWND(target.unread.window as *mut _);
         assert!(!IsWindowVisible(window).as_bool(),"请先把飞书关到托盘");
-        crate::messenger::windows::take_wake_steps();
+        crate::instant_messaging::client::take_wake_steps();
         let result=open(target.unread,&paths,true);
-        let steps=crate::messenger::windows::take_wake_steps();
+        let steps=crate::instant_messaging::client::take_wake_steps();
         eprintln!("{steps:?}");
         assert_eq!(result,Ok(()));assert!(IsWindowVisible(window).as_bool());
         assert!(steps.iter().any(|s|s.contains("由客户端自己显示")));

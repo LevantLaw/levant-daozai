@@ -201,7 +201,7 @@ fn kiro_credits_follow_the_ring_on_the_resident_bar(){
         windows:vec![Window{label:"月度额度".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     for _ in 0..60{h.frame(vec![]);}
     assert_eq!(h.app.quota_bar_indices().len(),1,"点数的 Kiro 账号应常驻");
-    let slot=crate::island::bar_layout::quota_slot(0);
+    let slot=crate::island::layout::bar::quota_slot(0);
     let layout=h.app.resident.current();
     let extra=layout.widths[slot]-27.0;
     assert!(extra>10.0,"环右侧要为点数让出位置：{:?}",layout.widths[slot]);
@@ -616,7 +616,7 @@ fn quota_cards_settings_gallery(){
 #[test]
 fn side_dock_stacks_ai_quota_and_opens_the_account(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H);
     let mut h=H::new();h.app.settings.dock=crate::model::Dock::Left;
     let (wb,_)=side_quota_fixture(&mut h);
     let away=Some(Pos2::new(w/2.0,hgt-5.0));
@@ -634,7 +634,7 @@ fn side_dock_stacks_ai_quota_and_opens_the_account(){
     let total=h.app.side_bar_len()-14.0;
     let mut y=top+(h.app.h.pos-total)/2.0;
     for item in h.app.side_items() {
-        let height=match item {crate::island::side_dock::SideItem::Quota(i,hh) if h.app.quota.config.accounts[i].id==wb=>{y+=hh/2.0;break;},crate::island::side_dock::SideItem::Quota(_,hh)=>hh,crate::island::side_dock::SideItem::Clock=>32.0,crate::island::side_dock::SideItem::Weather=>40.0,crate::island::side_dock::SideItem::Battery=>20.0,crate::island::side_dock::SideItem::Music=>18.0,crate::island::side_dock::SideItem::Focus|crate::island::side_dock::SideItem::Bell=>22.0,crate::island::side_dock::SideItem::Agent=>30.0,crate::island::side_dock::SideItem::Badge(_)=>18.0};
+        let height=match item {crate::island::layout::dock::SideItem::Quota(i,hh) if h.app.quota.config.accounts[i].id==wb=>{y+=hh/2.0;break;},crate::island::layout::dock::SideItem::Quota(_,hh)=>hh,crate::island::layout::dock::SideItem::Clock=>32.0,crate::island::layout::dock::SideItem::Weather=>40.0,crate::island::layout::dock::SideItem::Battery=>20.0,crate::island::layout::dock::SideItem::Music=>18.0,crate::island::layout::dock::SideItem::Focus|crate::island::layout::dock::SideItem::Bell=>22.0,crate::island::layout::dock::SideItem::Agent=>30.0,crate::island::layout::dock::SideItem::Badge(_)=>18.0};
         y+=height;
     }
     let click=Pos2::new(18.0,y);
@@ -743,7 +743,7 @@ fn claude_local_only_settings_show_notice_without_manual_reset_controls(){
 
 #[test]
 fn tray_quota_shows_during_bell_and_opens_the_quota_page(){
-    use crate::island::bar_layout::TRAY;
+    use crate::island::layout::bar::TRAY;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.quota_accounts(1);
     for _ in 0..30{h.frame(vec![]);}
@@ -752,7 +752,7 @@ fn tray_quota_shows_during_bell_and_opens_the_quota_page(){
     for _ in 0..20{h.frame(vec![]);}
     assert!(h.app.quota_bar_indices().is_empty(),"有铃铛时行内额度让位");
     assert_eq!(h.app.tray_active(),Some(crate::island::event_tray::Item::Quota));
-    assert!(h.app.resident.current().x[crate::island::bar_layout::QUOTA].is_none(),"额度不在常驻行");
+    assert!(h.app.resident.current().x[crate::island::layout::bar::QUOTA].is_none(),"额度不在常驻行");
     assert!(h.app.resident.current().x[TRAY].is_some(),"额度变化时容器占位");
     let center=*h.quota_centers().first().expect("容器里应画出额度环");
     h.click(Pos2::new(center,15.0));

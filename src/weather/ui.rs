@@ -842,14 +842,14 @@ impl App {
         let ink_w = |t: &str| ctx.fonts(|fonts| fonts.layout_no_wrap(t.to_string(), theme::font(size, W::Bold), theme::WHITE).mesh_bounds.width());
         let ink = match text.strip_prefix('-') { Some(rest) => ink_w("-") + size * 0.07 + ink_w(rest), None => ink_w(&text) }.ceil();
         let chip = PILL_ICON + PILL_GAP + ink + 2.0;
-        Some(chip - crate::island::bar_layout::WEATHER_WIDTH)
+        Some(chip - crate::island::layout::bar::WEATHER_WIDTH)
     }
 
     /// 常驻胶囊的天气徽标：小图标 + 温度；点击进入天气页。
-    pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::island::bar_layout::Layout) {
+    pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::island::layout::bar::Layout) {
         let Some(snapshot) = self.weather_pill().cloned() else { return };
-        let width = layout.widths[crate::island::bar_layout::WEATHER];
-        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::island::bar_layout::WEATHER));
+        let width = layout.widths[crate::island::layout::bar::WEATHER];
+        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::island::layout::bar::WEATHER));
         let tip = format!("{} · {}\n更新于 {} · {}", snapshot.place, snapshot.description(), weather::clock(snapshot.at),self.weather_source.displayed.name());
         // 用 bar_tooltip：常驻胶囊上的提示不能用 on_hover_text，悬浮层会盖住指针、抢走点击。
         if crate::quota::ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
@@ -885,9 +885,9 @@ impl App {
     }
 
     /// 只画不响应命中，设置页的常驻预览与事件容器复用。
-    pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::island::bar_layout::Layout, snapshot: &crate::weather::Snapshot) {
-        let width = layout.widths[crate::island::bar_layout::WEATHER];
-        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::island::bar_layout::WEATHER));
+    pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::island::layout::bar::Layout, snapshot: &crate::weather::Snapshot) {
+        let width = layout.widths[crate::island::layout::bar::WEATHER];
+        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::island::layout::bar::WEATHER));
     }
 
     /// 按给定宽度和透明度画天气徽标；徽标在宽度内居中。

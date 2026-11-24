@@ -21,7 +21,7 @@ impl Picker {
         let (tx,rx)=mpsc::channel();self.rx=Some(rx);self.error.clear();self.selected=None;
         let ctx=ctx.clone();
         std::thread::spawn(move||{
-            #[cfg(windows)] let result=crate::os::system::avoidance_windows();
+            #[cfg(windows)] let result=crate::os::foreground::avoidance_windows();
             #[cfg(not(windows))] let result=Err("应用选择仅支持 Windows".into());
             let _=tx.send(result);ctx.request_repaint();
         });

@@ -96,9 +96,9 @@ fn weather_side_bar_shows_a_clickable_temperature_on_both_edges(){
         assert_eq!(h.app.page(),8,"{dock:?} 点击侧边温度应进入天气页");
         assert!(!h.app.weather.solar_open);
         h.app.settings.visible_pages[8]=false;
-        assert!(!h.app.side_items().contains(&crate::island::side_dock::SideItem::Weather));
+        assert!(!h.app.side_items().contains(&crate::island::layout::dock::SideItem::Weather));
         h.app.settings.visible_pages[8]=true;h.app.set_minimal(true);
-        assert!(!h.app.side_items().contains(&crate::island::side_dock::SideItem::Weather));
+        assert!(!h.app.side_items().contains(&crate::island::layout::dock::SideItem::Weather));
     }
 }
 
@@ -163,7 +163,7 @@ fn weather_foundation_preview(){
             h.app.weather.picker_open=true;
         }
         if dock==Dock::Top {h.app.weather.solar_open=solar;h.app.show_page(8);}
-        let (w,hgt)=if dock==Dock::Top {(crate::island::CANVAS_W,WIN_H)}else{(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)};
+        let (w,hgt)=if dock==Dock::Top {(crate::island::CANVAS_W,WIN_H)}else{(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H)};
         let mut raster=feature_raster_sized(w,hgt);
         let frames=90;
         for frame in 0..frames {
@@ -357,7 +357,7 @@ fn weather_refresh_keeps_music_and_settings_shortcuts_separate(){
 
 #[test]
 fn weather_resident_settings_preserve_old_orders_and_the_status_switch(){
-    use crate::island::bar_layout::{AGENT,BATTERY,CLOCK,FOCUS,MUSIC,PET,QUOTA,WEATHER};
+    use crate::island::layout::bar::{AGENT,BATTERY,CLOCK,FOCUS,MUSIC,PET,QUOTA,WEATHER};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let path=crate::model::config_dir().join("settings.txt");std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path,"resident_order=7,6,2,0,9,1\nshow_weather=0\n").unwrap();
@@ -398,7 +398,7 @@ fn weather_status_switch_controls_the_badge_and_keeps_the_page_available(){
         for expected in [false,true] {
             for pressed in [true,false] {draw(&mut h,vec![egui::Event::PointerMoved(point),egui::Event::PointerButton{pos:point,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()}]);}
             assert_eq!(h.app.weather_pill().is_some(),expected);
-            assert_eq!(h.app.side_items().contains(&crate::island::side_dock::SideItem::Weather),expected);
+            assert_eq!(h.app.side_items().contains(&crate::island::layout::dock::SideItem::Weather),expected);
             assert!(h.app.module_on(8),"关闭状态组件后天气页仍可使用");
             h.app.settings=crate::model::Settings::load();assert_eq!(h.app.weather_pill().is_some(),expected,"天气开关应自动保存");
         }
@@ -447,8 +447,8 @@ fn weather_chip_sits_after_the_clock_on_the_resident_bar(){
     h.app.weather.snapshot=Some(crate::weather::Snapshot{condition:None,attributions:vec![],place:"杭州".into(),position:None,auto:false,temp:9.0,feels:Some(5.6),humidity:Some(58),wind:Some(13.9),code:51,day:true,high:Some(15.2),low:Some(6.8),sunrise:Some("06:52".into()),sunset:Some("17:21".into()),sun_times:None,days:vec![],at:chrono::Utc::now().timestamp()});
     for _ in 0..60{h.frame(vec![]);}
     let layout=h.app.resident.current();
-    let clock=layout.x[crate::island::bar_layout::CLOCK].expect("时钟应常驻");
-    let chip=layout.x[crate::island::bar_layout::WEATHER].expect("有快照时天气徽标应紧跟时钟占位");
+    let clock=layout.x[crate::island::layout::bar::CLOCK].expect("时钟应常驻");
+    let chip=layout.x[crate::island::layout::bar::WEATHER].expect("有快照时天气徽标应紧跟时钟占位");
     assert!(chip>clock+22.0+6.9,"天气应在时钟右侧：时钟 {clock}，天气 {chip}");
     let clock_text=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()=="09:41"=>Some(t.visual_bounding_rect()),_=>None}).expect("常驻栏应有时钟");
     let temp=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()=="9°"=>Some(t.visual_bounding_rect()),_=>None}).expect("常驻栏应在时间后显示当前温度");
@@ -463,19 +463,19 @@ fn weather_chip_hides_without_data_or_when_the_page_is_hidden(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_weather=false;
     for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.resident.current().x[crate::island::bar_layout::WEATHER].is_none(),"没有快照时不占位");
+    assert!(h.app.resident.current().x[crate::island::layout::bar::WEATHER].is_none(),"没有快照时不占位");
     h.app.weather.snapshot=Some(crate::weather::Snapshot{condition:None,attributions:vec![],place:"杭州".into(),position:None,auto:false,temp:9.0,feels:None,humidity:None,wind:None,code:0,day:true,high:None,low:None,sunrise:None,sunset:None,sun_times:None,days:vec![],at:chrono::Utc::now().timestamp()});
     for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.resident.current().x[crate::island::bar_layout::WEATHER].is_some(),"有快照时占位");
+    assert!(h.app.resident.current().x[crate::island::layout::bar::WEATHER].is_some(),"有快照时占位");
     h.app.settings.visible_pages[8]=false;
     for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.resident.current().x[crate::island::bar_layout::WEATHER].is_none(),"天气页被隐藏后不占位");
+    assert!(h.app.resident.current().x[crate::island::layout::bar::WEATHER].is_none(),"天气页被隐藏后不占位");
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="9°")),"隐藏后不再画温度");
 }
 
 #[test]
 fn tray_weather_appears_on_snapshot_change_and_hides_after_hold(){
-    use crate::island::bar_layout::TRAY;
+    use crate::island::layout::bar::TRAY;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;
     for _ in 0..30{h.frame(vec![]);}
@@ -556,7 +556,7 @@ fn weather_icon_atlas_preview(){
     for (name,palette,ppp) in [("weather-icons-dark",None,2.0f32),("weather-icons-cream",Some(crate::visuals::skin_paint::CREAM),2.0),("weather-icons-glass-light",Some(crate::visuals::skin_paint::GLASS_LIGHT),2.0),("weather-icons-dark-1x",None,1.0),("weather-icons-dark-125",None,1.25),("weather-icons-dark-150",None,1.5)] {
         let (pw,ph)=((924.0*ppp) as usize,(700.0*ppp) as usize);
         let mut h=H::new();h.app.settings.pet=false;
-        let mut layout=crate::island::bar_layout::Layout::new(false,0,false,false,false,false,true,false);layout.widths[crate::island::bar_layout::WEATHER]=50.0;
+        let mut layout=crate::island::layout::bar::Layout::new(false,0,false,false,false,false,true,false);layout.widths[crate::island::layout::bar::WEATHER]=50.0;
         let mut raster=crate::preview_raster::Raster::new(pw,ph);
         for frame in 0..4 {
             let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(924.0,700.0))),time:Some(frame as f64),

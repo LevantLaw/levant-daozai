@@ -38,7 +38,7 @@ pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::os
                 current.input=crate::os::input::State::read();input_at=crate::support::poll_clock::PollClock::now();
             }
             if sampled.ready(std::time::Duration::from_millis(500)){
-                current.system=Snapshot::read();current.fullscreen=crate::os::system::fullscreen();sampled=crate::support::poll_clock::PollClock::now();
+                current.system=Snapshot::read();current.fullscreen=crate::os::foreground::fullscreen();sampled=crate::support::poll_clock::PollClock::now();
             }
             if delivered.as_ref()!=Some(&current) {
                 match tx.try_send(current.clone()) {

@@ -465,7 +465,7 @@ fn shelf_remove_icon_stays_centered_on_hover_and_preserves_the_file(){
 #[test]
 fn side_dock_file_drag_opens_the_shelf_and_drop_saves_it(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H);
     let path=crate::model::config_dir().join("侧边拖入.txt");std::fs::create_dir_all(path.parent().unwrap()).unwrap();std::fs::write(&path,"x").unwrap();
     for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
         let mut h=H::new();h.app.settings.dock=dock;

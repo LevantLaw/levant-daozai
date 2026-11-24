@@ -12,7 +12,7 @@ fn due() -> H {
 }
 
 fn health_badge(h:&H)->Rect {
-    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::island::bar_layout::HEALTH))))
+    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::island::layout::bar::HEALTH))))
         .unwrap_or_else(||panic!("缺少健康常驻入口")).rect
 }
 
@@ -115,7 +115,7 @@ fn health_side_docks_open_page_and_confirm_independently(){
         let mut h=due();h.app.settings.dock=dock;
         // 换停靠方式后胶囊要重新收拢，徽标才有可点击区域。
         for _ in 0..60{h.frame(vec![]);}
-        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::island::bar_layout::HEALTH))))
+        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::island::layout::bar::HEALTH))))
             .unwrap_or_else(||panic!("缺少侧栏健康入口")).rect;
         h.click(rect.center());
         assert_eq!(h.app.page,crate::island::WATER_PAGE);
@@ -239,7 +239,7 @@ fn health_reminder_gallery(){
     for dock in [crate::model::Dock::Top,crate::model::Dock::Left,crate::model::Dock::Right]{
         let mut h=due();h.app.settings.dock=dock;h.app.settings.pet=false;
         let side=dock.is_side();
-        let (w,height)=if side{(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)}else{(crate::island::CANVAS_W,WIN_H)};
+        let (w,height)=if side{(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H)}else{(crate::island::CANVAS_W,WIN_H)};
         let mut raster=feature_raster_sized(w,height);
         let away=Some(Pos2::new(if side{w/2.0}else{WIN_W/2.0},height-6.0));
         let near=if dock==crate::model::Dock::Left{Pos2::new(8.0,height/2.0)}else if dock==crate::model::Dock::Right{Pos2::new(w-8.0,height/2.0)}else{Pos2::new(WIN_W/2.0,12.0)};

@@ -483,7 +483,7 @@ fn collapsed_focus_animates_without_music_or_mascot_and_stops_in_minimal_mode(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.pet=false;h.app.settings.tray_focus=false;h.app.pomo.running=true;
     for _ in 0..120 {h.frame(vec![]);}
-    if crate::island::bar_layout::animations_enabled(){assert!(h.animating,"关闭吉祥物后，常驻番茄的水面仍应轻微波动");}
+    if crate::island::layout::bar::animations_enabled(){assert!(h.animating,"关闭吉祥物后，常驻番茄的水面仍应轻微波动");}
     h.app.set_minimal(true);for _ in 0..120 {h.frame(vec![]);}
     assert!(!h.animating,"极简细线隐藏计时图标后，应停止其动画刷新");
 }
@@ -707,7 +707,7 @@ fn auto_minimal_music_stops_hidden_playback_animations(){
 
 #[test]
 fn tray_music_and_battery_leave_the_resident_row_and_show_on_change(){
-    use crate::island::bar_layout::{BATTERY,MUSIC,TRAY};
+    use crate::island::layout::bar::{BATTERY,MUSIC,TRAY};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_music=true;h.app.settings.tray_battery=true;
     h.power=(Some(80),false);

@@ -121,9 +121,9 @@ pub(crate) fn window_pid(hwnd:HWND)->u32{
 pub(crate) unsafe fn foreground_main_pid(source:Messenger,paths:&[String])->Option<u32>{
     let hwnd=GetForegroundWindow();
     if IsIconic(hwnd).as_bool() || !visible_main_frame(hwnd,source) || !matches(hwnd,paths){return None;}
-    if Messenger::OFFICE.contains(&source) && !super::desktop::main_window(hwnd,source){return None;}
+    if Messenger::OFFICE.contains(&source) && !super::office::main_window(hwnd,source){return None;}
     let pid=window_pid(hwnd);
-    Some(if source==Messenger::Wechat{crate::messenger::wechat::account_pid(pid,paths)}else{pid})
+    Some(if source==Messenger::Wechat{crate::instant_messaging::wechat::account_pid(pid,paths)}else{pid})
 }
 
 pub(crate) unsafe fn visible_main_frame(hwnd:HWND,source:Messenger)->bool{
@@ -610,7 +610,7 @@ mod tests {
         RegisterClassW(&WNDCLASSW{lpfnWndProc:Some(proc),hInstance:instance,lpszClassName:w!("Chrome_WidgetWin_1"),..Default::default()});
         let window=CreateWindowExW(WINDOW_EX_STYLE(0),w!("Chrome_WidgetWin_1"),w!(""),WS_OVERLAPPEDWINDOW,0,0,400,500,None,None,instance,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
-        let found=crate::messenger::qq::accounts(&paths).unwrap();let mut monitor=Runtime::default();
+        let found=crate::instant_messaging::qq::accounts(&paths).unwrap();let mut monitor=Runtime::default();
         let target=found[0];let tracked=monitor.track(target).is_ok();
         let reused=monitor.track(Target{started:target.started+1,..target}).is_ok();
         let restarted=open_qq_target(Target{started:target.started+1,..target});

@@ -7,7 +7,7 @@ fn ai_stale_hides_without_expanding(){
     h.app.settings.notifications=true;
     h.app.agent.config.enabled=true;
     h.app.settings.visible_pages[crate::island::AI_PAGE]=true;
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_event(port,&token,"SessionStart",serde_json::json!({"session_id":"ui-stale","cwd":"E:\\demo\\project"}));
     post_agent_event(port,&token,"UserPromptSubmit",serde_json::json!({"session_id":"ui-stale","prompt":"wait"}));
@@ -25,7 +25,7 @@ fn ai_stale_hides_without_expanding(){
 #[test]
 fn ai_question_keeps_detail_open_until_answered(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-q1");
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
@@ -47,7 +47,7 @@ fn ai_question_keeps_detail_open_until_answered(){
 #[test]
 fn ai_question_inline_input_enter_keeps_text_and_does_not_submit(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-free");
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
@@ -75,7 +75,7 @@ fn ai_question_inline_input_enter_keeps_text_and_does_not_submit(){
 fn ai_detail_closes_when_pending_disappears(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.agent.config.notify.done=false;
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-gone");
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
@@ -90,7 +90,7 @@ fn ai_detail_closes_when_pending_disappears(){
 #[test]
 fn ai_approval_keeps_detail_open_until_decided(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_permission_hook(port,&token,"ui-p1");
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
@@ -112,7 +112,7 @@ fn ai_approval_keeps_detail_open_until_decided(){
 #[test]
 fn ai_waiting_expands_directly(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-q2");
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
@@ -125,7 +125,7 @@ fn ai_waiting_expands_directly(){
 #[test]
 fn ai_waiting_expansion_waits_for_todo_editing(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     h.app.adding=true;h.app.buf="草稿".into();
     post_agent_hook(port,&token,"ui-edit");
@@ -140,7 +140,7 @@ fn ai_waiting_expansion_waits_for_todo_editing(){
 #[test]
 fn ai_second_waiting_event_opens_after_the_first_is_answered(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-a");
     post_agent_hook(port,&token,"ui-b");
@@ -186,7 +186,7 @@ fn collapsed_agent_light_opens_ai_page(){
 #[test]
 fn side_agent_light_opens_ai_page(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H);
     let mut h=H::new();h.app.settings.dock=crate::model::Dock::Left;
     let away=Some(Pos2::new(w/2.0,hgt-5.0));
     for _ in 0..60 {side_frame(&mut h,away);}

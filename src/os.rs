@@ -11,12 +11,14 @@ pub mod backdrop;
 #[cfg(windows)]
 pub mod composition;
 #[cfg(windows)]
+pub mod files;
+#[cfg(windows)]
+pub mod foreground;
+#[cfg(windows)]
 pub mod layered;
 #[cfg(windows)]
 pub mod native;
 #[cfg(windows)]
 pub mod status;
-#[cfg(windows)]
-pub mod system;
 #[cfg(windows)]
 pub mod tray;

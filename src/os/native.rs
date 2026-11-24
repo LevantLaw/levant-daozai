@@ -628,7 +628,7 @@ impl Window {
 
     pub fn browser_at_top(&mut self,settings:&crate::model::Settings)->Option<bool> {
         if self.browser_state.1.ready(Duration::from_millis(100)) {
-            self.browser_state=(crate::os::system::browser_at_top(self.hwnd,settings),PollClock::now());
+            self.browser_state=(crate::os::foreground::browser_at_top(self.hwnd,settings),PollClock::now());
         }
         self.browser_state.0
     }

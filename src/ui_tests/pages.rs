@@ -75,8 +75,8 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
     for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
         let mut h=H::new();
         h.app.settings.dock=dock;
-        let x=if dock==crate::model::Dock::Left {1.0}else{crate::island::side_dock::SIDE_W-1.0};
-        let resident=Pos2::new(x,crate::island::side_dock::SIDE_H/2.0);
+        let x=if dock==crate::model::Dock::Left {1.0}else{crate::island::layout::dock::SIDE_W-1.0};
+        let resident=Pos2::new(x,crate::island::layout::dock::SIDE_H/2.0);
         for _ in 0..60 {side_frame(&mut h,Some(resident));}
         assert!(h.app.open);
         for sign in [-1.0,1.0] {

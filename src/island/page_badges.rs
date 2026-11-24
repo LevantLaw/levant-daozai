@@ -1,6 +1,6 @@
 //! 页面徽标：邮箱未读、健康提醒、待办到期、置物架拖入、日程提醒、勿扰模式。
 use crate::island::{App, CALENDAR_PAGE, MAIL_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE};
-use crate::island::bar_layout::{self, Layout};
+use crate::island::layout::bar::{self, Layout};
 use crate::visuals::paint::{self, Card};
 use crate::visuals::theme;
 use eframe::egui::Color32;
@@ -12,7 +12,7 @@ const ICON_W: f32 = 20.0;
 
 /// 徽标在岛上的自然宽度；事件容器按它计算占位宽度。
 pub(crate) fn badge_width(slot: usize) -> f32 {
-    match slot { bar_layout::MAIL => MAIL_W, bar_layout::TODO => TODO_W, _ => ICON_W }
+    match slot { bar::MAIL => MAIL_W, bar::TODO => TODO_W, _ => ICON_W }
 }
 
 #[derive(Clone, Copy)]
@@ -47,40 +47,40 @@ impl App {
     pub(crate) fn page_badges_all(&self) -> Vec<Badge> {
         let mut badges = Vec::new();
         if self.settings.show_mail && self.module_on(MAIL_PAGE) && self.mail_unread_count() > 0 {
-            badges.push(Badge { slot: bar_layout::MAIL, page: Some(MAIL_PAGE), width: MAIL_W });
+            badges.push(Badge { slot: bar::MAIL, page: Some(MAIL_PAGE), width: MAIL_W });
         }
         if self.settings.show_health && self.module_on(WATER_PAGE) && !self.health_badges().is_empty() {
-            badges.push(Badge { slot: bar_layout::HEALTH, page: Some(WATER_PAGE), width: ICON_W });
+            badges.push(Badge { slot: bar::HEALTH, page: Some(WATER_PAGE), width: ICON_W });
         }
         if self.settings.show_todo && self.module_on(TODO_PAGE) && self.todo_due_count() > 0 {
-            badges.push(Badge { slot: bar_layout::TODO, page: Some(TODO_PAGE), width: TODO_W });
+            badges.push(Badge { slot: bar::TODO, page: Some(TODO_PAGE), width: TODO_W });
         }
         if self.settings.show_shelf && self.module_on(SHELF_PAGE) && self.t < self.shelf_badge_until {
-            badges.push(Badge { slot: bar_layout::SHELF, page: Some(SHELF_PAGE), width: ICON_W });
+            badges.push(Badge { slot: bar::SHELF, page: Some(SHELF_PAGE), width: ICON_W });
         }
         if self.settings.show_calendar && self.module_on(CALENDAR_PAGE) && self.t < self.calendar_badge_until {
-            badges.push(Badge { slot: bar_layout::CALENDAR, page: Some(CALENDAR_PAGE), width: ICON_W });
+            badges.push(Badge { slot: bar::CALENDAR, page: Some(CALENDAR_PAGE), width: ICON_W });
         }
         if self.settings.show_dnd && self.dnd.active {
-            badges.push(Badge { slot: bar_layout::DND, page: None, width: ICON_W });
+            badges.push(Badge { slot: bar::DND, page: None, width: ICON_W });
         }
         badges
     }
 
     fn badge_in_tray(&self, slot: usize) -> bool {
         match slot {
-            bar_layout::MAIL => self.settings.tray_mail,
-            bar_layout::HEALTH => self.settings.tray_health,
-            bar_layout::TODO => self.settings.tray_todo,
-            bar_layout::SHELF => self.settings.tray_shelf,
-            bar_layout::CALENDAR => self.settings.tray_calendar,
+            bar::MAIL => self.settings.tray_mail,
+            bar::HEALTH => self.settings.tray_health,
+            bar::TODO => self.settings.tray_todo,
+            bar::SHELF => self.settings.tray_shelf,
+            bar::CALENDAR => self.settings.tray_calendar,
             _ => false,
         }
     }
 
     /// 岛体预览里的徽标：页面图标已在设置侧栏绘制，不重复画一套；只剩没有页面入口的勿扰月亮。
     pub(crate) fn preview_badges(&self) -> Vec<Badge> {
-        if self.settings.show_dnd { vec![Badge { slot: bar_layout::DND, page: None, width: ICON_W }] } else { Vec::new() }
+        if self.settings.show_dnd { vec![Badge { slot: bar::DND, page: None, width: ICON_W }] } else { Vec::new() }
     }
 
     pub(crate) fn badge_active(&self, slot: usize) -> bool {
@@ -89,12 +89,12 @@ impl App {
 
     pub(crate) fn badge_label(&self, slot: usize) -> String {
         match slot {
-            bar_layout::MAIL => format!("邮箱 · {} 封未读", self.mail_unread_count()),
-            bar_layout::HEALTH => format!("健康提醒 · {}", self.health_badges().iter().map(|kind| kind.label()).collect::<Vec<_>>().join("、")),
-            bar_layout::TODO => format!("待办 · {} 项已到期", self.todo_due_count()),
-            bar_layout::SHELF => "置物架 · 刚收到文件".into(),
-            bar_layout::CALENDAR => "日程 · 即将开始".into(),
-            bar_layout::DND => "勿扰模式 · 已开启，点击关闭".into(),
+            bar::MAIL => format!("邮箱 · {} 封未读", self.mail_unread_count()),
+            bar::HEALTH => format!("健康提醒 · {}", self.health_badges().iter().map(|kind| kind.label()).collect::<Vec<_>>().join("、")),
+            bar::TODO => format!("待办 · {} 项已到期", self.todo_due_count()),
+            bar::SHELF => "置物架 · 刚收到文件".into(),
+            bar::CALENDAR => "日程 · 即将开始".into(),
+            bar::DND => "勿扰模式 · 已开启，点击关闭".into(),
             _ => String::new(),
         }
     }
@@ -118,23 +118,23 @@ impl App {
     /// 徽标图标；邮箱和待办在图标右侧带数量。
     pub(crate) fn paint_badge(&self, c: &Card, slot: usize, x: f32, color: Color32) {
         match slot {
-            bar_layout::MAIL => {
-                paint::envelope(c, x - 5.0, 15.0, bar_layout::GLYPH, color);
+            bar::MAIL => {
+                paint::envelope(c, x - 5.0, 15.0, bar::GLYPH, color);
                 c.centered_text(x + 7.0, 15.0, &self.mail_unread_count().to_string(), 9.5, crate::visuals::theme::W::Semibold, color, crate::visuals::paint::H::Center);
             }
-            bar_layout::HEALTH => {
+            bar::HEALTH => {
                 if let Some(kind) = self.health_badges().first() { kind.icon(c, x, 15.0, 0.68); }
-                else { crate::visuals::paint::droplet(c, x, 15.0, bar_layout::GLYPH, color); }
+                else { crate::visuals::paint::droplet(c, x, 15.0, bar::GLYPH, color); }
             }
-            bar_layout::TODO => {
-                paint::checklist(c, x - 5.0, 15.0, bar_layout::GLYPH, color, Color32::TRANSPARENT);
+            bar::TODO => {
+                paint::checklist(c, x - 5.0, 15.0, bar::GLYPH, color, Color32::TRANSPARENT);
                 c.centered_text(x + 7.0, 15.0, &self.todo_due_count().to_string(), 9.5, crate::visuals::theme::W::Semibold, color, crate::visuals::paint::H::Center);
             }
             // 托盘前唇和日历顶部挂钩让墨迹上下不对称，按视觉中线微调回 15 点。
-            bar_layout::SHELF => paint::tray(c, x, 14.2, bar_layout::GLYPH, 0.0, color, theme::GRAY),
-            bar_layout::CALENDAR => paint::calendar(c, x, 15.5, bar_layout::GLYPH, color),
+            bar::SHELF => paint::tray(c, x, 14.2, bar::GLYPH, 0.0, color, theme::GRAY),
+            bar::CALENDAR => paint::calendar(c, x, 15.5, bar::GLYPH, color),
             // 月亮外圆比同尺寸图标大，按统一图标尺寸折算。
-            bar_layout::DND => paint::moon(c, x, 15.0, bar_layout::MOON_SIZE, color),
+            bar::DND => paint::moon(c, x, 15.0, bar::MOON_SIZE, color),
             _ => {}
         }
     }

@@ -44,7 +44,7 @@ impl Alert {
     pub(crate) fn messenger(&self)->Option<crate::island::Messenger>{
         match &self.source {
             AlertSource::Messenger(client)=>Some(*client),
-            AlertSource::External(id)=>crate::island::Messenger::from_notification_id(id).filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast),
+            AlertSource::External(id)=>crate::island::Messenger::from_notification_id(id).filter(|client|client.adapter().capture==crate::instant_messaging::Capture::SystemToast),
             _=>None,
         }
     }
@@ -294,7 +294,7 @@ impl App {
         if let Some(index)=self.pending_messengers.iter().position(|u|u.source==source && u.pid==pid){
             if window!=0 && self.pending_messengers[index].window!=window {
                 self.pending_messengers[index].window=window;
-                if source.adapter().capture==crate::messenger::Capture::Taskbar{
+                if source.adapter().capture==crate::instant_messaging::Capture::Taskbar{
                     let unread=self.pending_messengers[index];
                     for alert in self.alerts.iter_mut().chain(self.notice.iter_mut()){
                         if alert.unread.is_some_and(|old|old.source==source && old.pid==pid){alert.unread=Some(unread);}
@@ -316,7 +316,7 @@ impl App {
     }
     pub fn receive_messenger_reminder(&mut self,unread:crate::island::Unread){
         let client=unread.source;
-        if client.adapter().capture!=crate::messenger::Capture::Taskbar || !client.enabled(&self.settings){return;}
+        if client.adapter().capture!=crate::instant_messaging::Capture::Taskbar || !client.enabled(&self.settings){return;}
         let pending=self.pending_messengers.iter().any(|old|old.source==client && old.pid==unread.pid);
         self.mark_messenger(client,unread.pid,unread.window);
         if pending{return;}
@@ -330,15 +330,15 @@ impl App {
     }
     pub fn receive_notification_from(&mut self,app:String,id:String,body:String,unread:Option<crate::island::Unread>){
         if !self.settings.read_notifications || id.is_empty(){return;}
-        if crate::messenger::suppresses_toast(&app,&id,crate::messenger::toast_suppression(&self.settings)){return;}
+        if crate::instant_messaging::suppresses_toast(&app,&id,crate::instant_messaging::toast_suppression(&self.settings)){return;}
         let known=crate::island::Messenger::from_notification_id(&id);
-        let client=known.filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast);
+        let client=known.filter(|client|client.adapter().capture==crate::instant_messaging::Capture::SystemToast);
         if known==Some(crate::island::Messenger::Qq) && !self.settings.qq_notifications {return;}
         // QQ 等即时通讯有独立的驻岛图标；只有非即时通讯的 Windows 通知点亮铃铛。
         if known.is_none() && !self.module_on(crate::island::WINDOWS_PAGE) {return;}
         let id=client.map(|client|client.adapter().notification_id.to_string()).unwrap_or(id);
         // 岛仔自己发出的系统提醒会被通知中心回传；已在历史里的同一内容不再入队，避免重复显示。
-        if crate::messenger::Messenger::from_notification_id(&id).is_none() && self.history.iter().any(|a|format!("{} · {}",a.title,a.body)==body){return;}
+        if crate::instant_messaging::Messenger::from_notification_id(&id).is_none() && self.history.iter().any(|a|format!("{} · {}",a.title,a.body)==body){return;}
         if !self.notification_apps.observe(&id,&app) || !self.settings.notifications{return;}
         let unread=client.map(|client|unread.filter(|u|u.source==client && u.pid!=0).unwrap_or(crate::island::Unread::of(client)));
         if let Some(unread)=unread{self.mark_messenger(unread.source,unread.pid,unread.window);}
@@ -364,21 +364,21 @@ impl App {
         // 只有会保留未确认账号的客户端需要这条「无法打开」说明。
         if !unread.source.adapter().keep_unidentified || !self.pending_messengers.contains(&unread){return;}
         let body=if unread.pid==0{"消息账号暂无法确认"}else{"暂时无法打开对应窗口"};
-        let source=if unread.source.adapter().capture==crate::messenger::Capture::Taskbar{AlertSource::Messenger(unread.source)}else{AlertSource::External(unread.source.adapter().notification_id.into())};
+        let source=if unread.source.adapter().capture==crate::instant_messaging::Capture::Taskbar{AlertSource::Messenger(unread.source)}else{AlertSource::External(unread.source.adapter().notification_id.into())};
         let hold=self.settings.notice_hold_secs;
         self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t});
     }
     pub(crate) fn tick_alerts(&mut self) {
         self.pending_messengers.retain(|u|u.source.enabled(&self.settings)
             && (u.source!=crate::island::Messenger::Qq || self.settings.qq_notifications)
-            && (u.source.adapter().capture!=crate::messenger::Capture::SystemToast
+            && (u.source.adapter().capture!=crate::instant_messaging::Capture::SystemToast
             || self.notification_apps.items.iter().any(|(key,_,on)|key==u.source.adapter().notification_id && *on)));
         let allowed=|a:&Alert|match &a.source {
             AlertSource::Internal=>!self.fullscreen_hidden || a.health().is_none(),
             AlertSource::Messenger(client)=>client.enabled(&self.settings),
             AlertSource::External(id)=>self.settings.read_notifications && self.settings.notifications
-                && (crate::messenger::Messenger::from_notification_id(id)!=Some(crate::island::Messenger::Qq) || self.settings.qq_notifications)
-                && !crate::messenger::suppresses_toast(&a.title,id,crate::messenger::toast_suppression(&self.settings)) && self.notification_apps.items.iter().any(|(key,_,on)|key==id && *on),
+                && (crate::instant_messaging::Messenger::from_notification_id(id)!=Some(crate::island::Messenger::Qq) || self.settings.qq_notifications)
+                && !crate::instant_messaging::suppresses_toast(&a.title,id,crate::instant_messaging::toast_suppression(&self.settings)) && self.notification_apps.items.iter().any(|(key,_,on)|key==id && *on),
         };
         self.alerts.retain(&allowed);
         if self.notice.as_ref().is_some_and(|a|!allowed(a)){self.notice=None;}

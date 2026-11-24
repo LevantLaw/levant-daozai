@@ -737,7 +737,7 @@ impl AgentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::bridge::Incoming;
+    use crate::ai_session::bridge::Incoming;
 
     fn event(agent: AgentId, name: &str, payload: serde_json::Value) -> Incoming {
         Incoming { id: 1, agent, event: name.into(), payload, reply: None, hosts: Vec::new() }

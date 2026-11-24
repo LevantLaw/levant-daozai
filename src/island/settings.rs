@@ -176,11 +176,11 @@ pub(crate) fn settings_danger_button(text:&str)->egui::Button<'static>{
 }
 /// Windows 通知设置里已开启的应用；其他平台只显示已经收到过通知的应用。
 #[cfg(windows)]
-fn enabled_notification_apps()->Vec<(String,String)>{crate::os::system::notification_apps_enabled()}
+fn enabled_notification_apps()->Vec<(String,String)>{crate::windows_toasts::notification_apps_enabled()}
 #[cfg(not(windows))]
 fn enabled_notification_apps()->Vec<(String,String)>{Vec::new()}
 #[cfg(windows)]
-fn notification_app_enabled(id:&str)->bool{crate::os::system::notification_enabled(id)!=Some(false)}
+fn notification_app_enabled(id:&str)->bool{crate::windows_toasts::notification_enabled(id)!=Some(false)}
 #[cfg(not(windows))]
 fn notification_app_enabled(_id:&str)->bool{true}
 /// 带状态胶囊的开关行：胶囊在开关左侧，说明胶囊不可点。
@@ -605,18 +605,7 @@ impl App {
                         ui.add_space(4.0);
                         ui.add_enabled_ui(on,|ui|self.agent_settings(ui));
                     }
-                    SETTINGS_TAB_WINDOWS=>{
-                        let on=self.settings_feature_header(ui,crate::island::WINDOWS_PAGE,"即时通讯以外的系统通知汇总，横幅结束后保留铃铛");
-                        ui.add_space(4.0);
-                        ui.add_enabled_ui(on,|ui|{
-                            settings_card(ui,|ui|{
-                                ui.label(egui::RichText::new(format!("本次运行已记录 {} 条通知",self.windows_notices.len())).size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
-                                settings_action_row(ui,|ui|{
-                                    if ui.add(settings_danger_button("清空记录")).clicked(){self.windows_notices.clear();self.windows_first=0;}
-                                });
-                            });
-                        });
-                    }
+                    SETTINGS_TAB_WINDOWS=>self.windows_settings(ui),
                     12=>{
                         let on=self.settings_feature_header(ui,crate::island::WEATHER_PAGE,"当地天气与七日预报");
                         ui.add_space(4.0);

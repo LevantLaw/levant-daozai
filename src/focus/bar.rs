@@ -87,7 +87,7 @@ pub(crate) fn tea(c:&Card,x:f32,y:f32,fraction:f32,t:f32){
 pub(crate) fn draw(c:&Card,cx:f32,cy:f32,t:f64,pomo:&Pomo,total:f32,compact:bool){
     let width=if compact{LYRIC_WIDTH}else{WIDTH};
     let left=cx-width/2.0;
-    let t=if pomo.running&&crate::island::bar_layout::animations_enabled(){t as f32}else{0.0};
+    let t=if pomo.running&&crate::island::layout::bar::animations_enabled(){t as f32}else{0.0};
     let fraction=(pomo.remaining/total).clamp(0.0,1.0);
     let ink=if pomo.phase==Phase::Focus {
         tomato(c,left+12.0,cy,fraction,t);theme::RED_TOP

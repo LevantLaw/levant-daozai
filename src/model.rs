@@ -443,14 +443,14 @@ impl Settings {
                 "avoid_apps" => s.avoid_apps = serde_json::from_str(&v).unwrap_or_default(),
                 "resident_order" => {
                     let mut order:Vec<usize>=v.split(',').filter_map(|n|n.parse().ok()).collect();
-                    if order.len()==6 && !order.contains(&crate::island::bar_layout::WEATHER) {
-                        if let Some(clock)=order.iter().position(|slot|*slot==crate::island::bar_layout::CLOCK){order.insert(clock+1,crate::island::bar_layout::WEATHER);}
+                    if order.len()==6 && !order.contains(&crate::island::layout::bar::WEATHER) {
+                        if let Some(clock)=order.iter().position(|slot|*slot==crate::island::layout::bar::CLOCK){order.insert(clock+1,crate::island::layout::bar::WEATHER);}
                     }
-                    if order.len()==7 && crate::island::bar_layout::DEFAULT_ORDER[..7].iter().all(|slot|order.contains(slot)) {
+                    if order.len()==7 && crate::island::layout::bar::DEFAULT_ORDER[..7].iter().all(|slot|order.contains(slot)) {
                         // 旧配置里没有 AI 会话槽：接在最后。
-                        order.push(crate::island::bar_layout::AGENT);
+                        order.push(crate::island::layout::bar::AGENT);
                     }
-                    if crate::island::bar_layout::valid_order(&order){s.resident_order=order;}
+                    if crate::island::layout::bar::valid_order(&order){s.resident_order=order;}
                 }
                 "page_order" => {
                     if let Ok(mut order)=v.split(',').map(str::parse::<usize>).collect::<Result<Vec<_>,_>>() {
@@ -486,11 +486,11 @@ impl Settings {
                 "tray_battery" => s.tray_battery = v != "0",
                 "tray_order" => {
                     let mut order:Vec<usize>=v.split(',').filter_map(|n|n.parse().ok()).collect();
-                    if order.len()==9 && crate::island::bar_layout::TRAY_ORDER.iter().filter(|slot|**slot!=crate::island::bar_layout::CALENDAR).all(|slot|order.contains(slot)) {
+                    if order.len()==9 && crate::island::layout::bar::TRAY_ORDER.iter().filter(|slot|**slot!=crate::island::layout::bar::CALENDAR).all(|slot|order.contains(slot)) {
                         // 旧配置里没有日程槽：接在置物架之后。
-                        if let Some(index)=order.iter().position(|slot|*slot==crate::island::bar_layout::SHELF){order.insert(index+1,crate::island::bar_layout::CALENDAR);}
+                        if let Some(index)=order.iter().position(|slot|*slot==crate::island::layout::bar::SHELF){order.insert(index+1,crate::island::layout::bar::CALENDAR);}
                     }
-                    if crate::island::bar_layout::valid_tray_order(&order){s.tray_order=order;}
+                    if crate::island::layout::bar::valid_tray_order(&order){s.tray_order=order;}
                 }
                 "show_mail" => s.show_mail = v != "0",
                 "show_health" => s.show_health = v != "0",

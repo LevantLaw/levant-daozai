@@ -170,7 +170,7 @@ fn microphone_pose(age:f32)->([f32;2],f32) {
 }
 
 fn microphone(c:&Card,cx:f32,y:f32,age:f32){
-    let age=if crate::island::bar_layout::animations_enabled(){age}else{0.0};
+    let age=if crate::island::layout::bar::animations_enabled(){age}else{0.0};
     let (head,angle)=microphone_pose(age);
     let point=|s:f32,v:f32|(cx+head[0]+s*angle.cos()-v*angle.sin(),y+head[1]+s*angle.sin()+v*angle.cos());
     let capsule=|start:f32,end:f32,width:f32,color:Color32|{

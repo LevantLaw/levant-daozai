@@ -56,7 +56,7 @@ mod tests {
         let items=UserNotificationListener::Current().unwrap().GetNotificationsAsync(NotificationKinds::Toast).unwrap().get().unwrap();
         let n=(0..items.Size().unwrap()).filter_map(|i|items.GetAt(i).ok()).find(|n|n.Id().ok()==Some(id)).unwrap();
         let created=n.CreationTime().unwrap().UniversalTime;
-        assert_eq!(super::super::notification_identity(&n,id,created,None),("QQ".into(),"QQ".into()));
+        assert_eq!(crate::windows_toasts::listener::notification_identity(&n,id,created,None),("QQ".into(),"QQ".into()));
         assert_eq!(sender(id,created).as_deref(),Some("QQ"));assert!(sender(id,created+1).is_none());
         drop(n);drop(items);unsafe{RoUninitialize();}
     }

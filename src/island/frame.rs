@@ -183,10 +183,10 @@ impl App {
                         let (agent_max,agent_step,agent_body)=if self.page==AI_PAGE && !self.agent.detail {
                             let count=self.agent.store.visible().len();
                             let rows=self.agent.config.display.rows;
-                            let viewport=crate::agent::ui::agent_card_area(count,rows);
-                            (crate::agent::ui::agent_scroll_max(count,rows),
-                                crate::agent::ui::agent_card_height(crate::agent::ui::agent_visible_rows(count,rows))+crate::agent::ui::AGENT_CARD_GAP,
-                                Rect::from_min_max(Pos2::new(40.0,crate::agent::ui::AGENT_LIST_TOP),Pos2::new(360.0,crate::agent::ui::AGENT_LIST_TOP+viewport)).contains(cursor))
+                            let viewport=crate::ai_session::page::agent_card_area(count,rows);
+                            (crate::ai_session::page::agent_scroll_max(count,rows),
+                                crate::ai_session::page::agent_card_height(crate::ai_session::page::agent_visible_rows(count,rows))+crate::ai_session::page::AGENT_CARD_GAP,
+                                Rect::from_min_max(Pos2::new(40.0,crate::ai_session::page::AGENT_LIST_TOP),Pos2::new(360.0,crate::ai_session::page::AGENT_LIST_TOP+viewport)).contains(cursor))
                         } else {(0.0,0.0,false)};
                         let list=match self.page {
                             CALENDAR_PAGE if calendar_body=>Some((&mut self.calendar.view.first,calendar_max)),
@@ -234,7 +234,7 @@ impl App {
         // ---------- 绘制 ----------
         let (sx, sy) = self.drag_scale();
         // 拿起放大不能超出透明画布，否则两端会被切掉。
-        let (max_w, max_h) = if side {(crate::island::side_dock::SIDE_W, crate::island::side_dock::SIDE_H)} else {(WIN_W, WIN_H)};
+        let (max_w, max_h) = if side {(crate::island::layout::dock::SIDE_W, crate::island::layout::dock::SIDE_H)} else {(WIN_W, WIN_H)};
         let (w, h) = ((self.w.pos * sx).min((max_w - 24.0).max(self.w.pos)), (self.h.pos * sy).min((max_h - 24.0).max(self.h.pos)));
         let panel = self.island_rect(win, w, h);
         let messenger_rect=self.messenger_badge_rect(win,panel);
@@ -251,7 +251,7 @@ impl App {
         let minimal_pill = minimal_strip && pc < 0.02;
         let flare = if minimal_pill || pill { 0.0 } else { lerp(5.0, FLARE, pc) };
         let k = (w / PW).clamp(0.3, 1.1);
-        let thickness = if side { crate::island::side_dock::SIDE_BAR_W } else { BAR_H };
+        let thickness = if side { crate::island::layout::dock::SIDE_BAR_W } else { BAR_H };
         let radius = if minimal_pill { BAR_H_MIN / 2.0 } else if pill { (w.min(h) * 0.5).min(lerp(thickness * 0.5, 26.0, pc)) } else { lerp(12.5, RAD * k.min(1.0), pc) };
         let flare_h = lerp(8.0, FLARE_H, pc);
         let thick = glass::thickness(PH);

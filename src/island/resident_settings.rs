@@ -1,4 +1,4 @@
-use crate::{island::bar_layout::*,island::extras::{setting_row_nested,settings_group_fold},visuals,visuals::paint::{self,Card,H},island::settings_theme::color as settings_color,visuals::theme::W};
+use crate::{island::layout::bar::*,island::extras::{setting_row_nested,settings_group_fold},visuals,visuals::paint::{self,Card,H},island::settings_theme::color as settings_color,visuals::theme::W};
 use eframe::egui::{self,Color32,RichText,Rect,Pos2,Vec2};
 
 /// 预览编辑器自己的统一间距；不跟随岛上的 `GAP`，以便在有限宽度里放下全部组件。

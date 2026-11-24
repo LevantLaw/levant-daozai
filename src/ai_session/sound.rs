@@ -1,6 +1,6 @@
 //! AI 会话提示音：直接播放内嵌 WAV，不启动 PowerShell。
 
-use crate::agent::store::{SoundConfig, SoundKind};
+use crate::ai_session::store::{SoundConfig, SoundKind};
 
 pub(crate) fn play(kind: SoundKind, config: &SoundConfig) {
     if !config.enabled { return; }

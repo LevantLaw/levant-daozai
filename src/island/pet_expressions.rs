@@ -83,7 +83,7 @@ impl Expressions {
             let expression=self.choose(1,&[Wink,Blush,SideGlance,ShyPeek]);self.play(expression);self.cooldown=18.0;
         }
         self.hovered=hovered;
-        if state==PetState::Awake && self.clip.is_none() && crate::island::bar_layout::animations_enabled() {
+        if state==PetState::Awake && self.clip.is_none() && crate::island::layout::bar::animations_enabled() {
             self.wait-=dt;
             if self.wait<=0.0 {
                 let expression=self.choose(0,&[Scan,Delighted,Peek,Smug,Search,Giggle,Praised,ShyPeek]);self.play(expression);
@@ -103,7 +103,7 @@ impl Expressions {
                 crate::visuals::skin_paint::mark_colored(texture.id());self.sheet=Some((expression,palette,texture));
             }
         }
-        let frame=if crate::island::bar_layout::animations_enabled(){expression.frame(time)}else{7};
+        let frame=if crate::island::layout::bar::animations_enabled(){expression.frame(time)}else{7};
         let uv=Rect::from_min_max(egui::pos2(0.0,frame as f32/16.0),egui::pos2(1.0,(frame+1) as f32/16.0));
         c.painter.image(self.sheet.as_ref().unwrap().2.id(),c.rect(cx-24.0,0.0,48.0,30.0),uv,Color32::WHITE);
         true
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn expressions_follow_real_scenarios_and_system_animation_setting(){
         let mut expressions=Expressions::default();let mut seen=std::collections::HashSet::new();
-        let idle_animations=crate::island::bar_layout::animations_enabled();
+        let idle_animations=crate::island::layout::bar::animations_enabled();
         if idle_animations {
             for _ in 0..8 {
                 for _ in 0..400 {

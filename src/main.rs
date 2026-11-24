@@ -5,7 +5,7 @@ use eframe::egui::{self, Color32, Pos2};
 use daozai::island::{self, App, Cmd, Env, Options};
 use daozai::music;
 #[cfg(windows)]
-use daozai::messenger::{self,OpenError,TaskbarEvent};
+use daozai::instant_messaging::{self,OpenError,TaskbarEvent};
 use daozai::support::poll_clock::PollClock;
 use std::time::{Duration, Instant};
 
@@ -50,9 +50,9 @@ struct Shell {
     #[cfg(windows)]
     input_keys:Option<daozai::os::input::Shortcuts>,
     #[cfg(windows)]
-    incoming: Option<daozai::os::system::Notifications>,
+    incoming: Option<daozai::windows_toasts::Notifications>,
     #[cfg(windows)]
-    messengers:messenger::Runtime,
+    messengers:instant_messaging::Runtime,
     #[cfg(windows)]
     unread_at:PollClock,
     #[cfg(windows)]
@@ -112,11 +112,11 @@ impl Shell {
     fn confirm_messenger_open(&mut self,unread:island::Unread)->bool{
         let foreground=self.messengers.foreground(&[unread.source]);
         if !self.app.confirm_messenger_open(unread,foreground){
-            let seen=foreground.map(|(source,pid)|format!("{} 账号 {pid}",source.name())).unwrap_or_else(messenger::windows::describe_foreground);
-            messenger::windows::trace(format!("唤起 {} 账号 {}：未到前台（前台是 {seen}）",unread.source.name(),unread.pid));
+            let seen=foreground.map(|(source,pid)|format!("{} 账号 {pid}",source.name())).unwrap_or_else(instant_messaging::client::describe_foreground);
+            instant_messaging::client::trace(format!("唤起 {} 账号 {}：未到前台（前台是 {seen}）",unread.source.name(),unread.pid));
             return false;
         }
-        messenger::windows::trace(format!("唤起 {} 账号 {}：已在前台",unread.source.name(),unread.pid));
+        instant_messaging::client::trace(format!("唤起 {} 账号 {}：已在前台",unread.source.name(),unread.pid));
         self.messengers.viewed_client(unread.source,unread.pid);
         true
     }
@@ -124,7 +124,7 @@ impl Shell {
     #[cfg(windows)]
     fn clear_exited_messengers(&mut self,ctx:&egui::Context){
         for unread in self.messengers.exited(&self.app.pending_messengers){
-            messenger::windows::trace(format!("清除已退出的{}提醒 账号 {}",unread.source.name(),unread.pid));
+            instant_messaging::client::trace(format!("清除已退出的{}提醒 账号 {}",unread.source.name(),unread.pid));
             if self.tray_opening.as_ref().is_some_and(|(target,_)|*target==unread) || self.opening_messenger.is_some_and(|(target,_)|target==unread){
                 self.app.messenger_unavailable(format!("{} 账号已退出",unread.source.name()));
             }
@@ -166,7 +166,7 @@ impl Shell {
         });
         startup::report::startup("初始化通知监听");
         #[cfg(windows)]
-        let incoming=if app.settings.read_notifications {match daozai::os::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
+        let incoming=if app.settings.read_notifications {match daozai::windows_toasts::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
         startup::report::startup("创建后台采样与窗口");
         let initial_input=None;
@@ -485,9 +485,9 @@ impl eframe::App for Shell {
             if let Some(rx)=&self.incoming {
                 rx.taskbar_settings(&self.app.settings);
                 while let Ok(event)=rx.try_recv(){match event {
-                    daozai::os::system::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
-                    daozai::os::system::Incoming::Status(s)=>self.app.listener_status=s,
-                    daozai::os::system::Incoming::Message(a,id,b,target)=>{
+                    daozai::windows_toasts::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
+                    daozai::windows_toasts::Incoming::Status(s)=>self.app.listener_status=s,
+                    daozai::windows_toasts::Incoming::Message(a,id,b,target)=>{
                         if target.is_some_and(|target|self.messengers.track(target)==Err(OpenError::Exited)){continue;}
                         self.app.receive_notification_from(a,id,b,target.map(|target|target.unread));
                     }
@@ -502,11 +502,11 @@ impl eframe::App for Shell {
                 let mut sources:Vec<island::Messenger>=self.app.pending_messengers.iter().map(|u|u.source).collect();sources.dedup();
                 match self.messengers.foreground(&sources){
                     Some((source,pid))=>{
-                        if self.app.pending_messengers.iter().any(|u|u.source==source){messenger::windows::trace(format!("岛上清除 {} 账号 {pid}（前台切换={foreground_changed}）",source.name()));}
+                        if self.app.pending_messengers.iter().any(|u|u.source==source){instant_messaging::client::trace(format!("岛上清除 {} 账号 {pid}（前台切换={foreground_changed}）",source.name()));}
                         self.messengers.viewed_client(source,pid);
                         self.app.viewed_client(source,pid);
                     }
-                    None=>if foreground_changed && !sources.is_empty(){messenger::windows::trace(format!("前台切换但不是消息客户端主窗口：{}；岛上未读 {:?}",messenger::windows::describe_foreground(),self.app.pending_messengers.iter().map(|u|(u.source.name(),u.pid)).collect::<Vec<_>>()));},
+                    None=>if foreground_changed && !sources.is_empty(){instant_messaging::client::trace(format!("前台切换但不是消息客户端主窗口：{}；岛上未读 {:?}",instant_messaging::client::describe_foreground(),self.app.pending_messengers.iter().map(|u|(u.source.name(),u.pid)).collect::<Vec<_>>()));},
                 }
             }
             if self.tray_opening.as_ref().is_some_and(|(unread,_)|!self.app.pending_messengers.contains(unread)){
@@ -529,7 +529,7 @@ impl eframe::App for Shell {
                         self.app.messenger_unavailable(error.message(unread.source));
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected)=>{
-                        messenger::windows::trace(format!("唤起 {} 账号 {}：唤起线程异常结束，未返回结果",unread.source.name(),unread.pid));
+                        instant_messaging::client::trace(format!("唤起 {} 账号 {}：唤起线程异常结束，未返回结果",unread.source.name(),unread.pid));
                         self.tray_opening=None;self.app.messenger_unavailable(format!("{} 暂时无法响应，请重试",unread.source.name()));
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty)=>{}
@@ -600,7 +600,7 @@ impl eframe::App for Shell {
             .frame(egui::Frame::new().fill(Color32::TRANSPARENT))
             .show(ctx, |ui| {
                 // 左右停靠时画布是竖向的 SIDE_W × SIDE_H。
-                let size=if self.app.settings.dock.is_side() {egui::vec2(daozai::island::side_dock::SIDE_W,daozai::island::side_dock::SIDE_H)} else {egui::vec2(island::WIN_W,island::WIN_H)};
+                let size=if self.app.settings.dock.is_side() {egui::vec2(daozai::island::layout::dock::SIDE_W,daozai::island::layout::dock::SIDE_H)} else {egui::vec2(island::WIN_W,island::WIN_H)};
                 let win = egui::Rect::from_min_size(ui.max_rect().min,size);
                 out = Some(self.app.frame(ui, win, &env));
             });
@@ -693,19 +693,19 @@ impl eframe::App for Shell {
                         self.clear_exited_messengers(ctx);
                         if !self.app.pending_messengers.contains(&unread){
                             if was_pending{
-                                messenger::windows::trace(format!("唤起 {} 账号 {}：未开始，账号进程已退出",unread.source.name(),unread.pid));
+                                instant_messaging::client::trace(format!("唤起 {} 账号 {}：未开始，账号进程已退出",unread.source.name(),unread.pid));
                                 self.app.messenger_unavailable(OpenError::Exited.message(unread.source));
                             }
                             continue;
                         }
                         if self.tray_opening.is_some(){
-                            messenger::windows::trace(format!("唤起 {} 账号 {}：未开始，上一次唤起还没结束",unread.source.name(),unread.pid));
+                            instant_messaging::client::trace(format!("唤起 {} 账号 {}：未开始，上一次唤起还没结束",unread.source.name(),unread.pid));
                             self.app.messenger_unavailable(OpenError::Busy.message(unread.source));ctx.request_repaint();continue;
                         }
                         match self.messengers.request(unread,&self.app.settings).start(ctx.clone()){
                             Ok(rx)=>self.tray_opening=Some((unread,rx)),
                             Err(error)=>{
-                                messenger::windows::trace(format!("唤起 {} 账号 {}：未开始 {error:?}",unread.source.name(),unread.pid));
+                                instant_messaging::client::trace(format!("唤起 {} 账号 {}：未开始 {error:?}",unread.source.name(),unread.pid));
                                 if error==OpenError::Unidentified{self.app.reveal_messenger_notice(unread);}
                                 self.app.messenger_unavailable(error.message(unread.source));ctx.request_repaint();
                             }
@@ -727,7 +727,7 @@ impl eframe::App for Shell {
                     }
                 },
                 Cmd::CalendarImport=>{
-                    #[cfg(windows)] match daozai::os::system::pick_files_for("选择要导入的日历文件（.ics）",true){
+                    #[cfg(windows)] match daozai::os::files::pick_files_for("选择要导入的日历文件（.ics）",true){
                         Ok(files)=>if !files.is_empty(){
                             let read:Vec<(String,String)>=files.iter().map(|path|{
                                 let name=path.file_name().map(|n|n.to_string_lossy().to_string()).unwrap_or_default();
@@ -740,16 +740,16 @@ impl eframe::App for Shell {
                     }
                 },
                 Cmd::AddFiles=>{
-                    #[cfg(windows)] match daozai::os::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
+                    #[cfg(windows)] match daozai::os::files::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
                 },
                 Cmd::DragFile(p)=>{
-                    #[cfg(windows)] if let Err(e)=daozai::os::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
+                    #[cfg(windows)] if let Err(e)=daozai::os::files::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
                     ctx.input_mut(|i| i.pointer=Default::default());
                 },
                 Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
                 Cmd::Reveal(p)=>{let _=daozai::support::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
                 Cmd::QuotaChooseFile=>{
-                    #[cfg(windows)] match daozai::os::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
+                    #[cfg(windows)] match daozai::os::files::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
                 },
                 Cmd::QuotaRefresh=>{
                     if self.quota_at.ready(Duration::from_secs(15)) {
@@ -780,7 +780,7 @@ impl eframe::App for Shell {
                     #[cfg(windows)] daozai::os::tray::play_notification_sound(sound);
                 },
                 Cmd::RequestNotifications=>{
-                    #[cfg(windows)] {self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::os::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
+                    #[cfg(windows)] {self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::windows_toasts::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
                 Cmd::MailSync=>if let Some(mail)=&self.mail {
@@ -1045,8 +1045,8 @@ mod open_path_tests {
 
 fn main() -> std::process::ExitCode {
     // Agent Hook 中继：在单实例检查、创建窗口之前处理，岛仔没运行也能快速返回。
-    if let Some((agent, event)) = daozai::agent::bridge::requested(std::env::args()) {
-        return std::process::ExitCode::from(daozai::agent::bridge::run_relay(agent, &event) as u8);
+    if let Some((agent, event)) = daozai::ai_session::bridge::requested(std::env::args()) {
+        return std::process::ExitCode::from(daozai::ai_session::bridge::run_relay(agent, &event) as u8);
     }
     startup::instance::install();
     // 收集诊断：在单实例检查、创建窗口和初始化显卡之前处理，岛仔启动即崩溃、卡死时也能用。

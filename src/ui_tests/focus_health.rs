@@ -311,7 +311,7 @@ fn singing_microphone_moves_relative_to_the_face_and_disappears_on_pause(){
         }).collect();
         assert_eq!(eyes.len(),2);offsets.push(head.y-(eyes[0]+eyes[1])/2.0);
     }
-    if crate::island::bar_layout::animations_enabled(){
+    if crate::island::layout::bar::animations_enabled(){
         let range=offsets.iter().copied().fold(f32::NEG_INFINITY,f32::max)-offsets.iter().copied().fold(f32::INFINITY,f32::min);
         assert!(range>0.4,"麦克风需要有独立动态");
     }

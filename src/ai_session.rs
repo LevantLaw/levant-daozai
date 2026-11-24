@@ -7,7 +7,7 @@ pub mod focus;
 pub mod hooks;
 pub mod store;
 pub(crate) mod sound;
-pub(crate) mod ui;
+pub(crate) mod page;
 
 pub use store::{AgentState, Config, Session, SessionState};
 

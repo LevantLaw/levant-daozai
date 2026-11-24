@@ -189,7 +189,7 @@ fn windows_notifications_share_one_bell_and_skip_qq(){
     h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
     for _ in 0..60 {h.frame(vec![]);}
     assert!(h.app.windows_unread,"离开通知页后新通知重新点亮铃铛");
-    let bell_x=WIN_W/2.0+h.app.resident.current().x[crate::island::bar_layout::BELL].unwrap();
+    let bell_x=WIN_W/2.0+h.app.resident.current().x[crate::island::layout::bar::BELL].unwrap();
     h.click(Pos2::new(bell_x,15.0));
     assert_eq!(h.app.page,crate::island::WINDOWS_PAGE,"点击驻岛铃铛应打开 Windows 通知页");
 }
@@ -547,7 +547,7 @@ fn hud_alerts_are_not_held_while_island_is_open(){
 #[test]
 fn ai_done_opens_session_list_without_banner(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_event(port,&token,"SessionStart",serde_json::json!({"session_id":"ui-done","cwd":"E:\\demo\\project"}));
     post_agent_event(port,&token,"Stop",serde_json::json!({"session_id":"ui-done","last_assistant_message":"已修复"}));
@@ -562,7 +562,7 @@ fn ai_done_opens_session_list_without_banner(){
 #[test]
 fn ai_waiting_alert_respects_notifications_master(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    h.app.agent.bridge=crate::ai_session::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     h.app.settings.notifications=false;
     post_agent_hook(port,&token,"ui-muted");
@@ -1044,7 +1044,7 @@ fn unread_gallery(){
         for n in [1,2,3,4]{
             let mut h=H::new();h.app.settings.dock=dock;fill(&mut h,n);
             let side=dock.is_side();
-            let (w,hgt)=if side {(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
+            let (w,hgt)=if side {(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
             let mut r=if side {feature_raster_sized(w,hgt)} else {feature_raster()};
             let away=Some(Pos2::new(if side {w/2.0} else {WIN_W/2.0},hgt-6.0));
             let near=if dock==crate::model::Dock::Left {Pos2::new(8.0,hgt/2.0)} else if dock==crate::model::Dock::Right {Pos2::new(w-8.0,hgt/2.0)} else {Pos2::new(WIN_W/2.0,12.0)};
@@ -1058,7 +1058,7 @@ fn unread_gallery(){
             if qq {h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());}
             h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
             let side=dock.is_side();
-            let (w,hgt)=if side {(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
+            let (w,hgt)=if side {(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
             let mut r=if side {feature_raster_sized(w,hgt)} else {feature_raster()};
             let away=Some(Pos2::new(if side {w/2.0} else {WIN_W/2.0},hgt-6.0));
             let near=if dock==crate::model::Dock::Left {Pos2::new(8.0,hgt/2.0)} else if dock==crate::model::Dock::Right {Pos2::new(w-8.0,hgt/2.0)} else {Pos2::new(WIN_W/2.0,12.0)};

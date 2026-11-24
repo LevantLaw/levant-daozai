@@ -6,8 +6,8 @@ use windows::{core::{w, PCWSTR}, Win32::{
     UI::{Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass}, WindowsAndMessaging::*},
 }};
 
-use crate::messenger::{OpenError,Unread};
-use crate::messenger::windows::*;
+use crate::instant_messaging::{OpenError,Unread};
+use crate::instant_messaging::client::*;
 
 pub(crate) const ADAPTER:NativeAdapter=NativeAdapter{
     paths:installed_paths,main_frame:wechat_main_frame,accounts:None,ready:|_|true,strict_window:false,open:open_wechat,taskbar:Some(start_taskbar),
@@ -445,7 +445,7 @@ pub fn open_wechat_from_tray(unread:crate::island::Unread)->Result<(),String>{
 struct State {
     message: u32,
     taskbar_created: u32,
-    source:crate::messenger::Messenger,
+    source:crate::instant_messaging::Messenger,
     registered: bool,
     paths: Vec<String>,
     /// 各账号独立合并闪动；确认查看后立即重置。
@@ -485,8 +485,8 @@ unsafe extern "system" fn subclass(hwnd: HWND, message: u32, wp: WPARAM, lp: LPA
                 }
                 if ours{
                     let source_pid=window_pid(target);
-                    let office=if state.source!=crate::messenger::Messenger::Wechat && wp.0==FLASH{crate::messenger::desktop::flash_target(state.source,target,&state.paths)}else{None};
-                    let pid=if state.source==crate::messenger::Messenger::Wechat{account_pid(source_pid,&state.paths)}else{office.map_or(source_pid,|unread|unread.pid)};
+                    let office=if state.source!=crate::instant_messaging::Messenger::Wechat && wp.0==FLASH{crate::instant_messaging::office::flash_target(state.source,target,&state.paths)}else{None};
+                    let pid=if state.source==crate::instant_messaging::Messenger::Wechat{account_pid(source_pid,&state.paths)}else{office.map_or(source_pid,|unread|unread.pid)};
                     if foreground==Some(pid){
                         if state.pending.iter().any(|(p,_)|*p==pid){client_trace(state.source,format!("  → 账号 {pid} 在前台，清掉待取提醒"));}
                         // 正在看这个账号：它的提醒作废，其它账号不受影响。
@@ -508,8 +508,8 @@ unsafe extern "system" fn subclass(hwnd: HWND, message: u32, wp: WPARAM, lp: LPA
     DefSubclassProc(hwnd,message,wp,lp)
 }
 
-fn client_trace(source:crate::messenger::Messenger,line:String){
-    if source==crate::messenger::Messenger::Wechat{trace(line);}else{crate::messenger::windows::trace(format!("{} {line}",source.name()));}
+fn client_trace(source:crate::instant_messaging::Messenger,line:String){
+    if source==crate::instant_messaging::Messenger::Wechat{trace(line);}else{crate::instant_messaging::client::trace(format!("{} {line}",source.name()));}
 }
 
 /// 窗口的简短描述：句柄、类名、可见 / 最小化。不读标题。
@@ -544,7 +544,7 @@ fn process_elevated()->bool{
 pub struct Listener { hwnd: HWND, state: Box<RefCell<State>> }
 impl Listener {
     pub fn new(ctx: eframe::egui::Context) -> Result<Self,String> {
-        let result=Self::start(ctx,crate::messenger::Messenger::Wechat);
+        let result=Self::start(ctx,crate::instant_messaging::Messenger::Wechat);
         // 每次启动监听都记一条：日志里没有这一行，就说明监听从未启动。
         let elevated=if process_elevated(){"是"}else{"否"};
         match &result {
@@ -553,8 +553,8 @@ impl Listener {
         }
         result
     }
-    pub(crate) fn for_client(source:crate::messenger::Messenger,ctx:eframe::egui::Context)->Result<Self,String>{Self::start(ctx,source)}
-    fn start(ctx: eframe::egui::Context,source:crate::messenger::Messenger) -> Result<Self,String> {
+    pub(crate) fn for_client(source:crate::instant_messaging::Messenger,ctx:eframe::egui::Context)->Result<Self,String>{Self::start(ctx,source)}
+    fn start(ctx: eframe::egui::Context,source:crate::instant_messaging::Messenger) -> Result<Self,String> {
         let paths=client_paths(source);
         if paths.is_empty(){return Err(format!("未找到{}安装路径，请安装后重新开启提醒",source.name()));}
         unsafe {
@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn all_taskbar_clients_first_flash_after_minimizing_a_viewed_account_is_not_swallowed(){unsafe{
         let _serial=crate::support::test_support::serial();
-        use crate::messenger::Messenger;
+        use crate::instant_messaging::Messenger;
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
         let instance=GetModuleHandleW(None).unwrap().into();let pid=std::process::id();
@@ -618,7 +618,7 @@ mod tests {
     #[test]
     fn office_shell_events_preserve_unknown_instances_until_a_new_unambiguous_event(){unsafe{
         let _serial=crate::support::test_support::serial();
-        use crate::messenger::Messenger;
+        use crate::instant_messaging::Messenger;
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
         let instance=GetModuleHandleW(None).unwrap().into();let pid=std::process::id();
@@ -650,7 +650,7 @@ mod tests {
             DestroyWindow(first).unwrap();drop(listener);
         }
     }}
-    use crate::messenger::windows::open_unread_with_paths;
+    use crate::instant_messaging::client::open_unread_with_paths;
     #[test]
     fn clicking_wechat_flash_never_shows_hidden_helper(){unsafe{
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,0,0,0,0,None,None,None,None).unwrap();
@@ -993,7 +993,7 @@ mod tests {
     fn shell_notifications_filter_targets_merge_flashes_and_detach(){unsafe{
         let hwnd=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,0,0,0,0,None,None,None,None).unwrap();
         let message=RegisterWindowMessageW(w!("SHELLHOOK"));
-        let state=Box::new(RefCell::new(State{message,taskbar_created:RegisterWindowMessageW(w!("TaskbarCreated")),source:crate::messenger::Messenger::Wechat,registered:true,paths:vec![],burst:Vec::new(),pending:Vec::new(),ctx:Default::default()}));
+        let state=Box::new(RefCell::new(State{message,taskbar_created:RegisterWindowMessageW(w!("TaskbarCreated")),source:crate::instant_messaging::Messenger::Wechat,registered:true,paths:vec![],burst:Vec::new(),pending:Vec::new(),ctx:Default::default()}));
         SetWindowSubclass(hwnd,Some(subclass),SUBCLASS_ID,(&*state as *const RefCell<State>) as usize).ok().unwrap();
         RegisterShellHookWindow(hwnd).ok().unwrap();
         let listener=Listener{hwnd,state};
@@ -1017,7 +1017,7 @@ mod tests {
     }}
     #[test]
     fn viewed_accounts_rearm_immediately_without_resetting_other_accounts(){
-        let mut state=State{message:0,taskbar_created:0,source:crate::messenger::Messenger::Wechat,registered:false,paths:vec![],burst:vec![],pending:vec![],ctx:Default::default()};
+        let mut state=State{message:0,taskbar_created:0,source:crate::instant_messaging::Messenger::Wechat,registered:false,paths:vec![],burst:vec![],pending:vec![],ctx:Default::default()};
         let start=Instant::now();
         assert!(state.attention(100,11,start));assert!(state.attention(200,22,start));assert!(state.attention(0,0,start));
         state.pending.clear();

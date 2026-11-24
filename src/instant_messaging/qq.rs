@@ -1,6 +1,6 @@
 //! QQ 的安装位置、主窗口和托盘规则。
 use super::{Messenger,OpenError,Target,Unread};
-use super::windows::*;
+use super::client::*;
 use windows::{core::{w,PCWSTR},Win32::{Foundation::{HWND,LPARAM,WPARAM},System::{Registry::{HKEY_CLASSES_ROOT,HKEY_CURRENT_USER},Threading::{OpenProcess,PROCESS_QUERY_LIMITED_INFORMATION}},UI::WindowsAndMessaging::*}};
 use std::path::PathBuf;
 

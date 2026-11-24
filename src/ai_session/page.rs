@@ -1,8 +1,8 @@
 //! AI 会话页面、详情子页与设置。
 
-use crate::agent::hooks::Health;
-use crate::agent::store::{Decision, Notice, NoticeKind, NotifyConfig, PendingKind, SessionState, Store};
-use crate::agent::{AgentId, Session};
+use crate::ai_session::hooks::Health;
+use crate::ai_session::store::{Decision, Notice, NoticeKind, NotifyConfig, PendingKind, SessionState, Store};
+use crate::ai_session::{AgentId, Session};
 use crate::island::{App, AI_PAGE};
 use crate::island::extras::{setting_row, setting_row_nested, settings_card, settings_control_row_right, settings_group_fold, settings_hint, settings_label, settings_segmented};
 use crate::visuals::paint::{Card, H};
@@ -104,7 +104,7 @@ impl App {
         let mut notices = Vec::new();
         for update in updates {
             if let Some(sound) = update.sound {
-                if sound_allowed { crate::agent::sound::play(sound, &self.agent.config.sound); }
+                if sound_allowed { crate::ai_session::sound::play(sound, &self.agent.config.sound); }
             }
             if let Some(notice) = update.notice { notices.push(notice); }
         }
@@ -153,7 +153,7 @@ impl App {
         // 待处理详情不抢占，等用户答完或返回后再展开下一条。
         if pending { return; }
         self.agent_open_after_notice = None;
-        if !crate::agent::ui::agent_alert_valid(&self.agent.store, &self.agent.config.notify, &alert) { return; }
+        if !crate::ai_session::page::agent_alert_valid(&self.agent.store, &self.agent.config.notify, &alert) { return; }
         self.agent_open_event(alert);
     }
 
@@ -388,7 +388,7 @@ impl App {
             return;
         }
         if let Some(hosts) = jumped {
-            if !crate::agent::focus::focus(&hosts) { self.say("没找到窗口"); }
+            if !crate::ai_session::focus::focus(&hosts) { self.say("没找到窗口"); }
         }
     }
 
@@ -399,11 +399,11 @@ impl App {
         let title = session.title.clone();
         let hosts = session.hosts.clone();
         let approval = match session.pending.as_ref().map(|pending| &pending.kind) {
-            Some(crate::agent::store::PendingKind::Approval(request)) => Some((request.tool.clone(), request.detail.clone())),
+            Some(crate::ai_session::store::PendingKind::Approval(request)) => Some((request.tool.clone(), request.detail.clone())),
             _ => None,
         };
         let questions = session.pending.as_ref().and_then(|pending| match &pending.kind {
-            crate::agent::store::PendingKind::Question(questions) => Some(questions.clone()),
+            crate::ai_session::store::PendingKind::Question(questions) => Some(questions.clone()),
             _ => None,
         }).unwrap_or_default();
         // 待处理事件已消失（例如在终端处理完），详情没有可展示的内容，退回列表。
@@ -419,7 +419,7 @@ impl App {
         let jump = c.hit(300.0, 34.0, 64.0, 18.0, "agent-jump");
         c.text(332.0, 47.0, "跳转", 10.0, W::Regular, theme::GRAY, H::Center);
         if jump.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-            if !crate::agent::focus::focus(&hosts) { self.say("没找到窗口"); }
+            if !crate::ai_session::focus::focus(&hosts) { self.say("没找到窗口"); }
         }
         let back = c.hit(372.0, 34.0, 34.0, 18.0, "agent-back");
         c.text(389.0, 47.0, "返回", 10.0, W::Regular, theme::GRAY, H::Center);
@@ -438,7 +438,7 @@ impl App {
             c.hit(23.0, APPROVAL_DETAIL_TOP, 370.0, detail_h, "agent-approval-detail").on_hover_text(&detail);
             if button(c, 15.0, actions_y, 94.0, "到终端处理", theme::BTN).clicked() {
                 self.agent.respond(&key, Decision::Terminal, self.t);
-                if !crate::agent::focus::focus(&hosts) { self.say("没找到窗口"); }
+                if !crate::ai_session::focus::focus(&hosts) { self.say("没找到窗口"); }
                 return;
             }
             if button(c, 195.0, actions_y, 58.0, "拒绝", theme::RED).clicked() { self.agent.respond(&key, Decision::Deny, self.t); return; }
@@ -492,7 +492,7 @@ impl App {
         let actions_y = question_actions_y(question.options.len());
         if button(c, 15.0, actions_y, 94.0, "到终端处理", theme::BTN).clicked() {
             self.agent.respond(&key, Decision::Terminal, self.t);
-            if !crate::agent::focus::focus(&hosts) { self.say("没找到窗口"); }
+            if !crate::ai_session::focus::focus(&hosts) { self.say("没找到窗口"); }
             return;
         }
         if index > 0 && button(c, 263.0, actions_y, 60.0, "上一题", theme::BTN).clicked() {
@@ -553,7 +553,7 @@ impl App {
             crate::island::extras::settings_action_row(ui,|ui|{
                 if ui.add(crate::island::extras::settings_primary_button("重新扫描")).clicked() { self.agent.rescan(); }
                 if ui.add(crate::island::extras::settings_danger_button("清理旧 Hook")).clicked() {
-                    let changed = crate::agent::hooks::cleanup_legacy();
+                    let changed = crate::ai_session::hooks::cleanup_legacy();
                     self.agent.rescan();
                     self.say(if changed { "已清理 Fly Island / 提示音 Hook，备份已保留" } else { "没有发现需要清理的旧 Hook" });
                 }
@@ -660,12 +660,12 @@ pub(crate) fn agent_alert_valid(store: &Store, notify: &NotifyConfig, alert: &Ag
     }
 }
 
-impl crate::agent::AgentState {
-    fn selected_session_questions(&self, key: &str) -> Vec<crate::agent::Question> {
+impl crate::ai_session::AgentState {
+    fn selected_session_questions(&self, key: &str) -> Vec<crate::ai_session::Question> {
         self.store.sessions.iter().find(|session| session.key == key)
             .and_then(|session| session.pending.as_ref())
             .and_then(|pending| match &pending.kind {
-                crate::agent::store::PendingKind::Question(questions) => Some(questions.clone()),
+                crate::ai_session::store::PendingKind::Question(questions) => Some(questions.clone()),
                 _ => None,
             }).unwrap_or_default()
     }

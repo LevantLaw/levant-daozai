@@ -1,6 +1,6 @@
 //! 事件容器：数据变化时短暂出现；邮件、健康、待办、日程持续到条件解除。
 use crate::island::App;
-use crate::island::bar_layout;
+use crate::island::layout::bar;
 use crate::visuals::paint::Card;
 use crate::visuals::theme;
 use eframe::egui;
@@ -33,16 +33,16 @@ impl Item {
 
     pub(crate) fn from_slot(slot: usize) -> Option<Item> {
         match slot {
-            bar_layout::WEATHER => Some(Item::Weather),
-            bar_layout::QUOTA => Some(Item::Quota),
-            bar_layout::FOCUS => Some(Item::Focus),
-            bar_layout::MAIL => Some(Item::Mail),
-            bar_layout::HEALTH => Some(Item::Health),
-            bar_layout::TODO => Some(Item::Todo),
-            bar_layout::SHELF => Some(Item::Shelf),
-            bar_layout::CALENDAR => Some(Item::Calendar),
-            bar_layout::MUSIC => Some(Item::Music),
-            bar_layout::BATTERY => Some(Item::Battery),
+            bar::WEATHER => Some(Item::Weather),
+            bar::QUOTA => Some(Item::Quota),
+            bar::FOCUS => Some(Item::Focus),
+            bar::MAIL => Some(Item::Mail),
+            bar::HEALTH => Some(Item::Health),
+            bar::TODO => Some(Item::Todo),
+            bar::SHELF => Some(Item::Shelf),
+            bar::CALENDAR => Some(Item::Calendar),
+            bar::MUSIC => Some(Item::Music),
+            bar::BATTERY => Some(Item::Battery),
             _ => None,
         }
     }
@@ -203,10 +203,10 @@ impl App {
 
     /// 容器成员的显示顺序；预览里拖动调整。
     pub(crate) fn tray_order(&self) -> Vec<Item> {
-        let order = if bar_layout::valid_tray_order(&self.settings.tray_order) {
+        let order = if bar::valid_tray_order(&self.settings.tray_order) {
             self.settings.tray_order.clone()
         } else {
-            bar_layout::TRAY_ORDER.to_vec()
+            bar::TRAY_ORDER.to_vec()
         };
         order.into_iter().filter_map(Item::from_slot).collect()
     }
@@ -234,16 +234,16 @@ impl App {
     /// 成员在容器里的自然宽度。
     pub(crate) fn tray_item_width(&self, item: Item, ctx: &egui::Context) -> f32 {
         match item {
-            Item::Weather => bar_layout::WEATHER_WIDTH + self.weather_pill_extra(ctx).unwrap_or(0.0).max(0.0),
+            Item::Weather => bar::WEATHER_WIDTH + self.weather_pill_extra(ctx).unwrap_or(0.0).max(0.0),
             Item::Quota => self.quota_tray_width(ctx),
             Item::Focus => crate::focus::bar::WIDTH,
-            Item::Mail => crate::island::page_badges::badge_width(bar_layout::MAIL),
-            Item::Health => crate::island::page_badges::badge_width(bar_layout::HEALTH),
-            Item::Todo => crate::island::page_badges::badge_width(bar_layout::TODO),
-            Item::Shelf => crate::island::page_badges::badge_width(bar_layout::SHELF),
-            Item::Calendar => crate::island::page_badges::badge_width(bar_layout::CALENDAR),
-            Item::Music => bar_layout::slot_width(bar_layout::MUSIC),
-            Item::Battery => bar_layout::slot_width(bar_layout::BATTERY),
+            Item::Mail => crate::island::page_badges::badge_width(bar::MAIL),
+            Item::Health => crate::island::page_badges::badge_width(bar::HEALTH),
+            Item::Todo => crate::island::page_badges::badge_width(bar::TODO),
+            Item::Shelf => crate::island::page_badges::badge_width(bar::SHELF),
+            Item::Calendar => crate::island::page_badges::badge_width(bar::CALENDAR),
+            Item::Music => bar::slot_width(bar::MUSIC),
+            Item::Battery => bar::slot_width(bar::BATTERY),
         }
     }
 
@@ -268,11 +268,11 @@ impl App {
     }
 
     /// 按容器顺序并排画所有活跃成员；命中行为与常驻时一致。
-    pub(crate) fn draw_tray(&mut self, c: &Card, x: f32, layout: &bar_layout::Layout) {
+    pub(crate) fn draw_tray(&mut self, c: &Card, x: f32, layout: &bar::Layout) {
         let items = self.tray_active_items();
         if items.is_empty() { return; }
-        let clearance = layout.pet_clearance(bar_layout::TRAY);
-        let mut left = x - layout.widths[bar_layout::TRAY] / 2.0;
+        let clearance = layout.pet_clearance(bar::TRAY);
+        let mut left = x - layout.widths[bar::TRAY] / 2.0;
         for item in items {
             let width = self.tray_item_width(item, c.ui.ctx());
             let item_x = left + width / 2.0;
@@ -295,13 +295,13 @@ impl App {
                     }
                     Item::Music => {
                         let faded=c.faded(alpha);
-                        crate::visuals::paint::playback_bars_box(&faded, item_x, 15.0, self.t, self.media.playing, theme::WHITE, bar_layout::GLYPH, bar_layout::MUSIC_H);
+                        crate::visuals::paint::playback_bars_box(&faded, item_x, 15.0, self.t, self.media.playing, theme::WHITE, bar::GLYPH, bar::MUSIC_H);
                         if crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-music"), "音乐 · 点击打开".into()).clicked() {
                             self.show_page(crate::island::MUSIC_PAGE);
                         }
                     }
                     Item::Battery => {
-                        crate::visuals::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, bar_layout::BATTERY_SCALE);
+                        crate::visuals::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, bar::BATTERY_SCALE);
                         let level = self.resident_power.0.map(|pct| format!("{pct}%")).unwrap_or_else(|| "电量不可用".into());
                         crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-battery"), format!("电量 · {level} · 只读"));
                     }
@@ -315,11 +315,11 @@ impl App {
     /// 事件容器里的页面徽标：点击进入对应功能页。
     fn draw_tray_badge(&mut self, c: &Card, x: f32, item: Item, alpha: f32) {
         let slot = match item {
-            Item::Mail => bar_layout::MAIL,
-            Item::Health => bar_layout::HEALTH,
-            Item::Todo => bar_layout::TODO,
-            Item::Shelf => bar_layout::SHELF,
-            Item::Calendar => bar_layout::CALENDAR,
+            Item::Mail => bar::MAIL,
+            Item::Health => bar::HEALTH,
+            Item::Todo => bar::TODO,
+            Item::Shelf => bar::SHELF,
+            Item::Calendar => bar::CALENDAR,
             _ => return,
         };
         self.paint_badge(&c.faded(alpha), slot, x, theme::WHITE);

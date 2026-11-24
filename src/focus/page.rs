@@ -39,7 +39,7 @@ impl App {
         }
         let hand = if self.pomo.running { (self.t as f32 * 1.2) % TAU } else { 0.0 };
         if resting {
-            let t=if self.pomo.running && crate::island::bar_layout::animations_enabled(){self.t as f32}else{0.0};
+            let t=if self.pomo.running && crate::island::layout::bar::animations_enabled(){self.t as f32}else{0.0};
             crate::focus::bar::tea(&c.scaled(rx,ry,2.2),rx,ry,frac,t);
         }else{paint::stopwatch(c, rx, ry + 0.5, 15.5, hand * run, theme::WHITE);}
 

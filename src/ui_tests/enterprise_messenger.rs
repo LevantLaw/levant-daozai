@@ -34,7 +34,7 @@ fn office_settings_are_independent_default_off_and_survive_restart(){
     let saved=crate::model::Settings::load();
     assert!(!saved.wecom_notifications && saved.feishu_notifications && saved.dingtalk_notifications);
     h.app.settings=saved;h.app.settings.notifications=false;
-    assert_ne!(crate::messenger::toast_suppression(&h.app.settings)&(1<<(Messenger::Feishu as u8)),0,"关闭总开关后也不能退回读取该客户端的系统通知正文");
+    assert_ne!(crate::instant_messaging::toast_suppression(&h.app.settings)&(1<<(Messenger::Feishu as u8)),0,"关闭总开关后也不能退回读取该客户端的系统通知正文");
     for client in Messenger::OFFICE{h.app.receive_messenger_reminder(Unread::of(client));}
     assert!(h.app.pending_messengers.is_empty());
 }
@@ -70,10 +70,10 @@ fn office_taskbar_mode_deduplicates_system_toasts_without_disabling_the_existing
         h.app.receive_notification(source.name().into(),source.adapter().notification_id.into(),"系统重复通知".into());
     }
     assert_eq!(h.app.pending_messengers.len(),3);assert_eq!(h.app.alerts.len(),3);
-    let mask=crate::messenger::toast_suppression(&h.app.settings);
+    let mask=crate::instant_messaging::toast_suppression(&h.app.settings);
     for source in Messenger::OFFICE{assert_ne!(mask&(1<<(source as u8)),0);}
     h.app.settings.feishu_notifications=false;
-    assert_eq!(crate::messenger::toast_suppression(&h.app.settings)&(1<<(Messenger::Feishu as u8)),0);
+    assert_eq!(crate::instant_messaging::toast_suppression(&h.app.settings)&(1<<(Messenger::Feishu as u8)),0);
     h.app.viewed_client(Messenger::Feishu,100);
     assert_eq!(h.app.pending_messengers.len(),2,"不同客户端即使进程号相同也必须隔离");
 }
@@ -131,7 +131,7 @@ fn messenger_brand_icon_gallery(){
 #[test]
 fn taskbar_duplicate_flashes_do_not_restart_the_unread_alert(){
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in Messenger::ALL.into_iter().filter(|source|source.adapter().capture==crate::messenger::Capture::Taskbar){
+    for source in Messenger::ALL.into_iter().filter(|source|source.adapter().capture==crate::instant_messaging::Capture::Taskbar){
         let mut h=H::new();enable(&mut h.app);
         let unread=Unread{source,pid:100,window:11};
         h.app.receive_messenger_reminder(unread);

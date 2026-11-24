@@ -426,7 +426,7 @@ fn ui_alignment_layout_gallery(){
 
 #[test]
 fn resident_components_can_be_dragged_saved_and_reset(){
-    use crate::island::bar_layout::{CLOCK,BATTERY,WEATHER};
+    use crate::island::layout::bar::{CLOCK,BATTERY,WEATHER};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(h:&mut H,events:Vec<egui::Event>,slot:usize)->[Pos2;2]{
         let mut points=[Pos2::ZERO;2];
@@ -454,7 +454,7 @@ fn resident_components_can_be_dragged_saved_and_reset(){
 
 #[test]
 fn resident_drag_inserts_on_the_pointer_side(){
-    use crate::island::bar_layout::{BATTERY,CLOCK};
+    use crate::island::layout::bar::{BATTERY,CLOCK};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(h:&mut H,events:Vec<egui::Event>)->(Pos2,Pos2){
         let mut points=(Pos2::ZERO,Pos2::ZERO);
@@ -659,7 +659,7 @@ fn expanded_status_row_keeps_entries_clickable_and_time_short(){
 fn side_dock_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_FEATURE_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H);
     for (dock,shape,skin) in [(crate::model::Dock::Left,crate::model::IslandShape::Notch,crate::model::Skin::Classic),(crate::model::Dock::Right,crate::model::IslandShape::Pill,crate::model::Skin::Cream)] {
         let tag=format!("{}-{}",dock.key(),shape.key());
         let mut h=H::new();let mut r=feature_raster_sized(w,hgt);
@@ -698,7 +698,7 @@ fn side_dock_gallery(){
 #[test]
 fn side_dock_auto_minimal_follows_avoidance(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H);
     let mut h=H::new();h.app.settings.dock=crate::model::Dock::Right;h.app.settings.browser_minimal=true;
     let away=Some(Pos2::new(w/2.0,hgt-5.0));
     for _ in 0..60 {side_frame(&mut h,away);}
@@ -715,7 +715,7 @@ fn side_dock_auto_minimal_follows_avoidance(){
 #[test]
 fn side_dock_opens_from_the_edge_and_collapses_back(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::layout::dock::SIDE_W,crate::island::layout::dock::SIDE_H);
     for (dock,shape) in [(crate::model::Dock::Left,crate::model::IslandShape::Notch),(crate::model::Dock::Right,crate::model::IslandShape::Pill)] {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_shape=shape;
         let away=Some(Pos2::new(w/2.0,hgt-5.0));
