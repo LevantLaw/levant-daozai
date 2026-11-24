@@ -12,7 +12,7 @@ fn due() -> H {
 }
 
 fn health_badge(h:&H)->Rect {
-    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::app::bar_layout::HEALTH))))
+    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::island::bar_layout::HEALTH))))
         .unwrap_or_else(||panic!("缺少健康常驻入口")).rect
 }
 
@@ -21,7 +21,7 @@ fn click_health_badge(h:&mut H) {
     let p=health_badge(h).center();
     // 悬停超过 0.2 秒胶囊会展开，徽标随之淡出；直接点击，避免工具提示和展开抢先。
     h.click(p);
-    assert_eq!(h.app.page,crate::app::WATER_PAGE,"健康入口点击应进入健康页");
+    assert_eq!(h.app.page,crate::island::WATER_PAGE,"健康入口点击应进入健康页");
 }
 
 #[test]
@@ -65,12 +65,12 @@ fn health_pending_survives_restart_and_day_change(){
     h.app=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});h.frame(vec![]);
     h.t+=24.0*3600.0;
     let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-29".into(),..Default::default()};
-    let _=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),..Default::default()},|ctx|{
+    let _=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W,WIN_H))),time:Some(h.t),..Default::default()},|ctx|{
         egui::CentralPanel::default().show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});
     });
     assert_eq!(h.app.health_pending,[true,true]);h.frame(vec![]);
     assert!(health_badge(&h).width()>10.0,"重启和跨天保留待处理提醒");
-    h.app.show_page(crate::app::WATER_PAGE);h.app.sit_mode=true;
+    h.app.show_page(crate::island::WATER_PAGE);h.app.sit_mode=true;
     h.hover(H::local(280.0,80.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="待活动")));
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains("已坐"))),"待处理不再显示持续增长的久坐分钟数");
@@ -115,10 +115,10 @@ fn health_side_docks_open_page_and_confirm_independently(){
         let mut h=due();h.app.settings.dock=dock;
         // 换停靠方式后胶囊要重新收拢，徽标才有可点击区域。
         for _ in 0..60{h.frame(vec![]);}
-        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::app::bar_layout::HEALTH))))
+        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::island::bar_layout::HEALTH))))
             .unwrap_or_else(||panic!("缺少侧栏健康入口")).rect;
         h.click(rect.center());
-        assert_eq!(h.app.page,crate::app::WATER_PAGE);
+        assert_eq!(h.app.page,crate::island::WATER_PAGE);
         assert!(h.app.health_pending[1]);
         h.hover(H::local(280.0,80.0),1.0);
         h.click_text("喝一口");
@@ -140,7 +140,7 @@ fn health_fullscreen_hidden_keeps_pending_silent_and_returns_as_badges(){
     assert_eq!(h.app.health_pending,[true,true],"全屏期间仍记住两项待处理提醒");
     assert!(h.app.notice.is_none() && h.app.alerts.is_empty(),"全屏期间不弹出健康提醒");
     assert!(h.app.health_badges().is_empty(),"全屏隐藏期间不显示健康常驻图标");
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(..))),"开启声音也不能发送系统通知或响铃");
+    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(..))),"开启声音也不能发送系统通知或响铃");
     assert_eq!(crate::model::load_health_pending(),[true,true]);
     let count=h.app.history.len();h.t+=500.0*60.0;h.frame(vec![]);
     h.fullscreen=false;h.frame(vec![]);
@@ -156,14 +156,14 @@ fn health_entering_fullscreen_clears_active_and_queued_popups_only(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.alert("喝水时间到了","喝点水吧",2,true);h.app.tick_alerts();
     h.app.hud_notice=h.app.notice.clone();
-    h.app.alert(crate::app::SIT_TITLE,"起来走走",2,true);
+    h.app.alert(crate::island::SIT_TITLE,"起来走走",2,true);
     h.app.alert("待办到时间了","检查周报",4,true);
     h.fullscreen=true;h.cmds.clear();h.frame(vec![]);
-    let health=|alert:&crate::app::extras::Alert|alert.health().is_some();
+    let health=|alert:&crate::island::extras::Alert|alert.health().is_some();
     assert!(!h.app.notice.as_ref().is_some_and(health) && !h.app.hud_notice.as_ref().is_some_and(health),"全屏隐藏时清除正在显示的健康横幅");
     assert!(!h.app.alerts.iter().any(health),"健康提醒不能留在弹窗队列里等退出后重播");
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(title,..)if title=="喝水时间到了" || title==crate::app::SIT_TITLE)),"尚未发出的健康系统通知也要抑制");
-    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(title,..)if title=="待办到时间了")),"其他类型提醒沿用原有逻辑");
+    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(title,..)if title=="喝水时间到了" || title==crate::island::SIT_TITLE)),"尚未发出的健康系统通知也要抑制");
+    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(title,..)if title=="待办到时间了")),"其他类型提醒沿用原有逻辑");
     assert_eq!(h.app.health_pending,[true,true]);
     h.fullscreen=false;h.frame(vec![]);
     assert!(!h.app.notice.as_ref().is_some_and(health));
@@ -179,7 +179,7 @@ fn health_fullscreen_with_hide_disabled_keeps_normal_reminders(){
     h.app.settings.lunch_rest=false;h.app.settings.water_start=0;h.app.settings.water_end=0;
     h.t+=61.0*60.0;h.cmds.clear();h.frame(vec![]);
     assert!(h.app.notice.as_ref().is_some_and(|a|a.health().is_some()));
-    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(..))),"关闭全屏隐藏时仍正常提醒");
+    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(..))),"关闭全屏隐藏时仍正常提醒");
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn health_settings_support_direct_input_and_preserve_pending_reminders(){
     for (label,input,expected) in [("45 分钟","37",37),("37 分钟","999",180),("180 分钟","0",5),("5 分钟","abc",5)]{
         h.cmds.clear();h.click_text(label);h.frame(vec![]);
         assert!(h.app.is_editing(),"健康时长应支持单击输入");
-        assert!(h.cmds.contains(&crate::app::Cmd::Focus),"输入时应取得原生键盘焦点");
+        assert!(h.cmds.contains(&crate::island::Cmd::Focus),"输入时应取得原生键盘焦点");
         h.frame(vec![egui::Event::Text(input.into())]);
         h.frame(vec![egui::Event::Key{key:egui::Key::Enter,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);h.frame(vec![]);
         assert_eq!(crate::model::Settings::load().water_minutes,expected);
@@ -239,12 +239,12 @@ fn health_reminder_gallery(){
     for dock in [crate::model::Dock::Top,crate::model::Dock::Left,crate::model::Dock::Right]{
         let mut h=due();h.app.settings.dock=dock;h.app.settings.pet=false;
         let side=dock.is_side();
-        let (w,height)=if side{(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H)}else{(crate::app::CANVAS_W,WIN_H)};
+        let (w,height)=if side{(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)}else{(crate::island::CANVAS_W,WIN_H)};
         let mut raster=feature_raster_sized(w,height);
         let away=Some(Pos2::new(if side{w/2.0}else{WIN_W/2.0},height-6.0));
         let near=if dock==crate::model::Dock::Left{Pos2::new(8.0,height/2.0)}else if dock==crate::model::Dock::Right{Pos2::new(w-8.0,height/2.0)}else{Pos2::new(WIN_W/2.0,12.0)};
         shoot_unread(&mut h,&mut raster,&dest,&format!("health-{}-collapsed",dock.key()),80,away);
-        h.app.show_page(crate::app::WATER_PAGE);h.app.sit_mode=true;
+        h.app.show_page(crate::island::WATER_PAGE);h.app.sit_mode=true;
         shoot_unread(&mut h,&mut raster,&dest,&format!("health-{}-sit",dock.key()),90,Some(near));
         h.app.sit_mode=false;
         shoot_unread(&mut h,&mut raster,&dest,&format!("health-{}-water",dock.key()),60,Some(near));
@@ -267,13 +267,13 @@ fn system_notify_off_keeps_island_alert_without_windows_notification(){
     h.app.settings.notifications=true;h.app.settings.system_notify=false;h.app.settings.sound=true;
     h.cmds.clear();h.app.alert("待办到时间了","检查周报",4,true);h.frame(vec![]);
     assert!(h.app.notice.as_ref().is_some_and(|a|a.title=="待办到时间了") || h.app.alerts.iter().any(|a|a.title=="待办到时间了"),"关闭系统通知后岛上仍要提醒");
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(..))),"关闭系统通知后不能再发 Windows 通知");
-    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(..))),"也不能留在待发队列里");
+    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(..))),"关闭系统通知后不能再发 Windows 通知");
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(..))),"也不能留在待发队列里");
 }
 
 #[test]
 fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
-    use crate::app::{Cmd, NotificationSound};
+    use crate::island::{Cmd, NotificationSound};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for (enabled,system,sound,expected) in [
         (true,true,true,Some(NotificationSound::Reminder)),
@@ -285,7 +285,7 @@ fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
         h.app.settings.notifications=enabled;
         h.app.settings.system_notify=system;
         h.app.settings.sound=sound;
-        for kind in crate::app::extras::HealthReminder::ALL {
+        for kind in crate::island::extras::HealthReminder::ALL {
             h.app.pending.clear();
             h.app.alert(kind.title(),"到时间了",2,true);
             h.app.alert(kind.title(),"到时间了",2,true);
@@ -300,7 +300,7 @@ fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
 
 #[test]
 fn fixed_notification_sound_mapping(){
-    use crate::app::{Cmd, NotificationSound};
+    use crate::island::{Cmd, NotificationSound};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.frame(vec![]);
     h.app.settings.notifications=true;
@@ -312,7 +312,7 @@ fn fixed_notification_sound_mapping(){
         ("待办到时间了",NotificationSound::Complete),
         ("今日饮水目标达成",NotificationSound::Complete),
         ("喝水时间到了",NotificationSound::Reminder),
-        (crate::app::SIT_TITLE,NotificationSound::Reminder),
+        (crate::island::SIT_TITLE,NotificationSound::Reminder),
         ("会议提醒",NotificationSound::Reminder),
         ("电量偏低",NotificationSound::Reminder),
         ("未分类提醒",NotificationSound::Sonar),
@@ -339,7 +339,7 @@ fn fixed_notification_sound_mapping(){
 
 #[test]
 fn external_notifications_keep_source_sound(){
-    use crate::app::Cmd;
+    use crate::island::Cmd;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.frame(vec![]);
     h.app.settings.read_notifications=true;
@@ -352,7 +352,7 @@ fn external_notifications_keep_source_sound(){
     assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::Notify(..))),"外部通知不发 Windows Toast");
 
     h.app.settings.qq_notifications=true;h.app.pending.clear();
-    h.app.receive_notification_from("QQ".into(),"QQ".into(),"新消息".into(),Some(crate::app::Unread::of(crate::app::Messenger::Qq)));
+    h.app.receive_notification_from("QQ".into(),"QQ".into(),"新消息".into(),Some(crate::island::Unread::of(crate::island::Messenger::Qq)));
     assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(..))),"即时通讯保持静音");
 }
 
@@ -361,7 +361,7 @@ fn system_notify_defaults_on_and_persists(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     assert!(crate::model::Settings::default().system_notify,"默认开启，老用户升级后行为不变");
     h.cmds.clear();h.app.alert("待办到时间了","检查周报",4,true);h.frame(vec![]);
-    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(t,..)if t=="待办到时间了")),"默认仍发送系统通知");
+    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Notify(t,..)if t=="待办到时间了")),"默认仍发送系统通知");
     h.app.settings.system_notify=false;h.app.settings.save();
     assert!(!crate::model::Settings::load().system_notify,"关闭后重启仍保持关闭");
     h.app.settings.system_notify=true;h.app.settings.save();

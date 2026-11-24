@@ -15,14 +15,14 @@ fn minimal_mode_keeps_focus_running_and_returns_after_notifications(){
 #[test]
 fn navigation_wraps_between_pages_and_notification_settings_remain_accessible() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(21.0,68.0));assert_eq!(h.app.page,crate::app::WINDOWS_PAGE);
+    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(21.0,68.0));assert_eq!(h.app.page,crate::island::WINDOWS_PAGE);
     h.hover(H::local(300.0,60.0),0.8);h.click(H::local(398.0,88.0));assert_eq!(h.app.page,0);
     h.app.open_settings_category(3);assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,6);
 }
 
 #[test]
 fn mascot_feedback_plays_beside_notice_and_respects_switches(){
-    use crate::app::extras::PetState;
+    use crate::island::extras::PetState;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.drink_water();h.app.alert("待办到时间了","测试提醒",4,false);
     for _ in 0..60 {h.frame(vec![]);}assert_eq!(h.app.pet_state(),PetState::Satisfied);
@@ -39,7 +39,7 @@ fn mascot_feedback_plays_beside_notice_and_respects_switches(){
 fn minimal_island_hides_messenger_notices_until_expanded(){
     // 群友截图：避让细线下来电 / 新消息后，细线变成带微信图标的方块。细线照常弹横幅，收起后只留细线，未读不常挂。
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    use crate::app::Messenger;
+    use crate::island::Messenger;
     for (source,shape) in [(Messenger::Wechat,crate::model::IslandShape::Notch),(Messenger::Wechat,crate::model::IslandShape::Pill),(Messenger::Qq,crate::model::IslandShape::Pill)] {
         let mut h=H::new();
         h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;h.app.set_minimal(true);h.app.settings.island_shape=shape;
@@ -48,7 +48,7 @@ fn minimal_island_hides_messenger_notices_until_expanded(){
         match source {
             Messenger::Wechat=>h.app.receive_wechat_reminder_from(4242,0x1234),
             Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新消息".into()),
-            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
+            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::island::Unread::of(source)),
         }
         for _ in 0..30 {h.frame(vec![]);}
         assert!(h.app.notice.as_ref().and_then(|a|a.messenger())==Some(source),"{source:?} {shape:?}：避让细线照常弹横幅");
@@ -123,7 +123,7 @@ fn windows_notification_echo_does_not_duplicate_own_reminders(){
 
 #[test]
 fn sit_notice_and_page_buttons_reset_the_timer(){
-    use crate::app::SIT_TITLE;
+    use crate::island::SIT_TITLE;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.system_idle=Some(0.0);h.frame(vec![]);
     h.app.sit_start=h.t-70.0*60.0;h.app.alert(SIT_TITLE,"已连续坐了 70 分钟",2,false);for _ in 0..60 {h.frame(vec![]);}
     h.click_text("知道了");assert!(h.app.notice.is_none());assert!((h.app.sit_due()-h.t-3600.0).abs()<5.0);assert_eq!(h.app.water.drunk_ml,0);
@@ -173,13 +173,13 @@ fn windows_notifications_share_one_bell_and_skip_qq(){
     assert!(h.app.windows_unread);
     h.app.receive_notification("QQ".into(),"QQ".into(),"新消息".into());
     assert_eq!(h.app.windows_notices.len(),2,"QQ 使用独立未读图标，不进入 Windows 通知页");
-    assert!(h.app.pending_messengers.iter().any(|u|u.source==crate::app::Messenger::Qq));
-    h.app.settings.visible_pages[crate::app::WINDOWS_PAGE]=false;
+    assert!(h.app.pending_messengers.iter().any(|u|u.source==crate::island::Messenger::Qq));
+    h.app.settings.visible_pages[crate::island::WINDOWS_PAGE]=false;
     h.app.receive_notification("天气".into(),"weather.app".into(),"降雨提醒".into());
     assert_eq!(h.app.windows_notices.len(),2,"功能页关闭时不再收集");
-    h.app.settings.visible_pages[crate::app::WINDOWS_PAGE]=true;
-    h.app.show_page(crate::app::WINDOWS_PAGE);
-    assert_eq!(h.app.page,crate::app::WINDOWS_PAGE);
+    h.app.settings.visible_pages[crate::island::WINDOWS_PAGE]=true;
+    h.app.show_page(crate::island::WINDOWS_PAGE);
+    assert_eq!(h.app.page,crate::island::WINDOWS_PAGE);
     assert!(!h.app.windows_unread,"打开通知页后清除未读标记");
     h.app.receive_notification("天气".into(),"weather.app".into(),"降雨提醒".into());
     assert!(!h.app.windows_unread,"停留在通知页时新通知不再点亮铃铛");
@@ -189,9 +189,9 @@ fn windows_notifications_share_one_bell_and_skip_qq(){
     h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
     for _ in 0..60 {h.frame(vec![]);}
     assert!(h.app.windows_unread,"离开通知页后新通知重新点亮铃铛");
-    let bell_x=WIN_W/2.0+h.app.resident.current().x[crate::app::bar_layout::BELL].unwrap();
+    let bell_x=WIN_W/2.0+h.app.resident.current().x[crate::island::bar_layout::BELL].unwrap();
     h.click(Pos2::new(bell_x,15.0));
-    assert_eq!(h.app.page,crate::app::WINDOWS_PAGE,"点击驻岛铃铛应打开 Windows 通知页");
+    assert_eq!(h.app.page,crate::island::WINDOWS_PAGE,"点击驻岛铃铛应打开 Windows 通知页");
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn windows_notice_page_lists_recent_notifications_and_can_clear_them(){
     h.app.settings.read_notifications=true;
     for i in 0..5 {h.app.receive_notification(format!("应用{i}"),format!("app{i}"),format!("消息{i}"));}
     h.app.alerts.clear();h.app.notice=None;h.app.windows_unread=true;
-    h.app.show_page(crate::app::WINDOWS_PAGE);h.hover(H::local(300.0,80.0),1.0);
+    h.app.show_page(crate::island::WINDOWS_PAGE);h.hover(H::local(300.0,80.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="5 条通知")));
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="应用0")));
     h.wheel(-40.0);h.wheel(-40.0);
@@ -218,7 +218,7 @@ fn bluetooth_connection_soon_after_initial_scan_is_not_suppressed(){
     let mut h=H::new();
     h.frame(vec![]);
     h.t=2.0;
-    h.bt=vec![crate::platform::bt::Device{id:"shokz".into(),name:"Shokz".into(),battery:Some(100),kind:crate::platform::bt::DeviceKind::Bone}];
+    h.bt=vec![crate::os::bt::Device{id:"shokz".into(),name:"Shokz".into(),battery:Some(100),kind:crate::os::bt::DeviceKind::Bone}];
     h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("蓝牙设备"));
 }
@@ -227,17 +227,17 @@ fn bluetooth_connection_soon_after_initial_scan_is_not_suppressed(){
 fn bluetooth_notices_track_multiple_devices_independently(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    let audio=crate::platform::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:None,kind:crate::platform::bt::DeviceKind::Bone};
-    let keyboard=crate::platform::bt::Device{id:"keyboard".into(),name:"QingLong 87".into(),battery:None,kind:crate::platform::bt::DeviceKind::Keyboard};
+    let audio=crate::os::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:None,kind:crate::os::bt::DeviceKind::Bone};
+    let keyboard=crate::os::bt::Device{id:"keyboard".into(),name:"QingLong 87".into(),battery:None,kind:crate::os::bt::DeviceKind::Keyboard};
     h.bt=vec![audio.clone()];h.frame(vec![]);
     h.bt.push(keyboard.clone());h.t=3.0;h.frame(vec![]);
     let notice=h.app.notice.as_ref().unwrap();
     assert_eq!(notice.body,"QingLong 87");
-    assert_eq!(notice.bluetooth,Some((crate::platform::bt::DeviceKind::Keyboard,true)));
+    assert_eq!(notice.bluetooth,Some((crate::os::bt::DeviceKind::Keyboard,true)));
     h.t=7.0;h.bt=vec![keyboard];h.frame(vec![]);
     let notice=h.app.notice.as_ref().unwrap();
     assert_eq!(notice.body,"Shokz · 已断开");
-    assert_eq!(notice.bluetooth,Some((crate::platform::bt::DeviceKind::Bone,false)));
+    assert_eq!(notice.bluetooth,Some((crate::os::bt::DeviceKind::Bone,false)));
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn closing_app_notification_keeps_queued_messages_and_the_resident_bell(){
         assert!(h.app.notice.is_none());assert!(h.app.hud_notice.is_none());
         assert!(h.app.windows_unread,"关闭横幅后仍保留驻岛铃铛");
         assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Circle(c)if c.fill==egui::Color32::from_rgb(255,72,72))),"未读时铃铛保留红点");
-        h.app.show_page(crate::app::WINDOWS_PAGE);h.app.forced_open_until=0.0;h.cursor=None;
+        h.app.show_page(crate::island::WINDOWS_PAGE);h.app.forced_open_until=0.0;h.cursor=None;
         for _ in 0..120{h.frame(vec![]);}
         assert!(!h.app.windows_unread);
         assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Circle(c)if c.fill==egui::Color32::from_rgb(255,72,72))),"打开通知页后不再残留铃铛红点");
@@ -281,7 +281,7 @@ fn windows_notice_view_opens_the_notification_page(){
     for _ in 0..30{h.frame(vec![]);}
     let view=h.ctx.read_response(egui::Id::new(("card",true,"external-view"))).expect("外部通知横幅应有查看按钮").rect;
     h.click(view.center());
-    assert_eq!(h.app.page,crate::app::WINDOWS_PAGE);
+    assert_eq!(h.app.page,crate::island::WINDOWS_PAGE);
     assert!(h.app.notice.is_none());
     assert!(!h.app.windows_unread);
 }
@@ -299,7 +299,7 @@ fn notice_mode_layout_gallery(){
         for frame in 0..120{
             let t=frame as f64/60.0;if frame==30{h.app.alert("大写锁定","已开启",5,false);}
             let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),media:h.media.clone(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
+            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
             let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});});
             raster.update_textures(&output.textures_delta);
             if frame==119{
@@ -328,7 +328,7 @@ fn right_notice_preview(){
         if frame==90{h.app.alert("大写锁定","已开启",5,false);}
         if frame==240{h.app.alert("蓝牙设备","OpenMove by Shokz · 电量 80%",5,false);}
         let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),media:h.media.clone(),..Default::default()};
-        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
+        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
         let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});});
         raster.update_textures(&output.textures_delta);raster.buf.fill([0.94,0.95,0.97,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
         let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);pipe.write_all(&rgba).unwrap();
@@ -368,14 +368,14 @@ fn hud_shrinks_smoothly_after_expiration(){
 fn bluetooth_badge_follows_connect_and_disconnect(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     // 首次扫描已连接的设备，记录但不作为新连接提醒。
-    h.bt=vec![crate::platform::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Earbuds}];h.frame(vec![]);
+    h.bt=vec![crate::os::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::os::bt::DeviceKind::Earbuds}];h.frame(vec![]);
     assert!(h.app.notice.is_none());
     assert_eq!(h.app.bt_shown.first().map(|d|d.name.as_str()),Some("Buds"));
     // 之后断开、再连上，各弹一条 HUD 通知。
     h.t=20.0;h.bt.clear();h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 已断开"));
     assert!(h.app.bt_shown.is_empty());
-    h.t=30.0;h.bt=vec![crate::platform::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Earbuds}];h.frame(vec![]);
+    h.t=30.0;h.bt=vec![crate::os::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::os::bt::DeviceKind::Earbuds}];h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 电量 80%"));
     // 没有设备时不留残留状态。
     h.t=40.0;h.bt.clear();h.frame(vec![]);
@@ -413,10 +413,10 @@ fn todo_notice_view_locates_the_reminded_task() {
 #[test]
 fn new_notification_sways_twice_then_stops_and_restarts_on_the_next_one() {
     for (i,expected_positive) in [true,false,true,false].into_iter().enumerate(){
-        let angle=crate::render::paint::bell_swing(0.95*(i as f64*0.25+0.125));
+        let angle=crate::visuals::paint::bell_swing(0.95*(i as f64*0.25+0.125));
         assert_eq!(angle>0.0,expected_positive);
     }
-    assert_eq!(crate::render::paint::bell_swing(1.0),0.0);
+    assert_eq!(crate::visuals::paint::bell_swing(1.0),0.0);
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.settings.read_notifications=true;h.app.receive_notification("测试通知".into(),"test.notification".into(),"第一条".into());
     let first=h.app.notification_bell_at;
@@ -492,7 +492,7 @@ fn external_notice_respects_permissions_masks_preview_and_never_reemits(){
  h.app.settings.read_notifications=true;
  h.app.receive_notification("系统音量".into(),"external.test".into(),"验证码 123456".into());
  let a=h.app.alerts.back().unwrap();assert!(!a.is_hud());assert!(!a.body.contains("123456"));assert_eq!(a.page,usize::MAX);
- assert!(h.app.history.is_empty());assert!(!h.app.pending.iter().any(|c|matches!(c,crate::app::Cmd::Notify(..))));
+ assert!(h.app.history.is_empty());assert!(!h.app.pending.iter().any(|c|matches!(c,crate::island::Cmd::Notify(..))));
  h.app.tick_alerts();assert!(h.app.notice.is_some());h.app.settings.read_notifications=false;h.app.tick_alerts();assert!(h.app.notice.is_none());
  h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
  h.app.receive_notification("测试".into(),"external.test".into(),"验证码 123456，请勿泄露".into());assert!(!h.app.alerts.back().unwrap().body.contains("123456"));
@@ -510,7 +510,7 @@ fn wechat_notifications_work_without_toast_permission_and_stop_when_disabled(){
     let notice=h.app.notice.as_ref().unwrap();
     assert_eq!(notice.title,"微信");assert_eq!(notice.body,"有新消息 · 请到微信查看");
     assert!(h.app.history.is_empty());
-    assert!(!h.app.pending.iter().any(|c|matches!(c,crate::app::Cmd::Notify(..))));
+    assert!(!h.app.pending.iter().any(|c|matches!(c,crate::island::Cmd::Notify(..))));
     h.app.settings.wechat_notifications=false;h.app.tick_alerts();assert!(h.app.notice.is_none());
     h.app.settings.wechat_notifications=true;h.app.settings.notifications=false;
     h.app.receive_wechat_reminder();assert!(h.app.alerts.is_empty());
@@ -551,9 +551,9 @@ fn ai_done_opens_session_list_without_banner(){
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_event(port,&token,"SessionStart",serde_json::json!({"session_id":"ui-done","cwd":"E:\\demo\\project"}));
     post_agent_event(port,&token,"Stop",serde_json::json!({"session_id":"ui-done","last_assistant_message":"已修复"}));
-    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.page==crate::app::AI_PAGE{break;}}
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.page==crate::island::AI_PAGE{break;}}
     assert!(h.app.open,"完成事件应直接打开 AI 会话页");
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
     assert!(!h.app.agent.detail,"完成事件不应展开会话详情");
     assert!(h.app.agent.selected.is_none());
     assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"完成事件不应出横幅");
@@ -616,7 +616,7 @@ fn compact_font_atlas_preserves_panel_and_notice_pixels(){
 fn bluetooth_switch_clears_notices_and_restarts_with_fresh_baseline(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    let device=crate::platform::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::platform::bt::DeviceKind::Keyboard};
+    let device=crate::os::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::os::bt::DeviceKind::Keyboard};
     h.app.bluetooth_alert(&device,true);h.frame(vec![]);
     h.app.bluetooth_alert(&device,false);
     h.app.settings.bluetooth_notifications=false;h.frame(vec![]);
@@ -645,7 +645,7 @@ fn minimal_side_pill_returns_to_line_while_wechat_is_unread(){
         let idle=side_frame_with(&mut h,None);
         h.app.receive_wechat_reminder_from(4242,0x1234);
         for _ in 0..30 {side_frame_with(&mut h,None);}
-        assert_eq!(h.app.notice.as_ref().and_then(|a|a.messenger()),Some(crate::app::Messenger::Wechat));
+        assert_eq!(h.app.notice.as_ref().and_then(|a|a.messenger()),Some(crate::island::Messenger::Wechat));
         for _ in 0..480 {side_frame_with(&mut h,None);}
         let collapsed=side_frame_with(&mut h,None);
         assert!(h.app.notice.is_none() && collapsed.notice_hit.is_none());
@@ -708,7 +708,7 @@ fn messenger_notice_status_gallery(){
         let mut h=H::new();h.app.settings.pet=true;h.app.settings.wechat_notifications=true;
         h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
         h.app.settings.bluetooth_notifications=true;
-        let ppp=2.0;let (w,height)=(crate::app::CANVAS_W,WIN_H);
+        let ppp=2.0;let (w,height)=(crate::island::CANVAS_W,WIN_H);
         let mut raster=crate::preview_raster::Raster::new((w*ppp) as usize,(height*ppp) as usize);
         for frame in 0..90{
             h.t=frame as f64/60.0;
@@ -723,7 +723,7 @@ fn messenger_notice_status_gallery(){
                 7=>{h.app.show_page(4);h.app.messenger_unavailable("QQ 账号已退出");},
                 8=>h.app.alert("大写锁定","已开启",5,false),
                 9=>h.app.alert("系统音量","音量 60%",5,false),
-                10=>h.app.bluetooth_alert(&crate::platform::bt::Device{id:"preview".into(),name:"耳机".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Headphones},true),
+                10=>h.app.bluetooth_alert(&crate::os::bt::Device{id:"preview".into(),name:"耳机".into(),battery:Some(80),kind:crate::os::bt::DeviceKind::Headphones},true),
                 11=>h.app.alert("电量偏低","剩余 15% · 请连接电源",5,false),
                 12=>{
                     let start=chrono::Local::now()+chrono::Duration::minutes(10);
@@ -758,13 +758,13 @@ fn qq_unknown_reminders_survive_viewing_other_accounts(){
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.read_notifications=true;
     h.app.receive_notification("QQ".into(),"QQ".into(),"未确认账号的消息".into());
-    h.app.viewed_client(crate::app::Messenger::Qq,200);
-    assert_eq!(h.app.pending_messengers,[crate::app::Unread::of(crate::app::Messenger::Qq)]);
+    h.app.viewed_client(crate::island::Messenger::Qq,200);
+    assert_eq!(h.app.pending_messengers,[crate::island::Unread::of(crate::island::Messenger::Qq)]);
 }
 
 #[test]
 fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_other_accounts(){
-    use crate::app::{Cmd,Messenger,Unread};
+    use crate::island::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for source in Messenger::ALL{
         let mut h=H::new();h.app.settings.read_notifications=true;h.app.settings.wechat_notifications=true;h.app.settings.wecom_notifications=true;h.app.settings.feishu_notifications=true;h.app.settings.dingtalk_notifications=true;
@@ -784,7 +784,7 @@ fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_ot
 
 #[test]
 fn qq_bound_notices_open_their_original_account_and_clear_independently(){
-    use crate::app::{Cmd,Messenger,Unread};
+    use crate::island::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.read_notifications=true;
     let a=Unread{source:Messenger::Qq,pid:100,window:11};let b=Unread{source:Messenger::Qq,pid:200,window:22};
@@ -801,7 +801,7 @@ fn qq_bound_notices_open_their_original_account_and_clear_independently(){
 
 #[test]
 fn qq_unknown_notice_can_close_without_dismissing_a_bound_account(){
-    use crate::app::{Messenger,Unread};
+    use crate::island::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.read_notifications=true;
     h.app.receive_notification("QQ".into(),"QQ".into(),"未确认账号".into());h.frame(vec![]);
@@ -814,7 +814,7 @@ fn qq_unknown_notice_can_close_without_dismissing_a_bound_account(){
 
 #[test]
 fn qq_expired_unidentified_notice_can_be_reopened_and_explicitly_cleared(){
-    use crate::app::{Messenger,Unread};
+    use crate::island::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.read_notifications=true;
     let unread=Unread::of(Messenger::Qq);
@@ -826,7 +826,7 @@ fn qq_expired_unidentified_notice_can_be_reopened_and_explicitly_cleared(){
 
 #[test]
 fn qq_unknown_reminders_are_not_numbered_as_another_known_account(){
-    use crate::app::{Messenger,Unread};
+    use crate::island::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.read_notifications=true;
     for (pid,window) in [(100,11),(0,0),(200,22)]{
@@ -854,7 +854,7 @@ fn unavailable_messenger_status_stays_visible_when_the_island_is_collapsed(){
 
 #[test]
 fn exited_messenger_unreads_clear_their_badges_and_notifications(){
-    use crate::app::{Messenger,Unread};
+    use crate::island::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
     h.app.receive_wechat_reminder_from(100,11);h.frame(vec![]);
@@ -878,7 +878,7 @@ fn exited_messenger_unreads_clear_their_badges_and_notifications(){
 
 #[test]
 fn messenger_notifications_keep_separate_badges_until_the_client_is_viewed(){
-    use crate::app::{Cmd,Messenger,Unread};
+    use crate::island::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
     h.frame(vec![]);h.app.receive_wechat_reminder();
@@ -923,7 +923,7 @@ fn messenger_capsule_grows_during_opening(){
             let appear=h.app.messenger_appear();
             if (0.02..0.95).contains(&appear) {
                 let button=h.ctx.read_response(egui::Id::new(("card",true,"微信".to_string()))).unwrap();
-                sampled|=(1.0..crate::app::UNREAD_W-1.0).contains(&button.rect.width());
+                sampled|=(1.0..crate::island::UNREAD_W-1.0).contains(&button.rect.width());
             }
         }
         assert!(sampled && h.app.open==opening,"每次展开与收回都应经过中间尺寸");
@@ -932,7 +932,7 @@ fn messenger_capsule_grows_during_opening(){
 
 #[test]
 fn messenger_accounts_get_number_tags_and_clear_one_by_one(){
-    use crate::app::{Cmd,Messenger,Unread};
+    use crate::island::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
     h.app.receive_wechat_reminder_from(100,11);h.app.receive_wechat_reminder_from(200,22);h.app.receive_wechat_reminder_from(100,12);
@@ -942,7 +942,7 @@ fn messenger_accounts_get_number_tags_and_clear_one_by_one(){
     h.app.alerts.clear();h.app.notice=None;
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.5);
     let rect=|h:&H,name:&str|h.ctx.read_response(egui::Id::new(("card",true,name.to_string()))).unwrap_or_else(||panic!("{name}")).rect;
-    let panel=h.app.island_rect(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),crate::app::PW,h.app.expanded_height());
+    let panel=h.app.island_rect(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),crate::island::PW,h.app.expanded_height());
     let (a,b,q)=(rect(&h,"微信"),rect(&h,"微信2"),rect(&h,"QQ"));
     assert!(a.bottom()<=b.top()+0.5 && b.bottom()<=q.top()+0.5);
     let inset=h.app.unread_top_inset();assert!(inset>0.0,"顶部停靠时胶囊离开屏幕上沿");
@@ -979,12 +979,12 @@ fn messenger_notifications_stay_right_and_move_outside_expanded_panel(){
     assert!(badge(&h).left()>WIN_W/2.0);
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.5);
     assert!(h.app.open && badge(&h).left()>WIN_W/2.0);
-    assert!((badge(&h).left()-(WIN_W/2.0+crate::app::PW/2.0+crate::app::UNREAD_GAP)).abs()<1.0,"展开后与面板留一小段间距 {:?}",badge(&h));
+    assert!((badge(&h).left()-(WIN_W/2.0+crate::island::PW/2.0+crate::island::UNREAD_GAP)).abs()<1.0,"展开后与面板留一小段间距 {:?}",badge(&h));
     let center=badge(&h).center();
     assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Rect(r)
-        if r.rect.contains(center) && (r.rect.width()-crate::app::UNREAD_W).abs()<0.1 && (r.rect.height()-crate::app::UNREAD_W).abs()<0.1)),"一个图标时是正圆");
+        if r.rect.contains(center) && (r.rect.width()-crate::island::UNREAD_W).abs()<0.1 && (r.rect.height()-crate::island::UNREAD_W).abs()<0.1)),"一个图标时是正圆");
     h.click(badge(&h).center());
-    assert!(h.cmds.contains(&crate::app::Cmd::ViewMessenger(crate::app::Unread::of(crate::app::Messenger::Wechat))));
+    assert!(h.cmds.contains(&crate::island::Cmd::ViewMessenger(crate::island::Unread::of(crate::island::Messenger::Wechat))));
 }
 
 #[test]
@@ -1018,9 +1018,9 @@ fn messenger_notifications_side_docks_keep_one_column(){
         let rect=|name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap().rect;
         let a=rect("微信");let b=rect("QQ");
         assert_eq!(a.center().x,b.center().x);assert!(a.bottom()<=b.top()+0.01);
-        let panel=h.app.island_rect(win,crate::app::PW,h.app.expanded_height());
-        if dock==crate::model::Dock::Left {assert!(a.left()>=panel.right()+crate::app::UNREAD_GAP-0.5,"左停靠：胶囊在面板右侧");}
-        else {assert!(a.right()<=panel.left()-crate::app::UNREAD_GAP+0.5,"右停靠：胶囊在面板左侧");}
+        let panel=h.app.island_rect(win,crate::island::PW,h.app.expanded_height());
+        if dock==crate::model::Dock::Left {assert!(a.left()>=panel.right()+crate::island::UNREAD_GAP-0.5,"左停靠：胶囊在面板右侧");}
+        else {assert!(a.right()<=panel.left()-crate::island::UNREAD_GAP+0.5,"右停靠：胶囊在面板左侧");}
         assert!((a.top()-panel.top()-2.0).abs()<1.0 && h.app.unread_top_inset()==0.0,"侧边停靠时顶端与面板对齐");
     }
 }
@@ -1028,7 +1028,7 @@ fn messenger_notifications_side_docks_keep_one_column(){
 #[test]
 #[ignore="按需导出微信 / QQ 未读胶囊的实际画面"]
 fn unread_gallery(){
-    use crate::app::Messenger;
+    use crate::island::Messenger;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_FEATURE_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     let fill=|h:&mut H,n:usize|{
@@ -1044,7 +1044,7 @@ fn unread_gallery(){
         for n in [1,2,3,4]{
             let mut h=H::new();h.app.settings.dock=dock;fill(&mut h,n);
             let side=dock.is_side();
-            let (w,hgt)=if side {(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
+            let (w,hgt)=if side {(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
             let mut r=if side {feature_raster_sized(w,hgt)} else {feature_raster()};
             let away=Some(Pos2::new(if side {w/2.0} else {WIN_W/2.0},hgt-6.0));
             let near=if dock==crate::model::Dock::Left {Pos2::new(8.0,hgt/2.0)} else if dock==crate::model::Dock::Right {Pos2::new(w-8.0,hgt/2.0)} else {Pos2::new(WIN_W/2.0,12.0)};
@@ -1058,7 +1058,7 @@ fn unread_gallery(){
             if qq {h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());}
             h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
             let side=dock.is_side();
-            let (w,hgt)=if side {(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
+            let (w,hgt)=if side {(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
             let mut r=if side {feature_raster_sized(w,hgt)} else {feature_raster()};
             let away=Some(Pos2::new(if side {w/2.0} else {WIN_W/2.0},hgt-6.0));
             let near=if dock==crate::model::Dock::Left {Pos2::new(8.0,hgt/2.0)} else if dock==crate::model::Dock::Right {Pos2::new(w-8.0,hgt/2.0)} else {Pos2::new(WIN_W/2.0,12.0)};

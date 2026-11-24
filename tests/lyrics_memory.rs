@@ -1,6 +1,6 @@
 //! 连续切歌后保留的堆内存应有界，字体预热和单帧临时分配不计入增长。
 use std::{alloc::{GlobalAlloc,Layout,System},sync::atomic::{AtomicUsize,Ordering}};
-use daozai::app::{App,Env,Options,WIN_W,WIN_H};
+use daozai::island::{App,Env,Options,WIN_W,WIN_H};
 use eframe::egui;
 
 struct CountingAllocator;

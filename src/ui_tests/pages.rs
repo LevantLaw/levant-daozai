@@ -46,10 +46,10 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
     assert_eq!(h.app.page,5);
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.app.open && !h.hit.contains(edge),"原位保留翻页意图，岛外仍可点击桌面");
-    assert!((h.app.h.pos-(PH+crate::app::STATUS_H)).abs()<0.1 && (h.hit.height()-PH-crate::app::STATUS_H-2.0).abs()<0.1,"矮页应使用自身高度");
+    assert!((h.app.h.pos-(PH+crate::island::STATUS_H)).abs()<0.1 && (h.hit.height()-PH-crate::island::STATUS_H-2.0).abs()<0.1,"矮页应使用自身高度");
     h.hover(H::local(180.0,174.0),0.4);
     assert!(h.app.open,"在上一页范围内向侧下方移动仍可阅读");
-    h.hover(H::local(220.0,PH-1.0+crate::app::PAGE_RAISE),0.4);
+    h.hover(H::local(220.0,PH-1.0+crate::island::PAGE_RAISE),0.4);
     h.hover(H::local(250.0,157.0),0.4);
     assert!(h.app.open,"轻微穿过新页边缘再移回来不应误收起");
     h.wheel(40.0);
@@ -61,7 +61,7 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
 
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.app.go(6,1.0);
-    h.hover(H::local(70.0,PH-1.0+crate::app::PAGE_RAISE),0.8);
+    h.hover(H::local(70.0,PH-1.0+crate::island::PAGE_RAISE),0.8);
     h.wheel(40.0);
     h.hover(edge,0.4);
     assert!(h.app.open,"翻页时光标刚好在新边缘内，也能顺势移到旧页范围");
@@ -75,14 +75,14 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
     for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
         let mut h=H::new();
         h.app.settings.dock=dock;
-        let x=if dock==crate::model::Dock::Left {1.0}else{crate::app::side_dock::SIDE_W-1.0};
-        let resident=Pos2::new(x,crate::app::side_dock::SIDE_H/2.0);
+        let x=if dock==crate::model::Dock::Left {1.0}else{crate::island::side_dock::SIDE_W-1.0};
+        let resident=Pos2::new(x,crate::island::side_dock::SIDE_H/2.0);
         for _ in 0..60 {side_frame(&mut h,Some(resident));}
         assert!(h.app.open);
         for sign in [-1.0,1.0] {
             h.app.go(6,1.0);
             let tall=side_frame(&mut h,Some(resident)).hit;
-            let edge=tall.center()+Vec2::new(0.0,sign*((PH+crate::app::STATUS_H)/2.0+8.0));
+            let edge=tall.center()+Vec2::new(0.0,sign*((PH+crate::island::STATUS_H)/2.0+8.0));
             for _ in 0..45 {side_frame(&mut h,Some(edge));}
             side_frame_events(&mut h,Some(edge),vec![egui::Event::MouseWheel {
                 unit:egui::MouseWheelUnit::Point,delta:Vec2::new(0.0,40.0),modifiers:Default::default(),
@@ -93,7 +93,7 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
             let out=side_frame(&mut h,Some(moved));
             assert!(out.expanded && !out.hit.contains(moved) && out.page_scroll_area.is_some_and(|r|r.contains(moved)),
                 "{dock:?} 原页上下边缘的空白处应可移动并续滚");
-            assert!((h.app.h.pos-(PH+crate::app::STATUS_H)).abs()<0.1);
+            assert!((h.app.h.pos-(PH+crate::island::STATUS_H)).abs()<0.1);
             let out=side_frame(&mut h,Some(tall.center()));
             assert!(out.expanded && !out.hit.contains(edge),"{dock:?} 移入矮页后应恢复高度");
         }
@@ -104,19 +104,19 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
 fn wheel_clipboard_stays_at_both_edges() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.app.show_page(crate::app::CLIPBOARD_PAGE);
-    for count in [crate::app::pages::CLIP_ROWS+1] {
+    h.app.show_page(crate::island::CLIPBOARD_PAGE);
+    for count in [crate::island::pages::CLIP_ROWS+1] {
         h.app.clipboard.lock().items.clear();
         for i in 0..count { h.app.clipboard.lock().push(&i.to_string(), "09:00"); }
-        let last=count.saturating_sub(crate::app::pages::CLIP_ROWS);
+        let last=count.saturating_sub(crate::island::pages::CLIP_ROWS);
         for (delta, first) in [(40.0,0),(-40.0,last),(-40.0,last),(40.0,0),(40.0,0)] {
             h.hover(H::local(300.0,60.0),0.4);
             h.wheel(delta);
-            assert_eq!(h.app.page,crate::app::CLIPBOARD_PAGE);
+            assert_eq!(h.app.page,crate::island::CLIPBOARD_PAGE);
             assert_eq!(h.app.clip_first,first);
         }
         for (delta,page) in [(-40.0,4),(40.0,3)]{
-            h.app.show_page(crate::app::CLIPBOARD_PAGE);h.hover(H::local(210.0,18.0),0.4);h.wheel(delta);
+            h.app.show_page(crate::island::CLIPBOARD_PAGE);h.hover(H::local(210.0,18.0),0.4);h.wheel(delta);
             assert_eq!(h.app.page,page,"剪贴板列表外仍应允许滚轮翻页");
         }
     }
@@ -126,15 +126,15 @@ fn wheel_clipboard_stays_at_both_edges() {
 #[test]
 fn clipboard_is_a_standalone_page(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.show_page(crate::app::CLIPBOARD_PAGE);
-    assert_eq!(h.app.page,crate::app::CLIPBOARD_PAGE);
+    h.app.show_page(crate::island::CLIPBOARD_PAGE);
+    assert_eq!(h.app.page,crate::island::CLIPBOARD_PAGE);
     h.hover(H::local(300.0,60.0),0.5);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="复制的文字会出现在这里")),"剪贴板页应有空状态");
-    h.app.show_page(crate::app::SHELF_PAGE);
+    h.app.show_page(crate::island::SHELF_PAGE);
     h.hover(H::local(300.0,60.0),0.5);
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="剪贴板")),"置物架页不再有剪贴板分栏");
-    h.app.set_page_visible(crate::app::CLIPBOARD_PAGE,false);
-    h.app.set_page_visible(crate::app::SHELF_PAGE,true);
+    h.app.set_page_visible(crate::island::CLIPBOARD_PAGE,false);
+    h.app.set_page_visible(crate::island::SHELF_PAGE,true);
     assert!(!h.app.clipboard_active(),"置物架开启不再启动剪贴板监听");
 }
 
@@ -245,7 +245,7 @@ fn hidden_components_do_not_keep_static_pages_animating(){
     h.app.settings.pet=false;
     h.app.show_page(4);h.hover(H::local(300.0,60.0),2.0);
     assert!(!h.animating);
-    let mut moving=crate::render::anim::Spring::new(0.0,230.0,0.9);moving.target=200.0;
+    let mut moving=crate::visuals::anim::Spring::new(0.0,230.0,0.9);moving.target=200.0;
     h.app.shelf_x.insert("hidden.txt".into(),moving);
     h.frame(vec![]);
     assert!(!h.animating,"离开置物页后，未完成的文件动画不能让其他页面持续刷新");
@@ -278,18 +278,18 @@ fn feature_gallery(){
     h.app.open_task_reminder(3);
     shoot_feature(&mut h,&mut r,&dest,"todo-picker",60,Some(H::local(120.0,60.0)),today);
     // 剪贴板
-    let mut h=H::new();let mut r=feature_raster();h.app.show_page(crate::app::CLIPBOARD_PAGE);
+    let mut h=H::new();let mut r=feature_raster();h.app.show_page(crate::island::CLIPBOARD_PAGE);
     shoot_feature(&mut h,&mut r,&dest,"clip-empty",60,Some(H::local(120.0,60.0)),today);
     {let mut hist=h.app.clipboard.lock();hist.items.clear();
         for (i,t) in ["https://github.com/Renly1994/xiaotang-daozai/releases","会议纪要：\n1. 周三前确认岛仔竖版方案\n2. 剪贴板记录上线","13800138000","SELECT * FROM todo WHERE repeat > 0 ORDER BY due;","验证码 482913"].iter().enumerate(){hist.push(t,&format!("09:{:02}",30+i));}
         hist.items[3].pinned=true;}
     shoot_feature(&mut h,&mut r,&dest,"clip-list",30,Some(H::local(200.0,66.0)),today);
-    h.app.show_page(crate::app::SHELF_PAGE);
+    h.app.show_page(crate::island::SHELF_PAGE);
     let file=std::env::temp_dir().join("岛仔周报.docx");std::fs::write(&file,b"x").unwrap();h.app.shelf.items=vec![file];
     shoot_feature(&mut h,&mut r,&dest,"shelf-files",30,Some(H::local(120.0,60.0)),today);
     h.app.confirm_clear=Some(h.app.t);
     shoot_feature(&mut h,&mut r,&dest,"shelf-confirm",5,Some(H::local(120.0,60.0)),today);
-    h.app.settings.clipboard_history=false;h.app.show_page(crate::app::CLIPBOARD_PAGE);
+    h.app.settings.clipboard_history=false;h.app.show_page(crate::island::CLIPBOARD_PAGE);
     shoot_feature(&mut h,&mut r,&dest,"clip-off",30,Some(H::local(120.0,60.0)),today);
 }
 
@@ -310,11 +310,11 @@ fn wheel_short_lists_turn_pages(){
             assert_eq!(h.app.page,page,"待办未溢出应翻页，条数 {count}");
         }
     }
-    for count in [0,1,crate::app::pages::CLIP_ROWS]{
+    for count in [0,1,crate::island::pages::CLIP_ROWS]{
         h.app.clipboard.lock().items.clear();
         for i in 0..count{h.app.clipboard.lock().push(&i.to_string(),"09:00");}
         for (delta,page) in [(-40.0,4),(40.0,3)]{
-            h.app.show_page(crate::app::CLIPBOARD_PAGE);h.hover(H::local(300.0,60.0),0.5);h.wheel(delta);
+            h.app.show_page(crate::island::CLIPBOARD_PAGE);h.hover(H::local(300.0,60.0),0.5);h.wheel(delta);
             assert_eq!(h.app.page,page,"剪贴板未溢出应翻页，条数 {count}");
         }
     }

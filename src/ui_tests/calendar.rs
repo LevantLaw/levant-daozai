@@ -15,20 +15,20 @@ fn complex_script_lyrics_preview(){
             "[00:01]བཀྲ་ཤིས་བདེ་ལེགས།\n[00:05]སྐྱིད་པོའི་གྲོགས་པོ་ཁྱེད་རང་ཡིན།\n[00:09]ཕ་ཡུལ་གྱི་རི་བོ་མཐོན་པོ།\n[00:13]སྙིང་གི་གཏམ་བརྗོད།"),
     ];
     for fixed in [false,true] {
-        crate::render::rtl_text::BYPASS.store(!fixed,std::sync::atomic::Ordering::Relaxed);
+        crate::visuals::rtl_text::BYPASS.store(!fixed,std::sync::atomic::Ordering::Relaxed);
         for (name,title,artist,lrc) in songs {
             for open in [false,true] {
                 let mut h=H::new();h.app.settings.pet=false;
-                if !fixed {h.ctx.set_fonts(crate::render::theme::fonts_without_tibetan());}
+                if !fixed {h.ctx.set_fonts(crate::visuals::theme::fonts_without_tibetan());}
                 h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
                 let media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:title.into(),artist:artist.into(),duration:215.0,playing:true,position:7.0,
                     playback_type:crate::smtc::MediaKind::Music,..Default::default()};
                 h.media=media.clone();h.frame(vec![]);
-                h.app.ly=crate::app::LyricsState{key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
-                    song:Some(crate::app::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:None}),
+                h.app.ly=crate::island::LyricsState{key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
+                    song:Some(crate::island::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:None}),
                     lyrics:Some(crate::lyrics::parse_lrc(lrc)),..Default::default()};
                 if open {h.app.show_page(0);}
-                let (w,hgt)=(crate::app::CANVAS_W,WIN_H);
+                let (w,hgt)=(crate::island::CANVAS_W,WIN_H);
                 let mut raster=feature_raster_sized(w,hgt);
                 for frame in 0..90 {
                     h.t+=1.0/60.0;
@@ -52,7 +52,7 @@ fn complex_script_lyrics_preview(){
             }
         }
     }
-    crate::render::rtl_text::BYPASS.store(false,std::sync::atomic::Ordering::Relaxed);
+    crate::visuals::rtl_text::BYPASS.store(false,std::sync::atomic::Ordering::Relaxed);
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn ics_import_preserves_recurring_overnight_and_all_day_events_on_reimport() {
 fn local_calendar_editor_makes_storage_scope_visible_with_connected_accounts() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let cfg=crate::calendar::Config{provider:crate::calendar::Provider::Feishu,username:"test".into(),href:None,server:None};
-    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::app::CalendarState::load();
+    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::island::CalendarState::load();
     let remote=crate::mail::Meeting{all_day:false,title:"飞书会议".into(),start:chrono::Local::now().timestamp()+3600,end:None,at:String::new(),uid:"remote-event".into()};
     h.app.calendar.events.push(remote.clone());
     h.app.open_calendar(None);h.hover(H::local(300.0,40.0),1.0);
@@ -215,7 +215,7 @@ fn local_calendar_can_create_edit_reload_and_remind_without_accounts() {
 fn calendar_month_errors_remain_visible_until_retry_or_month_change(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let cfg=crate::calendar::Config{provider:crate::calendar::Provider::WeCom,username:"test".into(),href:None,server:None};
-    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::app::CalendarState::load();
+    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::island::CalendarState::load();
     h.app.request_calendar_month(true);h.app.pending.clear();
     let month=h.app.calendar.view.month;
     h.app.calendar_event(crate::calendar::Event::MonthLoaded{config:cfg,month,result:Err("日程时间无法解析".into())});
@@ -233,7 +233,7 @@ fn calendar_combines_platforms_and_settings_tabs_do_not_filter_events() {
     let feishu=crate::calendar::Config{provider:crate::calendar::Provider::Feishu,username:"飞书账号".into(),href:None,server:None};
     let ding=crate::calendar::Config{provider:crate::calendar::Provider::DingTalk,username:"钉钉账号".into(),..feishu.clone()};
     crate::calendar::save_config(&feishu).unwrap();crate::calendar::save_config(&ding).unwrap();
-    h.app.calendar=crate::app::CalendarState::load();
+    h.app.calendar=crate::island::CalendarState::load();
     let day=chrono::Local::now().date_naive();
     let event=|uid:&str|crate::mail::Meeting{all_day:false,end:None,title:uid.into(),start:chrono::Local::now().timestamp()+60,at:"18:00".into(),uid:uid.into()};
     for (cfg,uid) in [(&feishu,"飞书会议"),(&ding,"钉钉会议")] {
@@ -493,11 +493,11 @@ fn music_lyrics_island_toggle_is_independent_and_persistent() {
     assert!(!h.app.show_lyrics && !h.app.settings.lyrics_enabled);
     let saved=crate::model::Settings::load();
     assert!(saved.island_lyrics && !saved.lyrics_enabled);
-    h.hover(Pos2::new(WIN_W/2.0,PH+crate::app::STATUS_H+30.0),1.0);
+    h.hover(Pos2::new(WIN_W/2.0,PH+crate::island::STATUS_H+30.0),1.0);
     assert!(!h.app.open);
     assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"));
     let pet_width=if h.app.pet_enabled(){48.0}else{0.0};
-    assert!((h.app.current_width()-crate::app::LYRIC_BAR_W-pet_width).abs()<2.0);
+    assert!((h.app.current_width()-crate::island::LYRIC_BAR_W-pet_width).abs()<2.0);
 }
 
 #[test]
@@ -536,7 +536,7 @@ fn expanded_and_segmented_lyrics_share_the_early_display_time(){
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let next=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text()=="下一句"=>Some(text),_=>None}).unwrap();
     assert_eq!(next.galley.job.sections[0].format.font_id.size,12.0,"展开歌词也应在开唱前高亮下一句");
-    h.hover(Pos2::new(WIN_W/2.0,PH+crate::app::STATUS_H+30.0),1.0);
+    h.hover(Pos2::new(WIN_W/2.0,PH+crate::island::STATUS_H+30.0),1.0);
     let line="愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光";
     h.media.position=6.0;h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
     for _ in 0..60{h.frame(vec![]);}
@@ -566,7 +566,7 @@ fn island_lyrics_center_segments_in_a_fixed_height(){
         assert!((center-WIN_W/2.0-offset).abs()<1.5,"歌词应在内容区居中");
         assert!(!text.galley.elided,"显示段应完整显示");
         assert_eq!(text.galley.rows.len(),1,"每次只显示一段歌词");
-        assert!((h.hit.height()-(crate::app::BAR_H+4.0)).abs()<0.1,"岛应保持固定高度");
+        assert!((h.hit.height()-(crate::island::BAR_H+4.0)).abs()<0.1,"岛应保持固定高度");
         assert!(text.visual_bounding_rect().bottom()<=h.hit.bottom(),"文字应完整显示在岛内");
     }
 }
@@ -592,7 +592,7 @@ fn island_lyrics_keep_title_fallback_and_intro_and_gaps(){
         if let Some(error)=&h.app.ly.error {
             assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==error.label())),"歌词错误提示只应在展开内显示");
         }
-        assert!((h.app.current_width()-crate::app::LYRIC_BAR_W).abs()<2.0,"状态 {state} 应保持音乐信息岛宽度");
+        assert!((h.app.current_width()-crate::island::LYRIC_BAR_W).abs()<2.0,"状态 {state} 应保持音乐信息岛宽度");
         assert!(h.region.height()>30.0);
         if state>=2 {
             assert!(h.app.compact_notices(),"歌名兜底仍属于岛上歌词模式");
@@ -744,7 +744,7 @@ fn starting_timer_keeps_lyrics_album_and_mascot_with_a_compact_countdown(){
         artwork:Some(std::sync::Arc::new(egui::ColorImage::new([32,32],egui::Color32::from_rgb(70,120,220)))),..Default::default()};
     h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]晚风吹过了山岗\n[00:15]下一句"));
     for _ in 0..120 {h.frame(vec![]);}
-    for phase in [crate::app::Phase::Focus,crate::app::Phase::Rest] {
+    for phase in [crate::island::Phase::Focus,crate::island::Phase::Rest] {
         h.app.pomo.phase=phase;h.app.pomo.remaining=h.app.phase_secs(phase);h.app.pomo.running=true;
         for _ in 0..120 {
             h.frame(vec![]);
@@ -805,7 +805,7 @@ fn full_notifications_return_when_island_lyrics_are_not_visible(){
         if music {h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
         for _ in 0..90{h.frame(vec![]);}h.app.alert("大写锁定","已开启",5,false);for _ in 0..60{h.frame(vec![]);}
         for label in ["大写锁定","已开启"]{assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==label&&t.opacity_factor>0.9&&s.clip_rect.contains(t.visual_bounding_rect().center()))),"非岛上歌词状态应直接显示通知文案：{label}");}
-        assert!((h.app.current_width()-crate::app::HUD_W-44.0).abs()<1.0,"完整提示保留吉祥物与文案的宽度");
+        assert!((h.app.current_width()-crate::island::HUD_W-44.0).abs()<1.0,"完整提示保留吉祥物与文案的宽度");
     }
 }
 
@@ -995,7 +995,7 @@ fn calendar_island_collapses_and_reopens_on_the_same_page() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.open_calendar(None);h.hover(H::local(300.0,60.0),1.0);
     assert_eq!(h.app.page,7);assert!(h.app.open);
-    assert!(h.hit.bottom()>=crate::app::CALENDAR_H,"月历最后一行必须位于可操作区域内");
+    assert!(h.hit.bottom()>=crate::island::CALENDAR_H,"月历最后一行必须位于可操作区域内");
     h.hover(Pos2::new(600.0,WIN_H+30.0),5.0);assert!(!h.app.open);
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);assert!(h.app.open);
     assert_eq!(h.app.page,7);assert!(!h.app.settings_open);
@@ -1218,7 +1218,7 @@ fn calendar_sync_result_does_not_enqueue_another_sync() {
     h.app.calendar.config=Some(config.clone());h.app.open_calendar(None);h.app.pending.clear();
     h.app.calendar.view.loading=false;
     h.app.calendar_event(crate::calendar::Event::Synced{config,events:vec![],at:"12:00".into()});
-    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::app::Cmd::CalendarMonth(_))),"同步结果不能触发下一轮同步，否则后台会持续请求");
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::island::Cmd::CalendarMonth(_))),"同步结果不能触发下一轮同步，否则后台会持续请求");
 }
 
 #[test]
@@ -1245,7 +1245,7 @@ fn calendar_add_button_does_not_overlap_the_battery_ring(){
     let mut raster=feature_raster();let mut shapes=Vec::new();
     for _ in 0..90 {
         h.t+=1.0/60.0;
-        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),focused:true,
+        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W,WIN_H))),time:Some(h.t),focused:true,
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(scale),..Default::default()})).collect(),..Default::default()};
         let env=Env{t:h.t,clock:"17:43:00".into(),date:date.into(),today:day.to_string(),cursor:Some(Pos2::new(WIN_W/2.0,12.0)),battery,charging:true,..Default::default()};
         let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H)),&env);});});
@@ -1255,13 +1255,13 @@ fn calendar_add_button_does_not_overlap_the_battery_ring(){
     if let Some(path)=std::env::var_os("DAOZAI_CALENDAR_HEADER_PREVIEW").filter(|_|index==0&&!seconds) {
         raster.buf.fill([0.15,0.15,0.15,1.0]);raster.draw(&h.ctx.tessellate(shapes.clone(),2.0),2.0);
         let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-        let image=image::RgbaImage::from_raw((crate::app::CANVAS_W*2.0) as u32,(WIN_H*2.0) as u32,rgba).unwrap();
+        let image=image::RgbaImage::from_raw((crate::island::CANVAS_W*2.0) as u32,(WIN_H*2.0) as u32,rgba).unwrap();
         image::imageops::crop_imm(&image,200,0,880,470).to_image().save(path).unwrap();
     }
     let text=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text) if text.galley.text()=="＋ 添加日程"=>Some(text.visual_bounding_rect()),_=>None}).unwrap();
     let button=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Rect(rect) if rect.rect.contains(text.center()) && (rect.rect.width()-54.0).abs()<0.1 && (rect.rect.height()-18.0).abs()<0.1=>Some(rect.rect),_=>None}).unwrap();
     if battery.is_some(){
-        let ring=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Circle(circle) if (circle.radius-8.2*crate::app::bar_layout::BATTERY_SCALE).abs()<0.1 && circle.center.y<crate::app::STATUS_H=>Some(Rect::from_center_size(circle.center,Vec2::splat(circle.radius*2.0+circle.stroke.width))),_=>None}).unwrap();
+        let ring=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Circle(circle) if (circle.radius-8.2*crate::island::bar_layout::BATTERY_SCALE).abs()<0.1 && circle.center.y<crate::island::STATUS_H=>Some(Rect::from_center_size(circle.center,Vec2::splat(circle.radius*2.0+circle.stroke.width))),_=>None}).unwrap();
         assert!(!button.expand(3.0).intersects(ring),"日程添加按钮与电量圆环应留有间距：按钮 {button:?}，圆环 {ring:?}");
     }
     let clock=h.app.settings.clock_text("17:43:00");

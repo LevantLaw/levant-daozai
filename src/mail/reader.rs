@@ -1,5 +1,5 @@
 //! 邮件全文阅读窗口：完整正文、收件账号和网页链接。
-use crate::app::{App,Cmd};
+use crate::island::{App,Cmd};
 use crate::mail::format::{self as mail_format,Kind};
 use eframe::egui::{self,Color32};
 
@@ -18,7 +18,7 @@ fn rich_label(ui:&mut egui::Ui,text:&str,size:f32,color:Color32,strong:bool,form
         if part.is_empty(){continue;}
         let bold=strong||index%2==1;
         job.append(part,0.0,egui::text::TextFormat{
-            font_id:crate::render::theme::font(size,if bold{crate::render::theme::W::Bold}else{crate::render::theme::W::Regular}),
+            font_id:crate::visuals::theme::font(size,if bold{crate::visuals::theme::W::Bold}else{crate::visuals::theme::W::Regular}),
             color,..Default::default()
         });
     }

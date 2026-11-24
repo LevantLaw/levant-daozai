@@ -1,9 +1,9 @@
 //! 隔离数据目录下持续绘制七分钟：前六分钟反复伸缩，最后一分钟稳定歌词。
 #[cfg(windows)]
 fn main()->eframe::Result<()> {
-    use daozai::app::{App,Env,Options,WIN_W,WIN_H};
+    use daozai::island::{App,Env,Options,WIN_W,WIN_H};
     use eframe::egui;
-    struct Probe {app:App,native:daozai::platform::native::Window,start:std::time::Instant,frame_at:std::time::Instant,textures:Option<usize>,frames:u64,min_width:f32,max_width:f32}
+    struct Probe {app:App,native:daozai::os::native::Window,start:std::time::Instant,frame_at:std::time::Instant,textures:Option<usize>,frames:u64,min_width:f32,max_width:f32}
     impl eframe::App for Probe {
         fn clear_color(&self,_:&egui::Visuals)->[f32;4]{[0.0;4]}
         fn update(&mut self,ctx:&egui::Context,_:&mut eframe::Frame){
@@ -33,12 +33,12 @@ fn main()->eframe::Result<()> {
         }
     }
     std::env::set_var("DAOZAI_DATA_DIR",std::env::temp_dir().join(format!("daozai-render-soak-{}",std::process::id())));
-    let options=eframe::NativeOptions{vsync:false,viewport:egui::ViewportBuilder::default().with_title("岛仔性能检查").with_inner_size([daozai::app::CANVAS_W,WIN_H]).with_position([100.0,100.0]).with_decorations(false).with_transparent(true).with_active(false),..Default::default()};
+    let options=eframe::NativeOptions{vsync:false,viewport:egui::ViewportBuilder::default().with_title("岛仔性能检查").with_inner_size([daozai::island::CANVAS_W,WIN_H]).with_position([100.0,100.0]).with_decorations(false).with_transparent(true).with_active(false),..Default::default()};
     eframe::run_native("岛仔性能检查",options,Box::new(|cc|{
         cc.egui_ctx.set_pixels_per_point(1.0);
         if let Some(gl)=&cc.gl{use eframe::glow::HasContext;println!("renderer={}",unsafe{gl.get_parameter_string(eframe::glow::RENDERER)});}
         let app=App::new(&cc.egui_ctx,Options{fetch_lyrics:false,pet_idle:1e9});
-        let native=daozai::platform::native::Window::new(cc).unwrap();
+        let native=daozai::os::native::Window::new(cc).unwrap();
         Ok(Box::new(Probe{app,native,start:std::time::Instant::now(),frame_at:std::time::Instant::now(),textures:None,frames:0,min_width:f32::INFINITY,max_width:0.0}))
     }))
 }

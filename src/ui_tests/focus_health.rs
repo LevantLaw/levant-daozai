@@ -18,7 +18,7 @@ fn quality_distinct_reminders_are_queued_instead_of_overwritten() {
 #[test]
 fn island_position_drag_tracks_screen_coordinates_and_saves_on_release(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::platform::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
+    let bounds=crate::os::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
     for dock in crate::model::Dock::ALL {for ppp in [1.0,1.5] {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_offset=-40;h.app.settings.save();
         // 起点离居中足够远，90 点位移不会落进居中吸附范围。
@@ -45,7 +45,7 @@ fn island_position_drag_tracks_screen_coordinates_and_saves_on_release(){
 #[test]
 fn island_position_drag_clamps_to_existing_limits_and_stays_resident(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     for dock in crate::model::Dock::ALL {for shape in crate::model::IslandShape::ALL {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_shape=shape;
         let start=island_drag_header(&mut h,bounds,1.0);
@@ -71,9 +71,9 @@ fn island_position_drag_clamps_to_existing_limits_and_stays_resident(){
 fn island_position_drag_below_a_top_bar_switches_edges_like_the_bare_screen(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::{Dock,Settings};
-    let monitor=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
-    let display=crate::platform::display_layout::Display{id:"d".into(),label:"d".into(),bounds:monitor,work_top:28,primary:true};
-    let bounds=crate::platform::display_layout::placement_bounds(&display,true);
+    let monitor=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let display=crate::os::display_layout::Display{id:"d".into(),label:"d".into(),bounds:monitor,work_top:28,primary:true};
+    let bounds=crate::os::display_layout::placement_bounds(&display,true);
     for to in [Dock::Left,Dock::Right] {
         let mut h=H::new();h.app.settings.save();
         let start=island_drag_header(&mut h,bounds,1.0);
@@ -95,7 +95,7 @@ fn island_position_drag_below_a_top_bar_switches_edges_like_the_bare_screen(){
 fn island_position_drag_switches_between_all_three_edges_and_saves_on_release(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::{Dock,IslandShape,Settings};
-    let bounds=crate::platform::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
+    let bounds=crate::os::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
     for from in Dock::ALL {for to in Dock::ALL.into_iter().filter(|to|*to!=from) {for ppp in [1.0,1.5] {for shape in IslandShape::ALL {
         let mut h=H::new();h.app.settings.dock=from;h.app.settings.island_shape=shape;h.app.settings.save();
         let start=island_drag_header(&mut h,bounds,ppp);
@@ -128,7 +128,7 @@ fn island_position_drag_switches_between_all_three_edges_and_saves_on_release(){
 fn island_position_drag_keeps_the_edge_in_the_middle_and_does_not_flap_at_corners(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::Dock;
-    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     let mut h=H::new();let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
     for (point,dock) in [(Pos2::new(500.0,500.0),Dock::Top),(Pos2::new(0.0,500.0),Dock::Left),
@@ -151,7 +151,7 @@ fn island_position_drag_keeps_the_edge_in_the_middle_and_does_not_flap_at_corner
 #[test]
 fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     let mut h=H::new();h.app.settings.island_offset=-30;h.app.settings.save();
     let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
@@ -160,7 +160,7 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     assert!(!h.app.open && h.app.progress()<0.5,"按住不动也应拿起岛体");
     assert_eq!(h.app.settings.island_offset,-30);
     // 窗口平滑跟随：一帧跳过去的光标，窗口要分几帧追上，且不按整数刻度跳。
-    let travel=1920.0/2.0-crate::platform::display_layout::ISLAND_HALF_EXTENT;
+    let travel=1920.0/2.0-crate::os::display_layout::ISLAND_HALF_EXTENT;
     let to=|units:f32|Pos2::new(start.x+(units+30.0)/100.0*travel,start.y);
     island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);
     island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);
@@ -193,7 +193,7 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
 #[test]
 fn island_position_drag_ignores_jitter_and_preserves_header_buttons(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     let mut h=H::new();let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
     island_drag_frame(&mut h,bounds,1.0,Some(start+Vec2::splat(1.0)),None);
@@ -206,7 +206,7 @@ fn island_position_drag_ignores_jitter_and_preserves_header_buttons(){
     assert!(h.app.settings_open,"时间区域拖动不能拦截设置按钮");
     assert_eq!(h.app.settings.island_offset,0);
     h.app.settings_open=false;
-    for (page,x,expected) in [(3,330.0,crate::app::Cmd::AddFiles),(6,319.0,crate::app::Cmd::QuotaRefresh)] {
+    for (page,x,expected) in [(3,330.0,crate::island::Cmd::AddFiles),(6,319.0,crate::island::Cmd::QuotaRefresh)] {
         h.app.show_page(page);
         for _ in 0..60{island_drag_frame(&mut h,bounds,1.0,Some(start),None);}
         let screen=island_drag_frame(&mut h,bounds,1.0,Some(start),None);
@@ -274,7 +274,7 @@ fn timer_counts_elapsed_time_after_sleep() {
 #[test]
 fn reminders_are_visible_while_collapsed_and_can_be_disabled(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.t+=2701.0;h.frame(vec![]);assert!(h.app.notice.is_some());assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Notify(t,..)if t.contains("喝水"))));
+    h.t+=2701.0;h.frame(vec![]);assert!(h.app.notice.is_some());assert!(h.cmds.iter().any(|c|matches!(c,crate::island::Cmd::Notify(t,..)if t.contains("喝水"))));
     h.app.water.remind=false;h.app.settings.sit_remind=false;h.app.notice=None;h.cmds.clear();h.t+=2800.0;h.frame(vec![]);assert!(h.app.notice.is_none());
 }
 
@@ -288,10 +288,10 @@ fn water_serving_and_undo_are_consistent(){
 #[test]
 fn mascot_rest_and_focus_have_distinct_states(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.opts.pet_idle=45.0;h.frame(vec![]);
-    assert_eq!(h.app.pet_state(),crate::app::extras::PetState::Awake);
-    h.t+=50.0;h.frame(vec![]);assert_eq!(h.app.pet_state(),crate::app::extras::PetState::Dozing);
-    h.t+=140.0;h.frame(vec![]);assert_eq!(h.app.pet_state(),crate::app::extras::PetState::Sleeping);
-    h.app.pomo.running=true;assert_eq!(h.app.pet_state(),crate::app::extras::PetState::Focused);
+    assert_eq!(h.app.pet_state(),crate::island::extras::PetState::Awake);
+    h.t+=50.0;h.frame(vec![]);assert_eq!(h.app.pet_state(),crate::island::extras::PetState::Dozing);
+    h.t+=140.0;h.frame(vec![]);assert_eq!(h.app.pet_state(),crate::island::extras::PetState::Sleeping);
+    h.app.pomo.running=true;assert_eq!(h.app.pet_state(),crate::island::extras::PetState::Focused);
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn singing_microphone_moves_relative_to_the_face_and_disappears_on_pause(){
         }).collect();
         assert_eq!(eyes.len(),2);offsets.push(head.y-(eyes[0]+eyes[1])/2.0);
     }
-    if crate::app::bar_layout::animations_enabled(){
+    if crate::island::bar_layout::animations_enabled(){
         let range=offsets.iter().copied().fold(f32::NEG_INFINITY,f32::max)-offsets.iter().copied().fold(f32::INFINITY,f32::min);
         assert!(range>0.4,"麦克风需要有独立动态");
     }
@@ -352,7 +352,7 @@ fn mascot_drink_nods_and_focus_completion_celebrates(){
 
 #[test]
 fn mascot_system_idle_wakes_once_then_follows_pointer(){
-    use crate::app::extras::PetState;
+    use crate::island::extras::PetState;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.opts.pet_idle=45.0;
     h.system_idle=Some(200.0);h.frame(vec![]);assert_eq!(h.app.pet_state(),PetState::Sleeping);
     h.system_idle=Some(0.0);h.frame(vec![]);assert_eq!(h.app.pet_state(),PetState::Waking);
@@ -378,7 +378,7 @@ fn idle_mascot_stays_static_until_hovered(){
 #[test]
 #[ignore = "按需导出吉祥物的实际渲染画面"]
 fn mascot_expression_gallery(){
-    use crate::app::extras::PetState;
+    use crate::island::extras::PetState;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::env::var_os("DAOZAI_PET_PREVIEW_DIR").map(std::path::PathBuf::from)
         .unwrap_or_else(||std::env::temp_dir().join(format!("daozai-pet-preview-{}",std::process::id())));
@@ -417,7 +417,7 @@ fn mascot_expression_gallery(){
 #[test]
 #[ignore="按需导出接入程序后的十二组表情"]
 fn mascot_integrated_expression_gallery(){
-    use crate::app::pet_expressions::Expression;
+    use crate::island::pet_expressions::Expression;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_PET_INTEGRATED_PREVIEW").expect("需指定预览目录"));
     std::fs::create_dir_all(&dest).unwrap();
@@ -456,7 +456,7 @@ fn minimal_takes_precedence_over_mascot(){
 
 #[test]
 fn lunch_break_silences_water_and_sit_reminders(){
-    use crate::app::SIT_TITLE;
+    use crate::island::SIT_TITLE;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.system_idle=Some(0.0);h.frame(vec![]);
     // 测试时钟固定在 09:41，把午休设成 09:30–10:00。
@@ -465,7 +465,7 @@ fn lunch_break_silences_water_and_sit_reminders(){
     h.frame(vec![]);assert!(h.app.notice.is_none(),"午休中不应弹喝水或久坐提醒");
     h.app.settings.lunch_rest=false;h.frame(vec![]);
     assert!(h.app.notice.is_some(),"关闭午休后应恢复提醒");
-    h.app.notice=None;h.app.alerts.clear();h.app.water.remind=false;h.app.confirm_health_reminder(crate::app::extras::HealthReminder::Sit);h.app.sit_start=h.t-2.0*3600.0;
+    h.app.notice=None;h.app.alerts.clear();h.app.water.remind=false;h.app.confirm_health_reminder(crate::island::extras::HealthReminder::Sit);h.app.sit_start=h.t-2.0*3600.0;
     h.app.settings.lunch_rest=true;h.app.settings.lunch_start=10*60;h.app.settings.lunch_end=13*60;
     h.frame(vec![]);assert!(h.app.notice.as_ref().is_some_and(|a|a.title==SIT_TITLE),"午休以外照常提醒");
 }
@@ -482,17 +482,17 @@ fn health_time_subpage_edits_lunch_and_backs_out_one_level(){
 
 #[test]
 fn sit_reminder_waits_for_confirmation_before_restarting(){
-    use crate::app::SIT_TITLE;
+    use crate::island::SIT_TITLE;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.system_idle=Some(0.0);h.frame(vec![]);h.app.water.remind=false;
     h.t+=59.0*60.0;h.frame(vec![]);assert!(h.app.notice.is_none(),"未满 60 分钟不提醒: {:?}",h.app.notice.as_ref().map(|a|(a.title.clone(),a.body.clone())));
     h.t+=61.0;h.frame(vec![]);
     assert!(h.app.notice.as_ref().is_some_and(|a|a.title==SIT_TITLE));
-    assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Notify(t,..)if t==SIT_TITLE)));
+    assert!(h.cmds.iter().any(|c|matches!(c,crate::island::Cmd::Notify(t,..)if t==SIT_TITLE)));
     let count=h.app.history.len();
     h.screen_locked=true;h.system_idle=Some(40.0*60.0);h.t+=500.0*60.0;h.frame(vec![]);
     assert!(h.app.notice.is_none());assert_eq!(h.app.history.len(),count,"锁屏和长时间未处理都只保留一次提醒");
-    h.app.confirm_health_reminder(crate::app::extras::HealthReminder::Sit);assert_eq!(h.app.sat_minutes(),0);
+    h.app.confirm_health_reminder(crate::island::extras::HealthReminder::Sit);assert_eq!(h.app.sat_minutes(),0);
     h.screen_locked=false;h.system_idle=Some(0.0);h.t+=59.0*60.0;h.frame(vec![]);assert!(h.app.notice.is_none());
     h.t+=61.0;h.frame(vec![]);assert!(h.app.notice.as_ref().is_some_and(|a|a.title==SIT_TITLE));
 }
@@ -500,7 +500,7 @@ fn sit_reminder_waits_for_confirmation_before_restarting(){
 #[test]
 fn focus_completion_offers_starting_the_break(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);h.app.pomo.running=true;h.app.pomo.remaining=1.0;h.t+=2.0;h.frame(vec![]);
-    assert!(h.app.pomo.phase==crate::app::Phase::Rest);assert!(!h.app.pomo.running);assert!(h.app.notice.is_some());
+    assert!(h.app.pomo.phase==crate::island::Phase::Rest);assert!(!h.app.pomo.running);assert!(h.app.notice.is_some());
     for _ in 0..60 {h.frame(vec![]);}h.click_text("开始");assert!(h.app.pomo.running);
 }
 
@@ -516,13 +516,13 @@ fn switching_to_rest_waits_for_the_start_button(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.app.go(1,1.0);h.hover(H::local(260.0,70.0),1.0);
     h.click(H::local(296.0,106.5));
-    assert!(h.app.pomo.phase==crate::app::Phase::Rest);
+    assert!(h.app.pomo.phase==crate::island::Phase::Rest);
     assert!(!h.app.pomo.running,"切换阶段应等待用户点击开始");
 }
 
 #[test]
 fn focus_page_selects_stopped_phases_and_starts_only_from_play(){
-    use crate::app::Phase;
+    use crate::island::Phase;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.focus_minutes=30;h.app.settings.rest_minutes=7;
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.app.go(1,1.0);h.hover(H::local(260.0,70.0),1.0);
@@ -546,15 +546,15 @@ fn focus_page_selects_stopped_phases_and_starts_only_from_play(){
 
 #[test]
 fn collapsed_focus_uses_tomato_and_rest_uses_a_white_cup(){
-    use crate::app::Phase;
+    use crate::island::Phase;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.tray_focus=false;
     for phase in [Phase::Focus,Phase::Rest] {
         h.app.pomo.phase=phase;h.app.pomo.remaining=h.app.phase_secs(phase);h.app.pomo.running=true;
         for _ in 0..120 {h.frame(vec![]);}
         let secs=h.app.pomo.remaining.ceil() as u32;let text=format!("{:02}:{:02}",secs/60,secs%60);
-        let color=if phase==Phase::Focus{crate::render::theme::RED_TOP}else{crate::render::theme::SOFT_GREEN};
+        let color=if phase==Phase::Focus{crate::visuals::theme::RED_TOP}else{crate::visuals::theme::SOFT_GREEN};
         assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==text && t.fallback_color==color)),"常驻倒计时颜色应跟随阶段");
-        let tomato=h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Mesh(m) if m.vertices.iter().any(|v|v.color==crate::render::theme::RED_TOP)));
+        let tomato=h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Mesh(m) if m.vertices.iter().any(|v|v.color==crate::visuals::theme::RED_TOP)));
         if phase==Phase::Focus {assert!(tomato,"专注时应显示红色番茄水位");}
         else {
             assert!(!tomato,"休息时应替换番茄");
@@ -569,11 +569,11 @@ fn focus_and_rest_completion_prepare_the_configured_next_phase_without_starting(
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.settings.rest_minutes=7;h.app.settings.focus_minutes=30;
     for _ in 0..5 {
-        h.app.pomo.phase=crate::app::Phase::Focus;h.app.pomo.running=true;h.app.pomo.remaining=0.01;h.frame(vec![]);
-        assert!(h.app.pomo.phase==crate::app::Phase::Rest && !h.app.pomo.running);
+        h.app.pomo.phase=crate::island::Phase::Focus;h.app.pomo.running=true;h.app.pomo.remaining=0.01;h.frame(vec![]);
+        assert!(h.app.pomo.phase==crate::island::Phase::Rest && !h.app.pomo.running);
         assert_eq!(h.app.pomo.remaining,420.0);assert!(h.app.notice.is_some());
         h.app.pomo.running=true;h.app.pomo.remaining=0.01;h.frame(vec![]);
-        assert!(h.app.pomo.phase==crate::app::Phase::Focus && !h.app.pomo.running);
+        assert!(h.app.pomo.phase==crate::island::Phase::Focus && !h.app.pomo.running);
         assert_eq!(h.app.pomo.remaining,1800.0);
     }
 }

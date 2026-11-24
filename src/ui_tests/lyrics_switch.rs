@@ -24,9 +24,9 @@ fn finish(h:&mut H,release:std::sync::mpsc::Sender<()>){
 /// 模拟当前歌曲已查到同步歌词。
 fn showing(h:&mut H,media:&NowPlaying,lrc:&str){
     h.media=media.clone();h.frame(vec![]);
-    h.app.ly=crate::app::LyricsState{
+    h.app.ly=crate::island::LyricsState{
         key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
-        song:Some(crate::app::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:media.song_id}),
+        song:Some(crate::island::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:media.song_id}),
         lyrics:Some(crate::lyrics::parse_lrc(lrc)),..Default::default()
     };
     h.frame(vec![]);

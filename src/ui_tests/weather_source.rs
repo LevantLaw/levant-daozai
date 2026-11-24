@@ -1,6 +1,6 @@
 //! 和风设置的原生交互与截图；只使用占位凭据和合成天气。
 use super::*;
-use crate::{weather::source_ui::Provider,app::settings_theme::SettingsTheme};
+use crate::{weather::source_ui::Provider,island::settings_theme::SettingsTheme};
 
 fn fixture(theme:SettingsTheme)->H {
     let mut h=H::new();h.app.settings.settings_theme=theme;h.app.settings_tab=12;h.app.open_settings();h.ctx.set_embed_viewports(false);
@@ -18,14 +18,14 @@ fn weather_badge_only_dims_after_repeated_failures_and_old_data(){
             h.app.weather.failures=failures;
             let snapshot=crate::weather::Snapshot{place:"广州".into(),temp:23.0,code:2,day:true,at:chrono::Utc::now().timestamp()-age,..Default::default()};
             let output=h.ctx.run(Default::default(),|ctx|{egui::CentralPanel::default().show(ctx,|ui|{
-                let c=crate::render::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
-                let layout=crate::app::bar_layout::Layout::new(false,0,false,false,false,false,true,false);
+                let c=crate::visuals::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
+                let layout=crate::island::bar_layout::Layout::new(false,0,false,false,false,false,true,false);
                 h.app.paint_pill_weather(&c,100.0,&layout,&snapshot);
                 h.app.paint_side_weather(&c,220.0,30.0,&snapshot);
             });});
             let colors:Vec<_>=output.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()=="23°"=>Some(t.fallback_color),_=>None}).collect();
             assert_eq!(colors.len(),2,"横向和侧边都应显示温度");
-            assert!(colors.iter().all(|c|*c==if gray{crate::render::theme::GRAY}else{crate::render::theme::WHITE}),"等待刷新或单次失败时应保持白色，只有连续失败且数据明显过期才变灰：age={age}, failures={failures}");
+            assert!(colors.iter().all(|c|*c==if gray{crate::visuals::theme::GRAY}else{crate::visuals::theme::WHITE}),"等待刷新或单次失败时应保持白色，只有连续失败且数据明显过期才变灰：age={age}, failures={failures}");
         }
     }
 }
@@ -210,7 +210,7 @@ fn qweather_data_credit_opens_the_provider_site_in_forecast_and_solar_views(){
         assert!(h.app.weather.snapshot.as_ref().is_some_and(|s|s.days.len()==7),"检查署名时必须实际显示和风数据");
         assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().starts_with("预报 "))),"预报需标明自己的更新时间");
         let point=h.ctx.read_response(egui::Id::new(("card",true,"weather-source"))).unwrap().rect.center();
-        h.click(point);assert!(h.cmds.contains(&crate::app::Cmd::OpenUrl("https://www.qweather.com/".into())));assert_eq!(h.app.page(),8);
+        h.click(point);assert!(h.cmds.contains(&crate::island::Cmd::OpenUrl("https://www.qweather.com/".into())));assert_eq!(h.app.page(),8);
     }
 }
 

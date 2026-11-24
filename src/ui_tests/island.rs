@@ -32,7 +32,7 @@ fn island_meshes_stay_valid_after_long_uptime_and_repeated_hover(){
 #[test]
 fn resized_font_atlases_stop_reuploading_and_release_unused_sizes(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let ctx=egui::Context::default();crate::render::theme::load_fonts(&ctx);
+    let ctx=egui::Context::default();crate::visuals::theme::load_fonts(&ctx);
     ctx.set_embed_viewports(false);
     let child=egui::ViewportId::from_hash_of("font-upload-settings");
     let children=std::sync::Arc::new(Mutex::new(Vec::new()));let capture=children.clone();
@@ -78,7 +78,7 @@ fn glass_pill_rim_stays_on_outline_while_collapsing() {
         h.hover(Pos2::new(WIN_W/2.0,15.0),1.5);
         assert!(h.app.progress()>0.99);
         h.cursor=None;
-        let mut raster=crate::preview_raster::Raster::new((crate::app::CANVAS_W*ppp) as usize,(WIN_H*ppp) as usize);
+        let mut raster=crate::preview_raster::Raster::new((crate::island::CANVAS_W*ppp) as usize,(WIN_H*ppp) as usize);
         let mut checked=0;
         for frame in 0..100 {
             h.frame(vec![egui::Event::PointerGone]);
@@ -176,7 +176,7 @@ fn hover_expands_with_overshoot_and_leave_collapses() {
     }
     assert!(peak > 1.002 && peak < 1.02, "展开应有轻微过冲, peak={peak}");
     assert!((h.app.progress() - 1.0).abs() < 0.02);
-    h.cursor = Some(Pos2::new(WIN_W / 2.0, PH + crate::app::STATUS_H + 30.0));
+    h.cursor = Some(Pos2::new(WIN_W / 2.0, PH + crate::island::STATUS_H + 30.0));
     for _ in 0..40 {
         h.frame(vec![]);
     }
@@ -205,9 +205,9 @@ fn minimal_hover_excludes_the_surrounding_browser_tabs() {
     h.app.set_minimal(true);
     for _ in 0..90 {h.frame(vec![]);}
     for cursor in [
-        Pos2::new(WIN_W/2.0,crate::app::BAR_H_MIN+1.0),
-        Pos2::new(WIN_W/2.0+crate::app::BAR_W_MIN/2.0+2.0,2.0),
-        Pos2::new(WIN_W/2.0-crate::app::BAR_W_MIN/2.0-2.0,2.0),
+        Pos2::new(WIN_W/2.0,crate::island::BAR_H_MIN+1.0),
+        Pos2::new(WIN_W/2.0+crate::island::BAR_W_MIN/2.0+2.0,2.0),
+        Pos2::new(WIN_W/2.0-crate::island::BAR_W_MIN/2.0-2.0,2.0),
     ] {
         assert!(!h.hit.contains(cursor),"刘海外的标签栏应接收鼠标操作");
         h.hover(cursor,1.0);
@@ -240,7 +240,7 @@ fn minimal_hover_does_not_catch_tabs_during_collapse() {
     h.app.set_minimal(true);
     h.hover(Pos2::new(WIN_W/2.0,2.0),1.0);
     assert!(h.app.open);
-    h.cursor=Some(Pos2::new(WIN_W/2.0,PH+crate::app::STATUS_H+30.0));
+    h.cursor=Some(Pos2::new(WIN_W/2.0,PH+crate::island::STATUS_H+30.0));
     for _ in 0..30 {
         h.frame(vec![]);
         if !h.app.open {break;}
@@ -292,7 +292,7 @@ fn resident_layout_gallery(){
         }
         if music {h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
         if focus {h.app.pomo.running=true;h.app.pomo.remaining=1283.0;}
-        if pet {h.app.pet.react(crate::app::extras::PetState::Happy);}
+        if pet {h.app.pet.react(crate::island::extras::PetState::Happy);}
         h
     }
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -392,8 +392,8 @@ fn ui_alignment_layout_gallery(){
         if name=="water-chart"{h.app.show_page(2);h.app.water_view=1;h.app.water.drunk_ml=1250;h.app.water.hours[9]=250;h.app.water.hours[8]=500;h.app.water.hours[7]=500;}
         if name=="focus-running"{h.app.show_page(1);h.app.pomo.running=true;h.app.pomo.remaining=1283.0;}
         if let Some(kind)=name.strip_prefix("bt-"){
-            let kind=match kind{"headphones"=>crate::platform::bt::DeviceKind::Headphones,"keyboard"=>crate::platform::bt::DeviceKind::Keyboard,"mouse"=>crate::platform::bt::DeviceKind::Mouse,"gamepad"=>crate::platform::bt::DeviceKind::Gamepad,"phone"=>crate::platform::bt::DeviceKind::Phone,"speaker"=>crate::platform::bt::DeviceKind::Speaker,_=>crate::platform::bt::DeviceKind::Other};
-            h.app.bluetooth_alert(&crate::platform::bt::Device{id:"preview".into(),name:"我的蓝牙设备 · 超长设备名称与连接状态".into(),battery:Some(100),kind},true);
+            let kind=match kind{"headphones"=>crate::os::bt::DeviceKind::Headphones,"keyboard"=>crate::os::bt::DeviceKind::Keyboard,"mouse"=>crate::os::bt::DeviceKind::Mouse,"gamepad"=>crate::os::bt::DeviceKind::Gamepad,"phone"=>crate::os::bt::DeviceKind::Phone,"speaker"=>crate::os::bt::DeviceKind::Speaker,_=>crate::os::bt::DeviceKind::Other};
+            h.app.bluetooth_alert(&crate::os::bt::Device{id:"preview".into(),name:"我的蓝牙设备 · 超长设备名称与连接状态".into(),battery:Some(100),kind},true);
         }
         match name{"volume"=>{h.app.volume_ui=Some((64,false));h.app.alert("系统音量","64%",0,false);},"caps"=>h.app.alert("大写锁定","已开启",0,false),"language"=>h.app.alert("键盘输入语言","中文（简体，中国）",0,false),"network"=>h.app.alert("网络连接","Wi-Fi · 网络已连接",0,false),"power"=>h.app.alert("电源已连接","当前电量 76%",0,false),"meeting"=>h.app.meeting_alert(crate::mail::Meeting{ all_day:false,title:"产品方案评审与下阶段开发排期确认".into(),start:chrono::Local::now().timestamp()+600,end:None,at:"11-01 10:00".into(),uid:"preview".into()},"邮件 · product-and-design-team@company-example.com".into(),5),_=>{}}
         if name=="meeting-dingtalk" || name=="meeting-wecom" {
@@ -426,7 +426,7 @@ fn ui_alignment_layout_gallery(){
 
 #[test]
 fn resident_components_can_be_dragged_saved_and_reset(){
-    use crate::app::bar_layout::{CLOCK,BATTERY,WEATHER};
+    use crate::island::bar_layout::{CLOCK,BATTERY,WEATHER};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(h:&mut H,events:Vec<egui::Event>,slot:usize)->[Pos2;2]{
         let mut points=[Pos2::ZERO;2];
@@ -454,7 +454,7 @@ fn resident_components_can_be_dragged_saved_and_reset(){
 
 #[test]
 fn resident_drag_inserts_on_the_pointer_side(){
-    use crate::app::bar_layout::{BATTERY,CLOCK};
+    use crate::island::bar_layout::{BATTERY,CLOCK};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(h:&mut H,events:Vec<egui::Event>)->(Pos2,Pos2){
         let mut points=(Pos2::ZERO,Pos2::ZERO);
@@ -484,10 +484,10 @@ fn resident_drag_inserts_on_the_pointer_side(){
 
 #[test]
 fn native_app_icon_uses_bounded_resolution(){
-    let icon=crate::render::theme::app_icon();
+    let icon=crate::visuals::theme::app_icon();
     assert!(icon.width<=128 && icon.height<=128,"原生窗口图标不需要常驻完整的 1024 像素品牌原图");
     assert_eq!(icon.rgba.len(),(icon.width*icon.height*4)as usize);
-    assert!(std::sync::Arc::ptr_eq(&icon,&crate::render::theme::app_icon()));
+    assert!(std::sync::Arc::ptr_eq(&icon,&crate::visuals::theme::app_icon()));
 }
 
 #[test]
@@ -643,15 +643,15 @@ fn expanded_status_row_keeps_entries_clickable_and_time_short(){
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let rect=|h:&H,name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap_or_else(||panic!("展开态缺少 {name}")).rect;
     for (name,r) in [("bell-mail",rect(&h,"bell-mail")),("header-music",rect(&h,"header-music")),("agent-pill",rect(&h,"agent-pill"))] {
-        assert!(r.center().y<crate::app::STATUS_H,"{name} 应留在顶部状态行：{r:?}");
+        assert!(r.center().y<crate::island::STATUS_H,"{name} 应留在顶部状态行：{r:?}");
     }
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="09:41"&&t.visual_bounding_rect().center().y<crate::app::STATUS_H)),"展开态只显示时:分");
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="09:41"&&t.visual_bounding_rect().center().y<crate::island::STATUS_H)),"展开态只显示时:分");
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains("上午")||t.galley.text()=="9:41:00")),"展开态不受时段和秒数设置影响");
     h.click(rect(&h,"header-music").center());
     assert_eq!(h.app.page(),0,"展开态音乐入口可点");
     h.hover(H::local(300.0,60.0),0.5);
     h.click(rect(&h,"bell-mail").center());
-    assert_eq!(h.app.page(),crate::app::WINDOWS_PAGE,"展开态铃铛可点");
+    assert_eq!(h.app.page(),crate::island::WINDOWS_PAGE,"展开态铃铛可点");
 }
 
 #[test]
@@ -659,7 +659,7 @@ fn expanded_status_row_keeps_entries_clickable_and_time_short(){
 fn side_dock_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_FEATURE_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     for (dock,shape,skin) in [(crate::model::Dock::Left,crate::model::IslandShape::Notch,crate::model::Skin::Classic),(crate::model::Dock::Right,crate::model::IslandShape::Pill,crate::model::Skin::Cream)] {
         let tag=format!("{}-{}",dock.key(),shape.key());
         let mut h=H::new();let mut r=feature_raster_sized(w,hgt);
@@ -698,7 +698,7 @@ fn side_dock_gallery(){
 #[test]
 fn side_dock_auto_minimal_follows_avoidance(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     let mut h=H::new();h.app.settings.dock=crate::model::Dock::Right;h.app.settings.browser_minimal=true;
     let away=Some(Pos2::new(w/2.0,hgt-5.0));
     for _ in 0..60 {side_frame(&mut h,away);}
@@ -715,7 +715,7 @@ fn side_dock_auto_minimal_follows_avoidance(){
 #[test]
 fn side_dock_opens_from_the_edge_and_collapses_back(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     for (dock,shape) in [(crate::model::Dock::Left,crate::model::IslandShape::Notch),(crate::model::Dock::Right,crate::model::IslandShape::Pill)] {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_shape=shape;
         let away=Some(Pos2::new(w/2.0,hgt-5.0));
@@ -731,7 +731,7 @@ fn side_dock_opens_from_the_edge_and_collapses_back(){
         // 推到边缘停留 → 展开，面板从边缘滑出且完整留在画布内。
         for _ in 0..60 {out=side_frame(&mut h,Some(Pos2::new(edge,hgt/2.0)));}
         assert!(h.app.open && h.app.progress()>0.95,"{dock:?} 应展开");
-        assert!(out.hit.width()>crate::app::PW-1.0 && out.hit.height()<200.0,"{:?}",out.hit);
+        assert!(out.hit.width()>crate::island::PW-1.0 && out.hit.height()<200.0,"{:?}",out.hit);
         assert!(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt)).contains_rect(out.region),"区域不能超出画布：{:?}",out.region);
         if dock==crate::model::Dock::Left {assert!(out.hit.left()<=0.5)} else {assert!(out.hit.right()>=w-0.5)}
         // 离开 → 收起。
@@ -769,7 +769,7 @@ fn memory_profile_long_listening_session(){
     let mut seed=12345u64;let mut next=||{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);(seed>>33) as u32};
     let run=|h:&mut H,media:&crate::smtc::NowPlaying|{
         h.t+=1.0/60.0;
-        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),max_texture_side:Some(side),
+        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W,WIN_H))),time:Some(h.t),max_texture_side:Some(side),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
         let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),media:media.clone(),cursor:h.cursor,bt_ready:true,..Default::default()};
         let app=&mut h.app;
@@ -798,7 +798,7 @@ fn memory_profile_long_listening_session(){
 
 #[test]
 fn stale_exit_results_preserve_new_windows_and_unidentified_accounts(){
-    use crate::app::{Messenger,Unread};
+    use crate::island::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.wechat_notifications=true;
     let old=Unread{source:Messenger::Wechat,pid:100,window:11};

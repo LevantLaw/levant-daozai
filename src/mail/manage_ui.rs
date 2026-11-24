@@ -1,5 +1,5 @@
 //! 邮件列表整理状态与服务器操作反馈。
-use crate::{app::{App,Cmd},mail::{Account,Item},mail::manage::{Action,Folder,Request,Snapshot,Completed}};
+use crate::{island::{App,Cmd},mail::{Account,Item},mail::manage::{Action,Folder,Request,Snapshot,Completed}};
 use std::collections::{HashMap,HashSet};
 #[derive(Clone,Default,serde::Serialize,serde::Deserialize)]
 struct LocalFlags{seen:Option<bool>,removed:bool}
@@ -223,7 +223,7 @@ impl App{
     }
 }
 
-pub(crate) fn trash_icon(c:&crate::render::paint::Card,x:f32,y:f32,ink:eframe::egui::Color32){
+pub(crate) fn trash_icon(c:&crate::visuals::paint::Card,x:f32,y:f32,ink:eframe::egui::Color32){
     c.path(&[(x-4.4,y-2.8),(x-3.9,y+4.2),(x-3.5,y+5.2),(x-2.6,y+5.6),(x+2.6,y+5.6),(x+3.5,y+5.2),(x+3.9,y+4.2),(x+4.4,y-2.8)],1.25,ink);
     c.seg((x-5.8,y-4.8),(x+5.8,y-4.8),1.25,ink);
     c.path(&[(x-2.3,y-4.8),(x-2.3,y-6.1),(x-1.6,y-6.8),(x+1.6,y-6.8),(x+2.3,y-6.1),(x+2.3,y-4.8)],1.25,ink);

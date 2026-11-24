@@ -1,6 +1,6 @@
 //! 无窗口交互测试：直接向 egui 注入输入事件，验证悬停展开、切页、按钮。
 
-use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
+use crate::island::{App, Env, Options, PH, PW, WIN_H, WIN_W};
 
 mod enterprise_messenger;
 
@@ -69,13 +69,13 @@ struct H {
     app: App,
     t: f64,
     cursor: Option<Pos2>,
-    cmds:Vec<crate::app::Cmd>,
+    cmds:Vec<crate::island::Cmd>,
     region:Rect,
     hit:Rect,
     animating:bool,
     page_transition:bool,
     shapes:Vec<egui::epaint::ClippedShape>,
-    bt: Vec<crate::platform::bt::Device>,
+    bt: Vec<crate::os::bt::Device>,
     media: crate::smtc::NowPlaying,
     power: (Option<u8>, bool),
     network: Option<bool>,
@@ -99,7 +99,7 @@ impl H {
     fn frame(&mut self, events: Vec<egui::Event>) {
         self.t += 1.0 / 60.0;
         let mut raw = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(crate::app::CANVAS_W, WIN_H))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(crate::island::CANVAS_W, WIN_H))),
             time: Some(self.t),
             events,
             hovered_files:self.hovered_files.clone(),
@@ -179,7 +179,7 @@ impl H {
     }
     /// 页面内容的本地坐标：x 相对面板左边，y 相对状态行下方的页面内容顶部。
     fn local(x: f32, y: f32) -> Pos2 {
-        Pos2::new((WIN_W - PW) / 2.0 + x, crate::app::STATUS_H - crate::app::PAGE_RAISE + y)
+        Pos2::new((WIN_W - PW) / 2.0 + x, crate::island::STATUS_H - crate::island::PAGE_RAISE + y)
     }
     fn quota_accounts(&mut self,count:usize) {
         use crate::quota::{Account,Provider,Snapshot,Window};
@@ -211,8 +211,8 @@ fn rand_id() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
 }
 
-fn island_drag_frame(h:&mut H,bounds:crate::platform::display_layout::Bounds,ppp:f32,pointer:Option<Pos2>,pressed:Option<bool>)->Rect {
-    use crate::{platform::display_layout,app::side_dock};
+fn island_drag_frame(h:&mut H,bounds:crate::os::display_layout::Bounds,ppp:f32,pointer:Option<Pos2>,pressed:Option<bool>)->Rect {
+    use crate::{os::display_layout,island::side_dock};
     let dock=h.app.settings.dock;
     let (width,height)=if dock.is_side(){(side_dock::SIDE_W,side_dock::SIDE_H)}else{(WIN_W,WIN_H)};
     let offset=h.app.placement_offset();
@@ -224,7 +224,7 @@ fn island_drag_frame(h:&mut H,bounds:crate::platform::display_layout::Bounds,ppp
     if let (Some(pos),Some(pressed))=(cursor,pressed){events.push(egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()});}
     h.t+=1.0/60.0;
     let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),cursor,screen:Some(screen),bt_ready:true,..Default::default()};
-    let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W.max(width),height))),time:Some(h.t),events,focused:true,
+    let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W.max(width),height))),time:Some(h.t),events,focused:true,
         viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
     let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
         let out=h.app.frame(ui,Rect::from_min_size(ui.max_rect().min,Vec2::new(width,height)),&env);h.region=out.region;h.hit=out.hit;h.cmds.extend(out.cmds);
@@ -233,11 +233,11 @@ fn island_drag_frame(h:&mut H,bounds:crate::platform::display_layout::Bounds,ppp
     screen
 }
 
-fn island_drag_header(h:&mut H,bounds:crate::platform::display_layout::Bounds,ppp:f32)->Pos2 {
+fn island_drag_header(h:&mut H,bounds:crate::os::display_layout::Bounds,ppp:f32)->Pos2 {
     h.app.show_page(1);
     let mut screen=Rect::NOTHING;
     for _ in 0..90{screen=island_drag_frame(h,bounds,ppp,None,None);}
-    let (width,height)=if h.app.side(){(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H)}else{(WIN_W,WIN_H)};
+    let (width,height)=if h.app.side(){(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)}else{(WIN_W,WIN_H)};
     let win=Rect::from_min_size(Pos2::ZERO,Vec2::new(width,height));
     h.app.content_origin(win)+Vec2::new(210.0,15.0)-screen.min.to_vec2()
 }
@@ -294,10 +294,10 @@ fn post_agent_event(port:u16,token:&str,event:&str,payload:serde_json::Value){
 }
 
 /// 新功能画面：按需导出，检查排版。
-fn feature_raster()->crate::preview_raster::Raster{crate::preview_raster::Raster::new((crate::app::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize)}
+fn feature_raster()->crate::preview_raster::Raster{crate::preview_raster::Raster::new((crate::island::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize)}
 
 fn shoot_feature(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>,today:&str){
-    let ppp=2.0;let (w,hgt)=(crate::app::CANVAS_W,WIN_H);
+    let ppp=2.0;let (w,hgt)=(crate::island::CANVAS_W,WIN_H);
     for f in 0..frames {
         h.t+=1.0/60.0;
         let env=Env{t:h.t,clock:"09:41:00".into(),today:today.into(),date:"11月4日 周三".into(),cursor,bt_ready:true,..Default::default()};
@@ -324,7 +324,7 @@ static SIDE_MUSIC:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::n
 
 /// 侧边停靠的画面：画布为 SIDE_W × SIDE_H。
 fn shoot_side(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>){
-    let ppp=2.0;let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let ppp=2.0;let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     for f in 0..frames {
         h.t+=1.0/60.0;
         let mut env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,bt_ready:true,battery:Some(76),..Default::default()};
@@ -367,9 +367,9 @@ fn side_quota_fixture(h:&mut H)->(String,String){
     (wb,ds)
 }
 
-fn side_frame_with(h:&mut H,cursor:Option<Pos2>)->crate::app::FrameOut{
+fn side_frame_with(h:&mut H,cursor:Option<Pos2>)->crate::island::FrameOut{
     let at_top=h.browser_at_top;
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     h.t+=1.0/60.0;
     let env=Env{t:h.t,clock:"09:41:00".into(),cursor,battery:Some(76),browser_at_top:at_top,..Default::default()};
     let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,..Default::default()};
@@ -378,12 +378,12 @@ fn side_frame_with(h:&mut H,cursor:Option<Pos2>)->crate::app::FrameOut{
     out.unwrap()
 }
 
-fn side_frame(h:&mut H,cursor:Option<Pos2>)->crate::app::FrameOut{
+fn side_frame(h:&mut H,cursor:Option<Pos2>)->crate::island::FrameOut{
     side_frame_events(h,cursor,cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default())
 }
 
-fn side_frame_events(h:&mut H,cursor:Option<Pos2>,events:Vec<egui::Event>)->crate::app::FrameOut{
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+fn side_frame_events(h:&mut H,cursor:Option<Pos2>,events:Vec<egui::Event>)->crate::island::FrameOut{
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     h.t+=1.0/60.0;
     let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,bt_ready:true,battery:Some(76),..Default::default()};
     let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
@@ -397,7 +397,7 @@ fn side_frame_events(h:&mut H,cursor:Option<Pos2>,events:Vec<egui::Event>)->crat
 fn shoot_unread(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>){
     let ppp=2.0;
     let side=h.app.settings.dock.is_side();
-    let (w,hgt)=if side {(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
+    let (w,hgt)=if side {(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H)} else {(crate::island::CANVAS_W,WIN_H)};
     let (ww,wh)=if side {(w,hgt)} else {(WIN_W,WIN_H)};
     for f in 0..frames {
         h.t+=1.0/60.0;

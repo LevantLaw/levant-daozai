@@ -545,7 +545,7 @@ mod tests {
     impl Drop for ClientProcess {
         fn drop(&mut self){let _=self.0.kill();let _=self.0.wait();}
     }
-    fn qq_target(pid:u32)->Target{Target{unread:crate::app::Unread{source:crate::app::Messenger::Qq,pid,window:pid as isize},started:u64::from(pid)}}
+    fn qq_target(pid:u32)->Target{Target{unread:crate::island::Unread{source:crate::island::Messenger::Qq,pid,window:pid as isize},started:u64::from(pid)}}
     #[test]
     fn qq_open_regression_unknown_click_after_an_account_exits(){
         let (a,b)=(qq_target(100),qq_target(200));
@@ -624,7 +624,7 @@ mod tests {
     }}
     #[test]
     fn unidentified_qq_reminders_never_choose_remaining_accounts(){
-        let unread=crate::app::Unread::of(crate::app::Messenger::Qq);
+        let unread=crate::island::Unread::of(crate::island::Messenger::Qq);
         for pids in [Some(vec![100,200,300]),Some(vec![200,300]),Some(vec![300]),None]{
             assert_eq!(validate_unread_with(unread,|_|pids.clone()).map_err(|error|error.message(unread.source)),Err("暂时无法确认此 QQ 消息的账号".into()));
         }
@@ -632,7 +632,7 @@ mod tests {
     }
     #[test]
     fn exited_accounts_report_their_status_even_when_other_accounts_remain(){
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         for source in Messenger::ALL{
             let mut clients=[ClientProcess::new(),ClientProcess::new(),ClientProcess::new()];
             let unread=Unread{source,pid:clients[0].0.id(),window:0};
@@ -645,7 +645,7 @@ mod tests {
     #[test]
     fn qq_unreads_never_show_hidden_helpers(){unsafe{
         let _serial=crate::support::test_support::serial();
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,0,0,10,10,None,None,None,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
         let results=[0,std::process::id()].map(|pid|open_unread_with_paths(Unread{source:Messenger::Qq,pid,window:window.0 as isize},&paths));
@@ -655,7 +655,7 @@ mod tests {
     #[test]
     fn wake_attempts_record_the_target_route_and_result_without_titles(){unsafe{
         let _serial=crate::support::test_support::serial();
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!("聊天对象的名字"),WS_POPUP,0,0,10,10,None,None,None,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
         let pid=std::process::id();
@@ -677,7 +677,7 @@ mod tests {
     }
     #[test]
     fn exited_messenger_accounts_are_removed_individually(){
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         for source in Messenger::ALL{
             let mut clients=[ClientProcess::new(),ClientProcess::new(),ClientProcess::new()];
             let mut unreads=clients.iter().map(|client|Unread{source,pid:client.0.id(),window:0}).collect::<Vec<_>>();
@@ -694,7 +694,7 @@ mod tests {
     }
     #[test]
     fn reminders_clear_when_the_client_exits_before_the_first_check(){
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         for source in Messenger::ALL{
             let mut client=ClientProcess::new();
             let unread=Unread{source,pid:client.0.id(),window:0};
@@ -705,7 +705,7 @@ mod tests {
     }
     #[test]
     fn unknown_messenger_accounts_clear_only_after_the_whole_client_exits(){
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         for source in Messenger::ALL{
             let unread=Unread::of(source);let mut monitor=Runtime::default();
             assert!(monitor.exited_with(&[unread],|_|Some(vec![100,200])).is_empty());
@@ -717,7 +717,7 @@ mod tests {
     #[test]
     fn messenger_reminders_survive_hidden_or_destroyed_windows(){unsafe{
         let _serial=crate::support::test_support::serial();
-        use crate::app::{Messenger,Unread};
+        use crate::island::{Messenger,Unread};
         let mut monitor=Runtime::default();
         for source in Messenger::ALL{
             let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,-10000,-10000,10,10,None,None,None,None).unwrap();

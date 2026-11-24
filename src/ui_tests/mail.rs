@@ -63,7 +63,7 @@ fn alphabetic_mail_codes_reach_the_card_without_changing_case() {
         assert!(text.galley.size().x<=120.5,"最长字母码不能挤入邮件列表：{}",text.galley.size().x);
         if value=="AbCdEf"{assert!(text.galley.job.sections.iter().any(|s|s.format.font_id.size>=23.0));}
         h.cmds.clear();h.click(H::local(60.0,70.0));
-        assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Copy(copied) if copied==value)));
+        assert!(h.cmds.iter().any(|c|matches!(c,crate::island::Cmd::Copy(copied) if copied==value)));
         h.t+=61.0;h.frame(vec![]);
         assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==value)));
     }
@@ -85,7 +85,7 @@ fn regression_microsoft_traditional_mail_creates_code_card() {
         h.app.show_page(5);h.hover(H::local(300.0,70.0),1.0);
         assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="431872"&&t.galley.job.sections.iter().any(|s|s.format.font_id.size>=23.0))),"新收到的繁体验证码应出现在大卡里");
         h.cmds.clear();h.click(H::local(60.0,70.0));
-        assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Copy(value) if value=="431872")),"大卡应支持点击复制");
+        assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Copy(value) if value=="431872")),"大卡应支持点击复制");
         h.t+=61.0;h.frame(vec![]);
         assert!(!h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="431872")),"繁体验证码同样应按隐私设置自动隐藏");
     }
@@ -122,7 +122,7 @@ fn mail_page_shows_code_and_copies_on_click() {
     h.hover(H::local(300.0, 60.0), 0.4);
     h.click(H::local(60.0, 70.0));
     assert!(
-        h.cmds.iter().any(|c| matches!(c, crate::app::Cmd::Copy(t) if t == "482913")),
+        h.cmds.iter().any(|c| matches!(c, crate::island::Cmd::Copy(t) if t == "482913")),
         "点验证码应复制: {:?}",
         h.cmds
     );
@@ -171,7 +171,7 @@ fn mail_hyperlink_click_requests_the_default_browser() {
     h.hover(H::local(300.0,60.0),1.0);
     let link=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text().contains("查看文档")=>Some(text.visual_bounding_rect()),_=>None}).expect("应展示邮件的超链接");
     h.click(link.center());
-    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::OpenUrl(url)if url=="https://example.com/review?a=1&b=2")),"点击后应通过默认浏览器打开完整地址");
+    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::OpenUrl(url)if url=="https://example.com/review?a=1&b=2")),"点击后应通过默认浏览器打开完整地址");
 }
 
 #[test]
@@ -327,7 +327,7 @@ fn mail_microsoft_settings_only_explains_unsupported_access(){
         assert!(!texts.iter().any(|t|t.contains(absent)),"暂不支持时不应出现误导入口：{absent}");
     }
     assert!(h.app.mail.accounts.is_empty());
-    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::app::Cmd::MailTest(..)|crate::app::Cmd::OpenUrl(_))));
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::island::Cmd::MailTest(..)|crate::island::Cmd::OpenUrl(_))));
 }
 
 #[test]
@@ -358,7 +358,7 @@ fn mail_microsoft_custom_host_and_address_disable_password_actions(){
             assert!(h.app.mail.note.is_empty(),"微软云连接的按钮应停用，点击不应再提示填写授权码");
         }
         assert!(h.app.mail.accounts.is_empty());
-        assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::app::Cmd::MailTest(..)|crate::app::Cmd::MailSync)));
+        assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::island::Cmd::MailTest(..)|crate::island::Cmd::MailSync)));
     }
 }
 
@@ -457,13 +457,13 @@ fn mailbox_readability_gallery(){
             h.app.mail.manage.data.insert(("work@qq.com".into(),crate::mail::manage::Folder::Trash),crate::mail::manage::Snapshot{validity:9,entries:vec![(1,true),(2,true)],items:vec![]});
         }
         h.app.show_page(5);
-        let ppp=1.5;let mut raster=crate::preview_raster::Raster::new((crate::app::CANVAS_W*ppp)as usize,(WIN_H*ppp)as usize);
+        let ppp=1.5;let mut raster=crate::preview_raster::Raster::new((crate::island::CANVAS_W*ppp)as usize,(WIN_H*ppp)as usize);
         for frame in 0..100 {
             let t=frame as f64/60.0;let env=Env{t,clock:"09:41:00".into(),cursor:Some(H::local(if variant==1{350.0}else{200.0},64.0)),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(crate::app::CANVAS_W,WIN_H))),time:Some(t),events:vec![egui::Event::PointerMoved(H::local(if variant==1{350.0}else{200.0},64.0))],viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
+            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(crate::island::CANVAS_W,WIN_H))),time:Some(t),events:vec![egui::Event::PointerMoved(H::local(if variant==1{350.0}else{200.0},64.0))],viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
             let out=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,egui::vec2(WIN_W,WIN_H)),&env);});});
             raster.update_textures(&out.textures_delta);
-            if frame==99 {raster.buf.fill([0.05,0.07,0.10,1.0]);raster.draw(&h.ctx.tessellate(out.shapes,out.pixels_per_point),out.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);let image=image::RgbaImage::from_raw((crate::app::CANVAS_W*ppp)as u32,(WIN_H*ppp)as u32,rgba).unwrap();image::imageops::crop_imm(&image,((WIN_W-PW)/2.0*ppp-10.0)as u32,0,(PW*ppp+20.0)as u32,if detail{370}else{225}).to_image().save(dest.join(if detail{"邮件详情.png"}else if variant==3{"回收站.png"}else if variant==4{"验证码分栏.png"}else if multiple{"悬停操作.png"}else{"邮箱列表.png"})).unwrap();}
+            if frame==99 {raster.buf.fill([0.05,0.07,0.10,1.0]);raster.draw(&h.ctx.tessellate(out.shapes,out.pixels_per_point),out.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);let image=image::RgbaImage::from_raw((crate::island::CANVAS_W*ppp)as u32,(WIN_H*ppp)as u32,rgba).unwrap();image::imageops::crop_imm(&image,((WIN_W-PW)/2.0*ppp-10.0)as u32,0,(PW*ppp+20.0)as u32,if detail{370}else{225}).to_image().save(dest.join(if detail{"邮件详情.png"}else if variant==3{"回收站.png"}else if variant==4{"验证码分栏.png"}else if multiple{"悬停操作.png"}else{"邮箱列表.png"})).unwrap();}
             raster.free_textures(&out.textures_delta);
         }
     }
@@ -478,9 +478,9 @@ fn mailbox_large_code_card_preserves_copy_and_identifies_source(){
     h.app.show_page(5);h.hover(H::local(200.0,90.0),1.0);
     assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="GitHub")));
     h.cmds.clear();h.click(H::local(60.0,70.0));
-    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Copy(value) if value=="274630")));
+    assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Copy(value) if value=="274630")));
     assert!(h.app.mail.open_uid.is_none(),"复制验证码不能误开邮件详情");
-    assert_eq!(h.app.expanded_height(),PH+crate::app::STATUS_H,"邮箱沿用录屏里的面板尺寸");
+    assert_eq!(h.app.expanded_height(),PH+crate::island::STATUS_H,"邮箱沿用录屏里的面板尺寸");
 }
 
 #[test]
@@ -710,7 +710,7 @@ fn managed_mail_unread_filter_open_and_mark_read(){
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="测试邮件 2")));
     h.cmds.clear();h.click(H::local(180.0,64.0));h.frame(vec![]);
     assert_eq!(h.app.mail.open_uid,Some(("manage@example.com".into(),1)));
-    let request=h.cmds.iter().find_map(|c|match c{crate::app::Cmd::MailManage(r)if r.action==(Action::Read{uid:1,seen:true})=>Some(r.clone()),_=>None}).expect("打开未读邮件应提交服务器已读操作");
+    let request=h.cmds.iter().find_map(|c|match c{crate::island::Cmd::MailManage(r)if r.action==(Action::Read{uid:1,seen:true})=>Some(r.clone()),_=>None}).expect("打开未读邮件应提交服务器已读操作");
     let mut snapshot=h.app.mail.manage.data[&("manage@example.com".into(),Folder::Inbox)].clone();snapshot.entries[0].1=true;
     h.app.mail_managed(Completed{request,result:Ok(snapshot)});h.hover(H::local(270.0,150.0),0.5);
     h.click(H::local(350.0,48.0));assert!(h.app.mail.open_uid.is_none());h.hover(H::local(200.0,80.0),0.4);
@@ -726,7 +726,7 @@ fn managed_mail_trash_icon_and_restore_keep_inbox_uid_separate(){
     h.app.mail.manage.data.insert(("manage@example.com".into(),Folder::Trash),Snapshot{validity:9,entries:vec![(1,true)],items:vec![]});
     h.click(H::local(370.0,130.0));assert!(h.app.mail.manage.trash_open);
     h.hover(H::local(350.0,64.0),0.2);h.cmds.clear();h.click(H::local(350.0,64.0));
-    let request=h.cmds.iter().find_map(|c|match c{crate::app::Cmd::MailManage(r)if r.action==(Action::Move{uid:1})=>Some(r.clone()),_=>None}).expect("回收站恢复按钮应提交移动操作");
+    let request=h.cmds.iter().find_map(|c|match c{crate::island::Cmd::MailManage(r)if r.action==(Action::Move{uid:1})=>Some(r.clone()),_=>None}).expect("回收站恢复按钮应提交移动操作");
     assert_eq!(request.folder,Folder::Trash);assert_eq!(request.validity,Some(9));
     h.app.mail_managed(Completed{request,result:Ok(Snapshot{validity:9,entries:vec![],items:vec![]})});
     assert!(h.app.mail.manage.trash.is_empty());assert_eq!(h.app.mail.recent.len(),3,"同 UID 的收件箱邮件不能被回收站恢复操作移除");
@@ -739,12 +739,12 @@ fn managed_mail_actions_wait_for_the_server_and_batch_read_is_explicit(){
     use crate::mail::manage::{Action,Completed};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=managed_mail_fixture();h.cmds.clear();
     h.hover(H::local(354.0,64.0),0.2);h.click(H::local(354.0,64.0));
-    let request=h.cmds.iter().find_map(|c|match c{crate::app::Cmd::MailManage(r)if r.action==(Action::Move{uid:1})=>Some(r.clone()),_=>None}).expect("删除应提交移到回收站");
+    let request=h.cmds.iter().find_map(|c|match c{crate::island::Cmd::MailManage(r)if r.action==(Action::Move{uid:1})=>Some(r.clone()),_=>None}).expect("删除应提交移到回收站");
     assert_eq!(h.app.mail.recent.len(),3,"服务器确认前不能丢掉邮件");
     h.app.mail_managed(Completed{request,result:Err("服务器拒绝操作".into())});assert_eq!(h.app.mail.recent.len(),3);
     for snapshot in h.app.mail.manage.data.values_mut(){for (_,seen) in &mut snapshot.entries{*seen=true;}}
     h.frame(vec![]);h.cmds.clear();h.click(H::local(350.0,43.0));
-    assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::MailManage(r)if r.action==Action::ReadAll)),"即使最近邮件已读，也应能处理邮箱中更早的未读邮件");
+    assert!(h.cmds.iter().any(|c|matches!(c,crate::island::Cmd::MailManage(r)if r.action==Action::ReadAll)),"即使最近邮件已读，也应能处理邮箱中更早的未读邮件");
 }
 
 #[test]
@@ -758,7 +758,7 @@ fn mail_local_mode_persists_without_writing_to_the_server(){
     assert!(h.app.mail.manage.data[&("manage@example.com".into(),Folder::Inbox)].entries[1].1,"服务器状态不能被本机已读操作改动");
     h.app.mail_manage_request(Some("manage@example.com"),Folder::Inbox,Action::Move{uid:1});
     assert_eq!(h.app.mail.recent.len(),2);assert_eq!(h.app.mail.manage.trash.len(),1);
-    h.frame(vec![]);assert!(!h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::MailManage(r)if r.action!=Action::Load)));
+    h.frame(vec![]);assert!(!h.cmds.iter().any(|c|matches!(c,crate::island::Cmd::MailManage(r)if r.action!=Action::Load)));
     let path=crate::model::config_dir().join("mail-local-state.json");let saved=std::fs::read_to_string(&path).unwrap();
     assert!(!saved.contains("manage@example.com")&&!saved.contains("测试邮件"),"本机状态仅保存标识和操作标记");
     h.app.mail.manage=Default::default();h.app.mail.recent=original.clone();h.app.mail_reload_local();
@@ -768,7 +768,7 @@ fn mail_local_mode_persists_without_writing_to_the_server(){
     h.app.mail.manage.trash_open=true;h.app.mail_manage_request(Some("manage@example.com"),Folder::Trash,Action::Move{uid:1});
     assert!(h.app.mail.manage.trash.is_empty());assert_eq!(h.app.mail.recent.len(),3);
     h.cmds.clear();h.app.settings.mail_sync_operations=true;h.app.mail_manage_mode_changed();h.frame(vec![]);
-    assert!(!h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::MailManage(r)if r.action!=Action::Load)),"开启同步不能补交本机操作");
+    assert!(!h.cmds.iter().any(|c|matches!(c,crate::island::Cmd::MailManage(r)if r.action!=Action::Load)),"开启同步不能补交本机操作");
     assert_eq!(h.app.mail_seen(&original[1],Folder::Inbox),Some(true),"开启同步后应显示服务器真实状态");
 }
 

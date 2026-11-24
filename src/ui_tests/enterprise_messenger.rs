@@ -1,6 +1,6 @@
 //! 仅使用合成事件验证办公软件提醒，不启动或操控实际客户端。
 use super::*;
-use crate::app::{Cmd,Messenger,Unread};
+use crate::island::{Cmd,Messenger,Unread};
 fn enable(app:&mut App){
     app.settings.wechat_notifications=true;app.settings.read_notifications=true;
     app.settings.wecom_notifications=true;app.settings.feishu_notifications=true;app.settings.dingtalk_notifications=true;

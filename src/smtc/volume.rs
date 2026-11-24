@@ -211,7 +211,7 @@ mod tests {
             let (_first,a)=create();let (_second,b)=create();
             let source=std::env::current_exe().unwrap().file_name().unwrap().to_str().unwrap().to_owned();
             a.SetMasterVolume(0.31,std::ptr::null()).unwrap();b.SetMasterVolume(0.52,std::ptr::null()).unwrap();
-            let before=crate::platform::system::Snapshot::read().volume;
+            let before=crate::os::system::Snapshot::read().volume;
             assert_eq!(read(&source),Some((52,false)));
             assert!(set_volume(&source,27));
             assert_eq!(read(&source),Some((27,false)));
@@ -221,7 +221,7 @@ mod tests {
             assert!(set_volume(&source,19));assert_eq!(read(&source),Some((19,false)));
             assert!(!set_volume("daozai-missing-player.exe",100));assert_eq!(read(&source),Some((19,false)));
             assert!(set_volume(&source,999));assert_eq!(read(&source),Some((100,false)));
-            assert_eq!(crate::platform::system::Snapshot::read().volume,before,"应用音量不能改变系统主音量或静音");
+            assert_eq!(crate::os::system::Snapshot::read().volume,before,"应用音量不能改变系统主音量或静音");
             println!("双会话音量、静音、解除静音、边界和系统音量隔离验证通过");
         }
     }

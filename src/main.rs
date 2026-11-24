@@ -1,15 +1,15 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
-//! Windows 外壳：无边框透明窗口 + 托盘 + 系统数据，界面全部交给 `daozai::app::App`。
+//! Windows 外壳：无边框透明窗口 + 托盘 + 系统数据，界面全部交给 `daozai::island::App`。
 
 use eframe::egui::{self, Color32, Pos2};
-use daozai::app::{self, App, Cmd, Env, Options};
+use daozai::island::{self, App, Cmd, Env, Options};
 use daozai::smtc;
 #[cfg(windows)]
 use daozai::messenger::{self,OpenError,TaskbarEvent};
 use daozai::support::poll_clock::PollClock;
 use std::time::{Duration, Instant};
 
-mod shell;
+mod startup;
 
 struct Shell {
     app: App,
@@ -40,41 +40,41 @@ struct Shell {
     win_x: f32,
     sys: (Option<u8>, bool, PollClock),
     #[cfg(windows)]
-    system_state: daozai::platform::system::Snapshot,
+    system_state: daozai::os::system::Snapshot,
     #[cfg(windows)]
     system_ready: bool,
     #[cfg(windows)]
-    system_rx: std::sync::mpsc::Receiver<daozai::platform::system::Observation>,
-    fullscreen: Option<daozai::platform::display_layout::Bounds>,
-    input_state:daozai::platform::input::Monitor,
+    system_rx: std::sync::mpsc::Receiver<daozai::os::system::Observation>,
+    fullscreen: Option<daozai::os::display_layout::Bounds>,
+    input_state:daozai::os::input::Monitor,
     #[cfg(windows)]
-    input_keys:Option<daozai::platform::input::Shortcuts>,
+    input_keys:Option<daozai::os::input::Shortcuts>,
     #[cfg(windows)]
-    incoming: Option<daozai::platform::system::Notifications>,
+    incoming: Option<daozai::os::system::Notifications>,
     #[cfg(windows)]
     messengers:messenger::Runtime,
     #[cfg(windows)]
     unread_at:PollClock,
     #[cfg(windows)]
-    opening_messenger:Option<(app::Unread,Instant)>,
+    opening_messenger:Option<(island::Unread,Instant)>,
     /// 后台线程正在唤起消息客户端。
     #[cfg(windows)]
-    tray_opening:Option<(app::Unread,std::sync::mpsc::Receiver<Result<(),OpenError>>)>,
+    tray_opening:Option<(island::Unread,std::sync::mpsc::Receiver<Result<(),OpenError>>)>,
     #[cfg(windows)]
     hidden: bool,
     /// 毛玻璃皮肤的背景亮度采样（仅毛玻璃皮肤运行）。
     #[cfg(windows)]
-    backdrop: Option<daozai::platform::backdrop::Sampler>,
+    backdrop: Option<daozai::os::backdrop::Sampler>,
     #[cfg(windows)]
-    native: Option<daozai::platform::native::Window>,
+    native: Option<daozai::os::native::Window>,
     #[cfg(windows)]
-    tray: Option<daozai::platform::tray::Tray>,
+    tray: Option<daozai::os::tray::Tray>,
     #[cfg(windows)]
     autostart: bool,
     /// v0.5.4：蓝牙音频设备（后台线程推送）与音量回声的静默窗口。
     #[cfg(windows)]
-    bt_rx: Option<daozai::platform::bt::Service>,
-    bt: Vec<daozai::platform::bt::Device>,
+    bt_rx: Option<daozai::os::bt::Service>,
+    bt: Vec<daozai::os::bt::Device>,
     bt_ready: bool,
     volume_quiet: PollClock,
     /// v0.5.5：邮件收信服务（工作线程），以及上次同步给它的账号/开关快照。
@@ -86,7 +86,7 @@ struct Shell {
     cal: Option<daozai::calendar::Service>,
     cal_sig: Option<(Vec<daozai::calendar::Config>, bool)>,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
-    clipboard_watch: Option<daozai::platform::clipboard::Watcher>,
+    clipboard_watch: Option<daozai::os::clipboard::Watcher>,
     quota: daozai::quota::Service,
     quota_sig: Option<(bool,Vec<daozai::quota::Account>)>,
     quota_at: PollClock,
@@ -97,19 +97,19 @@ const MODULE_OFF:&str="该功能已在「功能页面」中关闭";
 impl Shell {
     /// 按模块开关启停后台服务：关闭的模块不保留任何线程，重新开启时从头对齐配置。
     fn reconcile_modules(&mut self,ctx:&egui::Context){
-        let mail_on=self.app.module_on(app::MAIL_PAGE);
+        let mail_on=self.app.module_on(island::MAIL_PAGE);
         if mail_on!=self.mail.is_some() {self.mail=mail_on.then(daozai::mail::Service::start);self.mail_sig=None;}
-        let cal_on=self.app.module_on(app::CALENDAR_PAGE);
+        let cal_on=self.app.module_on(island::CALENDAR_PAGE);
         if cal_on!=self.cal.is_some() {self.cal=cal_on.then(daozai::calendar::Service::start);self.cal_sig=None;}
         let clipboard_on=self.app.clipboard_active();
         if clipboard_on!=self.clipboard_watch.is_some() {
-            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::platform::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
+            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::os::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
         }
         self.app.reconcile_agent_monitor(ctx);
     }
 
     #[cfg(windows)]
-    fn confirm_messenger_open(&mut self,unread:app::Unread)->bool{
+    fn confirm_messenger_open(&mut self,unread:island::Unread)->bool{
         let foreground=self.messengers.foreground(&[unread.source]);
         if !self.app.confirm_messenger_open(unread,foreground){
             let seen=foreground.map(|(source,pid)|format!("{} 账号 {pid}",source.name())).unwrap_or_else(messenger::windows::describe_foreground);
@@ -135,16 +135,16 @@ impl Shell {
     }
 
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        shell::diagnostics::graphics(cc);
+        startup::report::graphics(cc);
         let running_compat=cc.wgpu_render_state.is_some();
-        shell::diagnostics::startup("加载本地配置");
+        startup::report::startup("加载本地配置");
         let mut app = App::new(&cc.egui_ctx, Options::default());
         app.render_compat_running=running_compat;
         #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
-        shell::diagnostics::startup("初始化额度配置");
+        startup::report::startup("初始化额度配置");
         if !quota_demo{app.quota_initialize();app.migrate_merged_switches();}
-        shell::diagnostics::startup("启动剪贴板记录");
+        startup::report::startup("启动剪贴板记录");
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
         if std::env::args().any(|arg|arg=="--calendar"){app.open_calendar(None);}
         #[cfg(feature="record")]
@@ -153,25 +153,25 @@ impl Shell {
         if std::env::var("DAOZAI_CAL_DEMO").is_ok(){app.calendar_demo();}
         #[cfg(feature="record")]
         if let Ok(mode)=std::env::var("DAOZAI_QUOTA_DEMO"){app.quota_demo(&mode);}
-        shell::diagnostics::startup("初始化媒体和托盘");
+        startup::report::startup("初始化媒体和托盘");
         let media = smtc::shared();
         let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
         media_enabled.store(app.settings.visible_pages[0],std::sync::atomic::Ordering::Relaxed);
         #[cfg(windows)]
-        let autostart = daozai::platform::tray::autostart_enabled();
+        let autostart = daozai::os::tray::autostart_enabled();
         #[cfg(windows)]
-        let tray = app.start_tray(daozai::platform::tray::State {
+        let tray = app.start_tray(daozai::os::tray::State {
             pet: app.settings.pet,
             autostart,
         });
-        shell::diagnostics::startup("初始化通知监听");
+        startup::report::startup("初始化通知监听");
         #[cfg(windows)]
-        let incoming=if app.settings.read_notifications {match daozai::platform::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
+        let incoming=if app.settings.read_notifications {match daozai::os::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
-        shell::diagnostics::startup("创建后台采样与窗口");
+        startup::report::startup("创建后台采样与窗口");
         let initial_input=None;
-        #[cfg(windows)] let system_state=daozai::platform::system::Snapshot::default();
-        #[cfg(windows)] let system_rx=daozai::platform::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
+        #[cfg(windows)] let system_state=daozai::os::system::Snapshot::default();
+        #[cfg(windows)] let system_rx=daozai::os::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
         // 岛体大小只作用于主窗口，在首帧之前生效，避免启动时先按 100% 闪一下。
         #[cfg(windows)] eframe::set_root_viewport_scale(app.settings.island_scale());
         Self {
@@ -203,8 +203,8 @@ impl Shell {
             #[cfg(windows)] system_ready:false,
             #[cfg(windows)] system_rx,
             fullscreen:None,
-            input_state:daozai::platform::input::Monitor::new(initial_input),
-            #[cfg(windows)] input_keys:daozai::platform::input::Shortcuts::start(),
+            input_state:daozai::os::input::Monitor::new(initial_input),
+            #[cfg(windows)] input_keys:daozai::os::input::Shortcuts::start(),
             #[cfg(windows)] incoming,
             #[cfg(windows)] messengers:Default::default(),
             #[cfg(windows)] unread_at:PollClock::default(),
@@ -213,7 +213,7 @@ impl Shell {
             #[cfg(windows)] hidden:false,
             #[cfg(windows)] backdrop:None,
             #[cfg(windows)]
-            native: daozai::platform::native::Window::new(cc),
+            native: daozai::os::native::Window::new(cc),
             #[cfg(windows)]
             tray,
             #[cfg(windows)]
@@ -234,7 +234,7 @@ impl Shell {
 
     #[cfg(windows)]
     fn poll_tray(&mut self) {
-        use daozai::platform::tray::{self, Event};
+        use daozai::os::tray::{self, Event};
         let events = self.tray.as_ref().map(|t| t.poll()).unwrap_or_default();
         for e in events {
             match e {
@@ -287,9 +287,9 @@ impl Shell {
         let cursor=cursor.filter(|_|!self.native.as_ref().is_some_and(|w|w.holding_through_strip()));
         // 所在屏幕换算到窗口逻辑坐标，供通知详情等浮层避开屏幕边缘。
         #[cfg(windows)]
-        let screen=daozai::platform::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|{
+        let screen=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|{
             // 与岛体摆放用同一范围：避开顶栏后，拖动换边和浮层都以顶栏下沿为顶边。
-            let b=daozai::platform::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar());
+            let b=daozai::os::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar());
             egui::Rect::from_min_max(Pos2::new(b.left as f32/ppp-origin.x,b.top as f32/ppp-origin.y),Pos2::new(b.right as f32/ppp-origin.x,b.bottom as f32/ppp-origin.y))
         });
         #[cfg(not(windows))]
@@ -308,11 +308,11 @@ impl Shell {
             network: Some(self.system_state.network),
             cursor,
             idle_seconds: {
-                #[cfg(windows)] {Some(daozai::platform::system::idle_seconds())}
+                #[cfg(windows)] {Some(daozai::os::system::idle_seconds())}
                 #[cfg(not(windows))] {None}
             },
             screen_locked: {
-                #[cfg(windows)] {daozai::platform::system::screen_locked()}
+                #[cfg(windows)] {daozai::os::system::screen_locked()}
                 #[cfg(not(windows))] {false}
             },
             fullscreen_hidden: {
@@ -400,13 +400,13 @@ impl eframe::App for Shell {
                 && (&self.placement_key.0,self.placement_key.2,self.placement_key.3,self.placement_key.4)==(&placement_key.0,placement_key.2,placement_key.3,placement_key.4);
             if !offset_only {
                 self.placement_at=PollClock::now();
-                self.app.displays=daozai::platform::display_layout::connected();
+                self.app.displays=daozai::os::display_layout::connected();
             }
             self.placement_scale=ctx.pixels_per_point();
             self.placement_key=placement_key;
-            let display=daozai::platform::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
-            if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(self.placement_scale,daozai::platform::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),offset,self.app.settings.dock,shift))) {
-                if !self.placed {shell::diagnostics::startup("目标屏幕物理坐标定位完成，已请求显示");}
+            let display=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
+            if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(self.placement_scale,daozai::os::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),offset,self.app.settings.dock,shift))) {
+                if !self.placed {startup::report::startup("目标屏幕物理坐标定位完成，已请求显示");}
                 self.placed=true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             } else if self.t0.elapsed()>=Duration::from_secs(2) {
@@ -417,7 +417,7 @@ impl eframe::App for Shell {
         #[cfg(not(windows))]
         if !self.placed {
             if let Some(mon)=ctx.input(|i|i.viewport().monitor_size) {
-                self.placed=true;self.win_x=((mon.x-app::WIN_W)/2.0).round();
+                self.placed=true;self.win_x=((mon.x-island::WIN_W)/2.0).round();
                 ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(self.win_x,0.0)));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
@@ -452,10 +452,10 @@ impl eframe::App for Shell {
                 self.system_ready=true;
                 self.fullscreen=observation.fullscreen;
             }
-            self.hidden=daozai::platform::display_layout::hide_for_fullscreen(self.app.settings.hide_fullscreen,self.fullscreen,daozai::platform::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|d.bounds));
+            self.hidden=daozai::os::display_layout::hide_for_fullscreen(self.app.settings.hide_fullscreen,self.fullscreen,daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|d.bounds));
             // 毛玻璃：在岛体左右两侧和画布底边（都在窗口区域之外）取样，估计岛背后的明暗。
             if self.app.settings.skin.is_glass() && !self.hidden {
-                let sampler=self.backdrop.get_or_insert_with(daozai::platform::backdrop::Sampler::start);
+                let sampler=self.backdrop.get_or_insert_with(daozai::os::backdrop::Sampler::start);
                 let ppp=ctx.pixels_per_point();
                 if let Some(origin)=self.native.as_ref().and_then(|w|w.logical_origin(ppp)) {
                     let points=self.app.backdrop_points();
@@ -465,7 +465,7 @@ impl eframe::App for Shell {
                 self.backdrop=None;
             }
             if self.app.settings.bluetooth_notifications {
-                if self.bt_rx.is_none() {self.bt_rx=Some(daozai::platform::bt::spawn());}
+                if self.bt_rx.is_none() {self.bt_rx=Some(daozai::os::bt::spawn());}
             } else {
                 self.bt_rx=None;
                 self.bt.clear();
@@ -485,9 +485,9 @@ impl eframe::App for Shell {
             if let Some(rx)=&self.incoming {
                 rx.taskbar_settings(&self.app.settings);
                 while let Ok(event)=rx.try_recv(){match event {
-                    daozai::platform::system::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
-                    daozai::platform::system::Incoming::Status(s)=>self.app.listener_status=s,
-                    daozai::platform::system::Incoming::Message(a,id,b,target)=>{
+                    daozai::os::system::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
+                    daozai::os::system::Incoming::Status(s)=>self.app.listener_status=s,
+                    daozai::os::system::Incoming::Message(a,id,b,target)=>{
                         if target.is_some_and(|target|self.messengers.track(target)==Err(OpenError::Exited)){continue;}
                         self.app.receive_notification_from(a,id,b,target.map(|target|target.unread));
                     }
@@ -499,7 +499,7 @@ impl eframe::App for Shell {
             if !self.app.pending_messengers.is_empty(){ctx.request_repaint_after(Duration::from_secs(1));}
             if foreground_changed || self.app.pending_messengers!=previous_pending {
                 // 在微信 / QQ 里打开了某个账号的窗口：清掉这个账号的未读。
-                let mut sources:Vec<app::Messenger>=self.app.pending_messengers.iter().map(|u|u.source).collect();sources.dedup();
+                let mut sources:Vec<island::Messenger>=self.app.pending_messengers.iter().map(|u|u.source).collect();sources.dedup();
                 match self.messengers.foreground(&sources){
                     Some((source,pid))=>{
                         if self.app.pending_messengers.iter().any(|u|u.source==source){messenger::windows::trace(format!("岛上清除 {} 账号 {pid}（前台切换={foreground_changed}）",source.name()));}
@@ -600,7 +600,7 @@ impl eframe::App for Shell {
             .frame(egui::Frame::new().fill(Color32::TRANSPARENT))
             .show(ctx, |ui| {
                 // 左右停靠时画布是竖向的 SIDE_W × SIDE_H。
-                let size=if self.app.settings.dock.is_side() {egui::vec2(daozai::app::side_dock::SIDE_W,daozai::app::side_dock::SIDE_H)} else {egui::vec2(app::WIN_W,app::WIN_H)};
+                let size=if self.app.settings.dock.is_side() {egui::vec2(daozai::island::side_dock::SIDE_W,daozai::island::side_dock::SIDE_H)} else {egui::vec2(island::WIN_W,island::WIN_H)};
                 let win = egui::Rect::from_min_size(ui.max_rect().min,size);
                 out = Some(self.app.frame(ui, win, &env));
             });
@@ -612,14 +612,14 @@ impl eframe::App for Shell {
             let hovering=env.cursor.is_some_and(|p|out.hit.contains(p)||out.notice_hit.is_some_and(|r|r.contains(p)));
             let shift=if !self.app.settings.oled_shift {(0,0)}
                 else if !self.hidden && !hovering && self.app.oled_shift_idle(ctx) {
-                    ctx.request_repaint_after(daozai::platform::oled_shift::until_next_step(self.t0.elapsed()));
-                    let target=daozai::platform::oled_shift::shift(true,self.app.settings.dock,self.t0.elapsed());
-                    daozai::platform::oled_shift::toward(self.oled_shift,target)
+                    ctx.request_repaint_after(daozai::os::oled_shift::until_next_step(self.t0.elapsed()));
+                    let target=daozai::os::oled_shift::shift(true,self.app.settings.dock,self.t0.elapsed());
+                    daozai::os::oled_shift::toward(self.oled_shift,target)
                 } else {self.oled_shift};
             if shift!=self.oled_shift {
                 self.oled_shift=shift;
-                let display=daozai::platform::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
-                if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(ctx.pixels_per_point(),daozai::platform::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),self.app.placement_offset(),self.app.settings.dock,shift))) {
+                let display=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
+                if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(ctx.pixels_per_point(),daozai::os::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),self.app.placement_offset(),self.app.settings.dock,shift))) {
                     self.placement_key.4=shift;
                 }
                 ctx.request_repaint();
@@ -641,7 +641,7 @@ impl eframe::App for Shell {
                 if shot.is_none() || changed || interactive {
                     // 翻页期间即使滚轮已经停下，也要交付当前帧；持续动效仍按自身的低频节奏读回。
                     let now=Instant::now();
-                    match daozai::platform::layered::readback_delay(self.readback_at,now,interactive,out.repaint_after) {
+                    match daozai::os::layered::readback_delay(self.readback_at,now,interactive,out.repaint_after) {
                         None=>{
                             self.readback_at=Some(now);
                             let data=if turning && self.app.render_compat_running {
@@ -660,7 +660,7 @@ impl eframe::App for Shell {
             native.set_page_scroll_area(out.page_scroll_area.filter(|_|!self.hidden && out.expanded),ctx.pixels_per_point());
             native.update(region, hit, if self.hidden{None}else{out.notice_hit.map(r)},if self.hidden{None}else{out.file_drop_zone.map(r)},if self.hidden{None}else{out.glass.as_deref()},ctx.pixels_per_point(), out.editing, !self.hidden && out.expanded);
             if !self.hidden && self.app.settings.avoids_top_bar() && self.app.settings.top_bar_on_top && !self.app.settings.dock.is_side() {
-                if let Some(display)=daozai::platform::display_layout::selected(&self.app.displays,&self.app.settings.display_id) {
+                if let Some(display)=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id) {
                     native.keep_above_top_bar(display.bounds);
                 }
             }
@@ -714,7 +714,7 @@ impl eframe::App for Shell {
                 }
                 Cmd::RestartApp=>{
                     // 先拉起新进程（它会等本进程退出），再像托盘「退出」一样摘图标后结束。
-                    if shell::diagnostics::spawn_replacement(){
+                    if startup::instance::spawn_replacement(){
                         self.app.save_window_before_exit();
                         #[cfg(windows)] if let Some(tray)=&self.tray {tray.exit_process();}
                         std::process::exit(0);
@@ -727,7 +727,7 @@ impl eframe::App for Shell {
                     }
                 },
                 Cmd::CalendarImport=>{
-                    #[cfg(windows)] match daozai::platform::system::pick_files_for("选择要导入的日历文件（.ics）",true){
+                    #[cfg(windows)] match daozai::os::system::pick_files_for("选择要导入的日历文件（.ics）",true){
                         Ok(files)=>if !files.is_empty(){
                             let read:Vec<(String,String)>=files.iter().map(|path|{
                                 let name=path.file_name().map(|n|n.to_string_lossy().to_string()).unwrap_or_default();
@@ -740,16 +740,16 @@ impl eframe::App for Shell {
                     }
                 },
                 Cmd::AddFiles=>{
-                    #[cfg(windows)] match daozai::platform::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
+                    #[cfg(windows)] match daozai::os::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
                 },
                 Cmd::DragFile(p)=>{
-                    #[cfg(windows)] if let Err(e)=daozai::platform::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
+                    #[cfg(windows)] if let Err(e)=daozai::os::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
                     ctx.input_mut(|i| i.pointer=Default::default());
                 },
                 Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
                 Cmd::Reveal(p)=>{let _=daozai::support::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
                 Cmd::QuotaChooseFile=>{
-                    #[cfg(windows)] match daozai::platform::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
+                    #[cfg(windows)] match daozai::os::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
                 },
                 Cmd::QuotaRefresh=>{
                     if self.quota_at.ready(Duration::from_secs(15)) {
@@ -759,28 +759,28 @@ impl eframe::App for Shell {
                 },
                 Cmd::QuotaConnected=>{self.quota_sig=None;},
                 Cmd::ToggleAutostart=>{
-                    #[cfg(windows)] {let want=!self.autostart;match daozai::platform::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
+                    #[cfg(windows)] {let want=!self.autostart;match daozai::os::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
                 },
                 Cmd::SetVolume(v)=>{
-                    #[cfg(windows)] daozai::platform::system::set_volume(v);
+                    #[cfg(windows)] daozai::os::system::set_volume(v);
                     self.volume_quiet=PollClock::now();
                 },
                 Cmd::ToggleMute=>{
-                    #[cfg(windows)] daozai::platform::system::toggle_mute();
+                    #[cfg(windows)] daozai::os::system::toggle_mute();
                     self.volume_quiet=PollClock::now();
                 },
                 Cmd::Copy(text)=>{ctx.copy_text(text);self.app.say("已复制");},
                 Cmd::Notify(title,body,sound)=>{
                     #[cfg(windows)] {
-                        daozai::platform::tray::play_notification_sound(sound);
+                        daozai::os::tray::play_notification_sound(sound);
                         if let Some(tray)=&self.tray {tray.notify(&title,&body,false);}
                     }
                 },
                 Cmd::PlayNotificationSound(sound)=>{
-                    #[cfg(windows)] daozai::platform::tray::play_notification_sound(sound);
+                    #[cfg(windows)] daozai::os::tray::play_notification_sound(sound);
                 },
                 Cmd::RequestNotifications=>{
-                    #[cfg(windows)] {self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::platform::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
+                    #[cfg(windows)] {self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::os::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
                 Cmd::MailSync=>if let Some(mail)=&self.mail {
@@ -1048,19 +1048,19 @@ fn main() -> std::process::ExitCode {
     if let Some((agent, event)) = daozai::agent::bridge::requested(std::env::args()) {
         return std::process::ExitCode::from(daozai::agent::bridge::run_relay(agent, &event) as u8);
     }
-    shell::diagnostics::install();
+    startup::instance::install();
     // 收集诊断：在单实例检查、创建窗口和初始化显卡之前处理，岛仔启动即崩溃、卡死时也能用。
     #[cfg(windows)]
-    if daozai::platform::diagnostics_tool::requested(std::env::args()) {
-        return match daozai::platform::diagnostics_tool::run(&daozai::model::config_dir()) {
+    if daozai::os::diagnostics_tool::requested(std::env::args()) {
+        return match daozai::os::diagnostics_tool::run(&daozai::model::config_dir()) {
             Ok(_) => std::process::ExitCode::SUCCESS,
-            Err(error) => {shell::diagnostics::report("诊断收集未完成。", &error); std::process::ExitCode::FAILURE}
+            Err(error) => {startup::report::report("诊断收集未完成。", &error); std::process::ExitCode::FAILURE}
         };
     }
     match run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            shell::diagnostics::report("岛仔启动或运行失败。", &error.to_string());
+            startup::report::report("岛仔启动或运行失败。", &error.to_string());
             std::process::ExitCode::FAILURE
         }
     }
@@ -1068,21 +1068,21 @@ fn main() -> std::process::ExitCode {
 
 fn run() -> eframe::Result<()> {
     // 自动重启或「立即重启」拉起的新进程：先等旧进程退出，再做单实例检查。
-    shell::diagnostics::wait_for_previous_instance();
+    startup::instance::wait_for_previous_instance();
     // 单实例（与原版同名互斥体）
     #[cfg(windows)]
-    if !daozai::platform::tray::single_instance() {
-        if !daozai::platform::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
-            shell::diagnostics::report("岛仔已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe，再重新启动。");
+    if !daozai::os::tray::single_instance() {
+        if !daozai::os::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
+            startup::report::report("岛仔已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe，再重新启动。");
         }
         return Ok(());
     }
     #[cfg(windows)]
     std::thread::spawn(daozai::record_install_size);
-    shell::diagnostics::startup("初始化图形窗口");
+    startup::report::startup("初始化图形窗口");
     let viewport = egui::ViewportBuilder::default()
-        .with_title("岛仔").with_icon(daozai::render::theme::app_icon())
-        .with_inner_size([app::CANVAS_W, app::WIN_H])
+        .with_title("岛仔").with_icon(daozai::visuals::theme::app_icon())
+        .with_inner_size([island::CANVAS_W, island::WIN_H])
         .with_decorations(false)
         .with_transparent(true)
         .with_active(false)
@@ -1091,5 +1091,5 @@ fn run() -> eframe::Result<()> {
         .with_always_on_top()
         .with_visible(false);
     let opts = eframe::NativeOptions { viewport, vsync: !cfg!(windows), ..Default::default() };
-    shell::graphics::run(opts,|opts|eframe::run_native("岛仔", opts, Box::new(|cc| Ok(Box::new(Shell::new(cc))))))
+    startup::backend::run(opts,|opts|eframe::run_native("岛仔", opts, Box::new(|cc| Ok(Box::new(Shell::new(cc))))))
 }

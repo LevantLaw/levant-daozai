@@ -38,7 +38,7 @@ fn calendar_partial_warnings_are_scoped_and_clear_after_a_complete_refresh(){
     h.app.calendar_event(Event::Warning{config:other,month:Some(month),message:"其他账号".into()});
     h.app.calendar_event(Event::Warning{config:config.clone(),month:Some(month+chrono::Duration::days(32)),message:"旧月份".into()});
     assert_eq!(h.app.calendar.view.warning,message);
-    h.app.show_page(crate::app::CALENDAR_PAGE);h.hover(H::local(200.0,12.0),1.0);
+    h.app.show_page(crate::island::CALENDAR_PAGE);h.hover(H::local(200.0,12.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="部分同步")));
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="部分日程未同步")));
     for shape in &h.shapes{if let egui::Shape::Text(text)=&shape.shape{if ["部分同步","部分日程未同步"].contains(&text.galley.text()){assert!(shape.clip_rect.contains_rect(text.visual_bounding_rect()));}}}
@@ -57,7 +57,7 @@ fn calendar_partial_sync_preview(){
         let start=(chrono::Local::now()+chrono::Duration::minutes(30)).timestamp();
         let events=if empty{vec![]}else{vec![crate::mail::Meeting{uid:"preview".into(),title:"面试安排".into(),start,end:Some(start+1800),all_day:false,at:"面试时间".into()}]};
         h.app.calendar_event(Event::MonthLoaded{config:config.clone(),month,result:Ok(events)});
-        h.app.calendar_event(Event::Warning{config,month:Some(month),message:"1 处日历读取失败；日历服务器拒绝访问（403）".into()});h.app.show_page(crate::app::CALENDAR_PAGE);
+        h.app.calendar_event(Event::Warning{config,month:Some(month),message:"1 处日历读取失败；日历服务器拒绝访问（403）".into()});h.app.show_page(crate::island::CALENDAR_PAGE);
         let mut raster=feature_raster();let day=chrono::Local::now().date_naive().to_string();
         shoot_feature(&mut h,&mut raster,&destination,if empty{"calendar-partial-empty"}else{"calendar-partial-events"},100,Some(H::local(200.0,12.0)),&day);
     }

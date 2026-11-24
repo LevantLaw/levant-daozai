@@ -1,7 +1,7 @@
 //! 天气页与天气设置：实况、七日预报与日照时段，图标全部用面板矢量绘制。
-use crate::app::{App, Cmd, Env, WEATHER_PAGE, WEATHER_H};
-use crate::render::paint::{self, Card, H};
-use crate::render::theme::{self, W};
+use crate::island::{App, Cmd, Env, WEATHER_PAGE, WEATHER_H};
+use crate::visuals::paint::{self, Card, H};
+use crate::visuals::theme::{self, W};
 use crate::weather::{self, Kind};
 use eframe::egui::{self, Color32};
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
@@ -44,26 +44,26 @@ const LIGHT_TONES: [(Color32, Color32); 14] = [
 
 /// 天气图标的换肤函数：浅色皮肤按 `LIGHT_TONES` 换成浅色版，保留原透明度；
 /// 表外颜色与深色皮肤仍走通用换色。
-pub(crate) fn light_tone(color: Color32, p: &crate::render::skin_paint::Palette) -> Color32 {
+pub(crate) fn light_tone(color: Color32, p: &crate::visuals::skin_paint::Palette) -> Color32 {
     let a = color.a();
     let light = p.paper.iter().map(|&v| v as u32).sum::<u32>() > 3 * 128;
-    if a == 0 || !light { return crate::render::skin_paint::map_color(color, p); }
+    if a == 0 || !light { return crate::visuals::skin_paint::map_color(color, p); }
     let af = a as f32 / 255.0;
     let c = [color.r(), color.g(), color.b()].map(|v| (v as f32 / af).min(255.0));
     let near = |t: Color32| (c[0] - t.r() as f32).abs() <= 6.0 && (c[1] - t.g() as f32).abs() <= 6.0 && (c[2] - t.b() as f32).abs() <= 6.0;
     match LIGHT_TONES.iter().find(|(dark, _)| near(*dark)) {
         Some(&(_, to)) => Color32::from_rgba_premultiplied(
             (to.r() as f32 * af).round() as u8, (to.g() as f32 * af).round() as u8, (to.b() as f32 * af).round() as u8, a),
-        None => crate::render::skin_paint::map_color(color, p),
+        None => crate::visuals::skin_paint::map_color(color, p),
     }
 }
 
 /// 把 `paint` 画出的图形登记为天气图标配色，浅色皮肤下不被通用换色压暗。
 fn toned(c: &Card, paint: impl FnOnce()) {
     let (ctx, layer) = (c.ui.ctx(), c.painter.layer_id());
-    let from = crate::render::skin_paint::shape_count(ctx, layer);
+    let from = crate::visuals::skin_paint::shape_count(ctx, layer);
     paint();
-    crate::render::skin_paint::tone_since(ctx, layer, from, light_tone);
+    crate::visuals::skin_paint::tone_since(ctx, layer, from, light_tone);
 }
 
 /// 常驻胶囊上迷你天气图标的边长。
@@ -692,7 +692,7 @@ impl App {
     }
 
     pub(crate) fn weather_city_picker(&mut self, ui: &mut egui::Ui) -> bool {
-        use crate::app::extras::{settings_control_row,settings_hint};
+        use crate::island::extras::{settings_control_row,settings_hint};
         let popup=egui::Id::new("weather-city-options");
         let mut enter=false;
         let response=settings_control_row(ui,"城市名称",80.0,|ui|{
@@ -842,14 +842,14 @@ impl App {
         let ink_w = |t: &str| ctx.fonts(|fonts| fonts.layout_no_wrap(t.to_string(), theme::font(size, W::Bold), theme::WHITE).mesh_bounds.width());
         let ink = match text.strip_prefix('-') { Some(rest) => ink_w("-") + size * 0.07 + ink_w(rest), None => ink_w(&text) }.ceil();
         let chip = PILL_ICON + PILL_GAP + ink + 2.0;
-        Some(chip - crate::app::bar_layout::WEATHER_WIDTH)
+        Some(chip - crate::island::bar_layout::WEATHER_WIDTH)
     }
 
     /// 常驻胶囊的天气徽标：小图标 + 温度；点击进入天气页。
-    pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::app::bar_layout::Layout) {
+    pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::island::bar_layout::Layout) {
         let Some(snapshot) = self.weather_pill().cloned() else { return };
-        let width = layout.widths[crate::app::bar_layout::WEATHER];
-        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::app::bar_layout::WEATHER));
+        let width = layout.widths[crate::island::bar_layout::WEATHER];
+        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::island::bar_layout::WEATHER));
         let tip = format!("{} · {}\n更新于 {} · {}", snapshot.place, snapshot.description(), weather::clock(snapshot.at),self.weather_source.displayed.name());
         // 用 bar_tooltip：常驻胶囊上的提示不能用 on_hover_text，悬浮层会盖住指针、抢走点击。
         if crate::quota::ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
@@ -885,9 +885,9 @@ impl App {
     }
 
     /// 只画不响应命中，设置页的常驻预览与事件容器复用。
-    pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::app::bar_layout::Layout, snapshot: &crate::weather::Snapshot) {
-        let width = layout.widths[crate::app::bar_layout::WEATHER];
-        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::app::bar_layout::WEATHER));
+    pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::island::bar_layout::Layout, snapshot: &crate::weather::Snapshot) {
+        let width = layout.widths[crate::island::bar_layout::WEATHER];
+        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::island::bar_layout::WEATHER));
     }
 
     /// 按给定宽度和透明度画天气徽标；徽标在宽度内居中。
@@ -1087,8 +1087,8 @@ impl App {
     }
 
     pub(crate) fn weather_settings(&mut self, ui: &mut egui::Ui) {
-        use crate::app::extras::{settings_card, settings_hint, settings_label};
-        use crate::app::settings_theme::color;
+        use crate::island::extras::{settings_card, settings_hint, settings_label};
+        use crate::island::settings_theme::color;
         let ctx=ui.ctx().clone();
         let accent=color(&ctx,Color32::from_rgb(96,164,255),Color32::from_rgb(34,108,220));
         ui.add_space(4.0);
@@ -1193,7 +1193,7 @@ fn info_row(ui: &mut egui::Ui, title: &str, right: impl FnOnce(&mut egui::Ui)) {
 /// 城市列表的一行：单选圆点、缓存天气图标、名称与地区、缓存温度；可删除的行右侧带 ×。
 /// 返回 (点击整行, 点击删除)。
 pub(crate) fn city_row(ui: &mut egui::Ui, selected: bool, removable: bool, title: &str, detail: &str, cached: Option<&weather::Snapshot>, accent: Color32) -> (bool, bool) {
-    use crate::app::settings_theme::color;
+    use crate::island::settings_theme::color;
     let ctx = ui.ctx().clone();
     let (rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 48.0), egui::Sense::click());
     let remove_rect = egui::Rect::from_center_size(egui::pos2(rect.right() - 18.0, rect.center().y), egui::vec2(26.0, 26.0));
@@ -1222,7 +1222,7 @@ pub(crate) fn city_row(ui: &mut egui::Ui, selected: bool, removable: bool, title
         None => canvas.circle(48.0, 24.0, 2.5, weak),
     }
     let end = canvas.painter.add(egui::Shape::Noop).0;
-    if !ui.visuals().dark_mode { crate::render::skin_paint::recolor_layer(&ctx, canvas.painter.layer_id(), &[(first, end)], &crate::render::skin_paint::GLASS_LIGHT); }
+    if !ui.visuals().dark_mode { crate::visuals::skin_paint::recolor_layer(&ctx, canvas.painter.layer_id(), &[(first, end)], &crate::visuals::skin_paint::GLASS_LIGHT); }
     let right = rect.right() - if removable { 40.0 } else { 16.0 };
     let painter = ui.painter();
     let temp_w = cached.map(|s| {
@@ -1252,7 +1252,7 @@ pub(crate) fn city_row(ui: &mut egui::Ui, selected: bool, removable: bool, title
 /// 城市搜索下拉的一项：定位标记 + 名称（粗）+ 行政区（灰），左对齐；
 /// 已选中的右侧打勾，已在列表里的标「已添加」。
 pub(crate) fn city_option(ui: &mut egui::Ui, position: &weather::Position, chosen: bool, saved: bool) -> egui::Response {
-    use crate::app::settings_theme::color;
+    use crate::island::settings_theme::color;
     let ctx = ui.ctx().clone();
     let width = ui.available_width().max(220.0);
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 44.0), egui::Sense::click());

@@ -87,7 +87,7 @@ pub(crate) fn account_pid(pid:u32,paths:&[String])->u32{
 /// 托盘唤起的诊断：只记步骤、窗口类名、位置和系统版本，不记窗口标题、提示文字或聊天内容。
 struct TrayLog(Vec<String>);
 impl TrayLog {
-    fn new(unread:crate::app::Unread)->Self{
+    fn new(unread:crate::island::Unread)->Self{
         use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
         let key=w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion");
         let build=registry_string(HKEY_LOCAL_MACHINE,key,w!("CurrentBuild")).unwrap_or_default();
@@ -157,7 +157,7 @@ fn remaining_tray_button(buttons:&[windows::Win32::Foundation::RECT],others:&[Op
 }
 
 /// 该账号能切换过去的主窗口：先找闪动进程自己，再找它的微信祖先进程。
-unsafe fn account_main_window(pid:u32,source:crate::app::Messenger,paths:&[String])->Option<HWND>{
+unsafe fn account_main_window(pid:u32,source:crate::island::Messenger,paths:&[String])->Option<HWND>{
     if pid==0 {return None;}
     if let Some(window)=visible_main_window_of(pid,source,paths){return Some(window);}
     let owners:Vec<_>=tray_hosts(paths).into_iter().map(|(p,_)|p).collect::<std::collections::HashSet<_>>().into_iter().collect();
@@ -166,8 +166,8 @@ unsafe fn account_main_window(pid:u32,source:crate::app::Messenger,paths:&[Strin
 }
 
 /// 该账号缩在托盘（没有可见主窗口，但有托盘图标）时返回 Ok；否则返回给用户的提示，并记录诊断。
-pub fn wechat_in_tray(unread:crate::app::Unread)->Result<(),String>{
-    if unread.source!=crate::app::Messenger::Wechat {return Err("请从任务栏或托盘打开微信".into());}
+pub fn wechat_in_tray(unread:crate::island::Unread)->Result<(),String>{
+    if unread.source!=crate::island::Messenger::Wechat {return Err("请从任务栏或托盘打开微信".into());}
     let paths=client_paths(unread.source);
     let mut log=TrayLog::new(unread);
     unsafe{
@@ -256,10 +256,10 @@ unsafe fn tray_overflow_button(ui:&windows::Win32::UI::Accessibility::IUIAutomat
 /// 微信缩在托盘时：通过无障碍接口按下该账号自己的托盘按钮，由微信自己唤起主窗口。
 /// 不移动鼠标、不向微信发送内部消息、不注入、不读取内容；定位不到唯一按钮就放弃。
 /// 兼容新版 Win11 托盘与 Windows 10 / 早期 Win11 的旧式托盘。会阻塞几百毫秒，必须在后台线程调用。
-pub fn open_wechat_from_tray(unread:crate::app::Unread)->Result<(),String>{
+pub fn open_wechat_from_tray(unread:crate::island::Unread)->Result<(),String>{
     use windows::{core::Interface,Win32::{Foundation::RECT,System::Com::*,UI::{Accessibility::*,HiDpi::*}}};
     let mut log=TrayLog::new(unread);
-    if unread.source!=crate::app::Messenger::Wechat {return Err(log.fail("T1","不是微信提醒"));}
+    if unread.source!=crate::island::Messenger::Wechat {return Err(log.fail("T1","不是微信提醒"));}
     let paths=client_paths(unread.source);
     unsafe {
         let _=SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -655,7 +655,7 @@ mod tests {
     fn clicking_wechat_flash_never_shows_hidden_helper(){unsafe{
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,0,0,0,0,None,None,None,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
-        let unread=crate::app::Unread{source:crate::app::Messenger::Wechat,pid:std::process::id(),window:window.0 as isize};
+        let unread=crate::island::Unread{source:crate::island::Messenger::Wechat,pid:std::process::id(),window:window.0 as isize};
         let result=open_unread_with_paths(unread,&paths);
         let visible=IsWindowVisible(window).as_bool();
         DestroyWindow(window).unwrap();
@@ -673,8 +673,8 @@ mod tests {
         let window=CreateWindowExW(WINDOW_EX_STYLE(0),w!("Qt51514QWindowIcon"),w!("Weixin"),style,0,0,300,200,None,None,instance,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
         let pid=std::process::id();
-        let flashed=open_unread_with_paths(crate::app::Unread{source:crate::app::Messenger::Wechat,pid,window:window.0 as isize},&paths);
-        let unknown=open_unread_with_paths(crate::app::Unread{source:crate::app::Messenger::Wechat,pid:0,window:window.0 as isize},&paths);
+        let flashed=open_unread_with_paths(crate::island::Unread{source:crate::island::Messenger::Wechat,pid,window:window.0 as isize},&paths);
+        let unknown=open_unread_with_paths(crate::island::Unread{source:crate::island::Messenger::Wechat,pid:0,window:window.0 as isize},&paths);
         let visible=IsWindowVisible(window).as_bool();
         DestroyWindow(window).unwrap();
         assert!(!visible,"隐藏的微信窗口不得被显示");
@@ -693,7 +693,7 @@ mod tests {
         let _=EnumWindows(Some(collect),LPARAM((&mut found as *mut (Vec<String>,Vec<(HWND,bool)>)) as isize));
         assert!(!found.1.is_empty(),"本机没有微信窗口");
         for &(hwnd,_) in &found.1 {
-            let unread=crate::app::Unread{source:crate::app::Messenger::Wechat,pid:window_pid(hwnd),window:hwnd.0 as isize};
+            let unread=crate::island::Unread{source:crate::island::Messenger::Wechat,pid:window_pid(hwnd),window:hwnd.0 as isize};
             let result=open_unread_with_paths(unread,&found.0);
             std::thread::sleep(Duration::from_millis(300));
             for &(other,was_visible) in &found.1 {
@@ -757,10 +757,10 @@ mod tests {
         let _=ShowWindow(window,SW_SHOWNOACTIVATE);
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
         let pid=std::process::id();
-        let qualifies=visible_main_frame(window,crate::app::Messenger::Wechat);
-        let usable=usable_main_frame(window,crate::app::Messenger::Wechat);
-        let found=visible_main_window_of(pid,crate::app::Messenger::Wechat,&paths);
-        let result=open_unread_with_paths(crate::app::Unread{source:crate::app::Messenger::Wechat,pid,window:window.0 as isize},&paths);
+        let qualifies=visible_main_frame(window,crate::island::Messenger::Wechat);
+        let usable=usable_main_frame(window,crate::island::Messenger::Wechat);
+        let found=visible_main_window_of(pid,crate::island::Messenger::Wechat,&paths);
+        let result=open_unread_with_paths(crate::island::Unread{source:crate::island::Messenger::Wechat,pid,window:window.0 as isize},&paths);
         DestroyWindow(window).unwrap();
         assert!(qualifies,"测试窗口应当像微信主窗口");
         assert!(!usable && found.is_none(),"屏幕外的窗口不算用户看得到的主窗口");
@@ -896,10 +896,10 @@ mod tests {
     #[test]
     fn tray_open_rejects_unknown_accounts(){
         // 非微信进程的闪动不得退到本机微信托盘（本机装了微信时也一样）。
-        assert!(open_wechat_from_tray(crate::app::Unread{source:crate::app::Messenger::Wechat,pid:std::process::id(),window:0}).is_err());
-        assert!(wechat_in_tray(crate::app::Unread{source:crate::app::Messenger::Wechat,pid:std::process::id(),window:0}).is_err());
-        assert!(open_wechat_from_tray(crate::app::Unread{source:crate::app::Messenger::Qq,pid:1,window:0}).is_err());
-        assert!(wechat_in_tray(crate::app::Unread{source:crate::app::Messenger::Qq,pid:std::process::id(),window:0}).is_err(),"QQ 不走微信托盘");
+        assert!(open_wechat_from_tray(crate::island::Unread{source:crate::island::Messenger::Wechat,pid:std::process::id(),window:0}).is_err());
+        assert!(wechat_in_tray(crate::island::Unread{source:crate::island::Messenger::Wechat,pid:std::process::id(),window:0}).is_err());
+        assert!(open_wechat_from_tray(crate::island::Unread{source:crate::island::Messenger::Qq,pid:1,window:0}).is_err());
+        assert!(wechat_in_tray(crate::island::Unread{source:crate::island::Messenger::Qq,pid:std::process::id(),window:0}).is_err(),"QQ 不走微信托盘");
     }
     #[test]
     #[ignore="需要本机已登录的微信；会把微信关到托盘再唤起"]
@@ -910,7 +910,7 @@ mod tests {
             use windows::Win32::Foundation::BOOL;
             unsafe extern "system" fn visit(hwnd:HWND,data:LPARAM)->BOOL{
                 let (paths,out)=&mut *(data.0 as *mut (Vec<String>,Option<HWND>));
-                if visible_main_frame(hwnd,crate::app::Messenger::Wechat) && matches(hwnd,paths){*out=Some(hwnd);return false.into();}
+                if visible_main_frame(hwnd,crate::island::Messenger::Wechat) && matches(hwnd,paths){*out=Some(hwnd);return false.into();}
                 true.into()
             }
             let mut found=(paths.clone(),None);
@@ -932,7 +932,7 @@ mod tests {
                 hidden=hidden.or(data.1);hidden.expect("找不到微信主窗口")
             }
         };
-        let unread=crate::app::Unread{source:crate::app::Messenger::Wechat,pid:window_pid(main),window:main.0 as isize};
+        let unread=crate::island::Unread{source:crate::island::Messenger::Wechat,pid:window_pid(main),window:main.0 as isize};
         println!("任务栏自动隐藏={}",taskbar_autohide());
         assert!(!IsWindowVisible(main).as_bool(),"微信应已缩到托盘");
         assert!(wechat_in_tray(unread).is_ok());
@@ -945,7 +945,7 @@ mod tests {
     }}
     #[test]
     fn capture_overlays_do_not_count_as_viewing_a_messenger(){
-        use crate::app::Messenger;
+        use crate::island::Messenger;
         let main=(WS_SYSMENU|WS_MINIMIZEBOX).0;
         assert!(client_main_frame(Messenger::Qq,"Chrome_WidgetWin_1",main,0));
         assert!(client_main_frame(Messenger::Wechat,"Qt51514QWindowIcon",main,0));
@@ -955,13 +955,13 @@ mod tests {
     }
     #[test]
     fn weixin_qt_main_window_without_system_menu_counts_as_viewed(){
-        use crate::app::Messenger;
+        use crate::island::Messenger;
         assert!(client_main_frame(Messenger::Wechat,"Qt51514QWindowIcon",0x96c70000,0x100));
         assert!(!client_main_frame(Messenger::Wechat,"Qt51514QWindowIcon",WS_POPUP.0,0x100));
     }
     #[test]
     fn qq_nt_main_window_without_system_menu_counts_as_viewed(){
-        use crate::app::Messenger::Qq;
+        use crate::island::Messenger::Qq;
         assert!(client_main_frame(Qq,"Chrome_WidgetWin_1",0x14c70000,0x100));
         assert!(!client_main_frame(Qq,"Chrome_WidgetWin_1",0x04c20000,0x80108));
         assert!(!client_main_frame(Qq,"Chrome_WidgetWin_1",0x04030000,0x80000));
@@ -969,7 +969,7 @@ mod tests {
     #[test]
     #[ignore="需要本机 QQ 主窗口实际位于前台"]
     fn local_qq_main_window_is_viewed(){
-        assert!(client_in_foreground(crate::app::Messenger::Qq));
+        assert!(client_in_foreground(crate::island::Messenger::Qq));
     }
     #[test]
     fn protocol_registration_requires_an_absolute_wechat_executable(){

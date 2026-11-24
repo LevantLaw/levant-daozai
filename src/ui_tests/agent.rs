@@ -6,7 +6,7 @@ fn ai_stale_hides_without_expanding(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.notifications=true;
     h.app.agent.config.enabled=true;
-    h.app.settings.visible_pages[crate::app::AI_PAGE]=true;
+    h.app.settings.visible_pages[crate::island::AI_PAGE]=true;
     h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_event(port,&token,"SessionStart",serde_json::json!({"session_id":"ui-stale","cwd":"E:\\demo\\project"}));
@@ -31,7 +31,7 @@ fn ai_question_keeps_detail_open_until_answered(){
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
     assert!(h.app.open&&h.app.agent.detail,"等待回答应直接展开详情");
     assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待回答不应先出横幅");
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
     assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-q1"));
     h.cursor=None;
     for _ in 0..360 {h.frame(vec![]);}
@@ -53,7 +53,7 @@ fn ai_question_inline_input_enter_keeps_text_and_does_not_submit(){
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
     assert!(h.app.agent.detail,"提问详情应已打开");
     for _ in 0..120 {h.frame(vec![]);if h.app.reveal>0.95 {break;}}
-    assert!((h.app.expanded_height()-(crate::app::STATUS_H+214.0)).abs()<0.01,"两个选项时详情不应按最大高度展开");
+    assert!((h.app.expanded_height()-(crate::island::STATUS_H+214.0)).abs()<0.01,"两个选项时详情不应按最大高度展开");
     let (_,free_y)=h.app.agent_free_row().expect("自由输入行应已画出");
     h.click(H::local(200.0,free_y+11.0));
     h.frame(vec![]);
@@ -84,7 +84,7 @@ fn ai_detail_closes_when_pending_disappears(){
     for _ in 0..600 {h.frame(vec![]);if !h.app.agent.detail{break;}}
     assert!(!h.app.agent.detail,"待处理事件消失后应退回列表");
     assert!(h.app.agent.selected.is_none());
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
 }
 
 #[test]
@@ -96,12 +96,12 @@ fn ai_approval_keeps_detail_open_until_decided(){
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
     assert!(h.app.open&&h.app.agent.detail,"等待审批应直接展开详情");
     assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待审批不应先出横幅");
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
     assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-p1"));
     h.cursor=None;
     for _ in 0..360 {h.frame(vec![]);}
     assert!(h.app.open,"光标离开和停留时长都不应自动收起审批详情");
-    assert!((h.app.expanded_height()-(crate::app::STATUS_H+186.0)).abs()<0.01,"单行命令的审批详情应收缩到一行高度");
+    assert!((h.app.expanded_height()-(crate::island::STATUS_H+186.0)).abs()<0.01,"单行命令的审批详情应收缩到一行高度");
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="允许一次")),"审批按钮直接画在详情里");
     h.click_text("允许一次");
     assert_eq!(h.app.agent.store.waiting_count(),0,"在岛上直接批准即可放行");
@@ -118,7 +118,7 @@ fn ai_waiting_expands_directly(){
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
     assert!(h.app.open&&h.app.agent.detail,"等待回答直接展开详情");
     assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待回答不排横幅");
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
     assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-q2"));
 }
 
@@ -179,14 +179,14 @@ fn collapsed_agent_light_opens_ai_page(){
     for _ in 0..10 {h.frame(vec![]);}
     let light=h.ctx.read_response(egui::Id::new(("card",true,"agent-pill"))).expect("收起态应显示 AI 状态灯").rect;
     h.click(light.center());
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
     assert!(h.app.open,"点状态灯应直接打开 AI 页");
 }
 
 #[test]
 fn side_agent_light_opens_ai_page(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     let mut h=H::new();h.app.settings.dock=crate::model::Dock::Left;
     let away=Some(Pos2::new(w/2.0,hgt-5.0));
     for _ in 0..60 {side_frame(&mut h,away);}
@@ -196,6 +196,6 @@ fn side_agent_light_opens_ai_page(){
     side_frame_events(&mut h,Some(p),vec![egui::Event::PointerMoved(p)]);
     side_frame_events(&mut h,Some(p),vec![button(true)]);
     side_frame_events(&mut h,Some(p),vec![button(false)]);
-    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert_eq!(h.app.page,crate::island::AI_PAGE);
     assert!(h.app.open,"点侧边状态灯应直接打开 AI 页");
 }

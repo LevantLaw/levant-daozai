@@ -99,7 +99,7 @@ fn empty_todo_draft_can_be_cancelled_by_clicking_elsewhere(){
         assert!(h.app.buf.is_empty());assert_eq!(h.app.todos.items.len(),1);assert_eq!(h.app.todos.items[0].text,"保留任务");
         assert_eq!(crate::model::TodoList::load().items.len(),1,"不能保存空白待办");
         h.hover(H::local(65.0,60.0),0.3);
-        assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Focus)),"取消后不能反复激活窗口");
+        assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Focus)),"取消后不能反复激活窗口");
     }
 }
 
@@ -122,7 +122,7 @@ fn todo_ime_focus_change_preserves_empty_draft(){
     h.frame(vec![egui::Event::Ime(egui::ImeEvent::Enabled),egui::Event::WindowFocused(false)]);
     assert!(h.app.adding,"输入法候选窗口造成的失焦不能取消空白待办");
     assert!(h.app.open);
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Focus)),"不能和输入法窗口反复争抢焦点");
+    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Focus)),"不能和输入法窗口反复争抢焦点");
     h.app.foreground_changed();h.frame(vec![]);
     assert!(h.app.adding,"输入法组合输入期间的前台切换应保留草稿");
     h.frame(vec![egui::Event::WindowFocused(true),egui::Event::Ime(egui::ImeEvent::Preedit("zhong".into()))]);
@@ -186,20 +186,20 @@ fn blank_todo_draft_closes_when_window_focus_is_lost(){
     h.cmds.clear();h.frame(vec![egui::Event::WindowFocused(false)]);
     assert!(!h.app.is_editing(),"点击其他软件后空白草稿应自动退出");
     assert!(h.app.todos.items.is_empty());
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Focus)),"失去焦点时不能把窗口再次激活");
+    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Focus)),"失去焦点时不能把窗口再次激活");
 }
 
 #[test]
 fn todo_input_requests_window_focus_once_and_preserves_typed_drafts(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.show_page(4);h.hover(H::local(300.0,60.0),1.0);h.cmds.clear();h.click(H::local(70.0,109.0));
-    assert_eq!(h.cmds.iter().filter(|cmd|matches!(cmd,crate::app::Cmd::Focus)).count(),1,"新建时只应请求一次窗口焦点");
+    assert_eq!(h.cmds.iter().filter(|cmd|matches!(cmd,crate::island::Cmd::Focus)).count(),1,"新建时只应请求一次窗口焦点");
     h.click(H::local(280.0,46.0));assert!(h.app.adding,"点击输入框不能取消草稿");
     h.frame(vec![egui::Event::Text("尚未保存的内容".into())]);h.cmds.clear();
     h.click(H::local(65.0,60.0));h.frame(vec![egui::Event::WindowFocused(false)]);
     for _ in 0..20{h.frame(vec![]);}
     assert!(h.app.adding);assert_eq!(h.app.buf,"尚未保存的内容");assert!(h.app.todos.items.is_empty());
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Focus)),"已有内容失焦后应保留草稿，不能抢回焦点");
+    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Focus)),"已有内容失焦后应保留草稿，不能抢回焦点");
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn switching_apps_cancels_only_empty_new_todos(){
         assert_eq!(h.app.adding,!text.trim().is_empty());
         assert_eq!(h.app.buf,if text.trim().is_empty(){""}else{text});
         assert!(h.app.todos.items.is_empty());
-        assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Focus)));
+        assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::island::Cmd::Focus)));
     }
 }
 
@@ -393,8 +393,8 @@ fn todo_reminder_picker_is_embedded_in_the_island(){
     egui::Context::set_immediate_viewport_renderer(|_,_|panic!("待办提醒必须在岛内选择，不能创建独立窗口"));
     h.click(H::local(343.0,46.0));
     for _ in 0..90 {h.frame(vec![]);}
-    assert_eq!(h.app.expanded_height(),PH+crate::app::STATUS_H,"右侧滚轮应保持待办页原来的高度");
-    assert!(h.hit.height()<=PH+crate::app::STATUS_H+2.0,"选择时间不能撑大岛体");
+    assert_eq!(h.app.expanded_height(),PH+crate::island::STATUS_H,"右侧滚轮应保持待办页原来的高度");
+    assert!(h.hit.height()<=PH+crate::island::STATUS_H+2.0,"选择时间不能撑大岛体");
     for label in ["准备会议","已完成","取消","完成","暂不提醒"] {
         let (rect,clip)=h.shapes.iter().find_map(|s|match &s.shape {
             egui::Shape::Text(t) if t.galley.text()==label=>Some((t.visual_bounding_rect(),s.clip_rect)),_=>None,
@@ -465,7 +465,7 @@ fn shelf_remove_icon_stays_centered_on_hover_and_preserves_the_file(){
 #[test]
 fn side_dock_file_drag_opens_the_shelf_and_drop_saves_it(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let (w,hgt)=(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H);
+    let (w,hgt)=(crate::island::side_dock::SIDE_W,crate::island::side_dock::SIDE_H);
     let path=crate::model::config_dir().join("侧边拖入.txt");std::fs::create_dir_all(path.parent().unwrap()).unwrap();std::fs::write(&path,"x").unwrap();
     for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
         let mut h=H::new();h.app.settings.dock=dock;

@@ -1,5 +1,5 @@
 //! 岛内日程：左侧月历，右侧按时间排列邮件邀请与工作日程。
-use crate::{app::{App, Cmd, Env, CALENDAR_PAGE}, calendar, mail,render,render::paint::{self,Card,H},render::theme::{self,W}};
+use crate::{island::{App, Cmd, Env, CALENDAR_PAGE}, calendar, mail,visuals,visuals::paint::{self,Card,H},visuals::theme::{self,W}};
 use chrono::{Datelike, NaiveDate};
 use eframe::egui::{self,Color32};
 
@@ -278,19 +278,19 @@ impl App {
         let now=calendar_now(env);
         c.fill(37.0,9.0,54.0,18.0,8.0,Color32::from_rgb(30,30,33));
         source_icon(c,Source::Calendar(None),43.0,13.0,10.0);
-        c.centered_text(69.0,18.0,"日程",10.0,W::Semibold,render::theme::WHITE,H::Center);
+        c.centered_text(69.0,18.0,"日程",10.0,W::Semibold,visuals::theme::WHITE,H::Center);
         if c.hit(37.0,9.0,54.0,18.0,"calendar-today").on_hover_text("回到今天").clicked(){self.select_calendar_day(today);}
-        let (add,b)=paint::capsule(c,97.0,9.0,54.0,18.0,"calendar-add-local",render::theme::BTN,render::theme::BTN_HOVER);
-        b.centered_text(124.0,18.0,"＋ 添加日程",8.4,W::Regular,render::theme::WHITE,H::Center);
+        let (add,b)=paint::capsule(c,97.0,9.0,54.0,18.0,"calendar-add-local",visuals::theme::BTN,visuals::theme::BTN_HOVER);
+        b.centered_text(124.0,18.0,"＋ 添加日程",8.4,W::Regular,visuals::theme::WHITE,H::Center);
         if add.clicked(){self.open_calendar_editor(None);return;}
         c.seg((155.0,36.0),(155.0,208.0),0.6,Color32::from_gray(38));
         let day=self.calendar.view.day;
         let weekday=["星期一","星期二","星期三","星期四","星期五","星期六","星期日"][day.weekday().num_days_from_monday() as usize];
         c.text(40.0,42.0,weekday,9.0,W::Regular,accent,H::Left);
-        c.text(40.0,61.0,&format!("{}月{}日",day.month(),day.day()),14.0,W::Semibold,render::theme::WHITE,H::Left);
+        c.text(40.0,61.0,&format!("{}月{}日",day.month(),day.day()),14.0,W::Semibold,visuals::theme::WHITE,H::Left);
         let month=self.calendar.view.month;
         c.centered_text(45.0,80.0,"‹",14.0,W::Regular,muted,H::Center);
-        c.centered_text(87.0,80.0,&format!("{}年{}月",month.year(),month.month()),9.5,W::Regular,render::theme::GRAY,H::Center);
+        c.centered_text(87.0,80.0,&format!("{}年{}月",month.year(),month.month()),9.5,W::Regular,visuals::theme::GRAY,H::Center);
         c.centered_text(129.0,80.0,"›",14.0,W::Regular,muted,H::Center);
         for (x,next) in [(38.0,false),(122.0,true)] {
             if c.hit(x,72.0,14.0,16.0,("calendar-month",next)).clicked(){
@@ -345,7 +345,7 @@ impl App {
         first=first.min(max);
         if events.is_empty() {
             let message=if self.calendar.view.loading{"正在获取日程…"}else if !self.calendar.view.error.is_empty(){"暂时无法获取日程"}else if !self.calendar.view.warning.is_empty(){"部分日程未同步"}else if ended_count>0{"当天日程已结束"}else{"当天暂无日程"};
-            c.centered_text(271.0,76.0,message,11.0,W::Regular,render::theme::GRAY,H::Center);
+            c.centered_text(271.0,76.0,message,11.0,W::Regular,visuals::theme::GRAY,H::Center);
             if self.calendar_configs().is_empty(){
                 c.centered_text(271.0,103.0,"连接日历",9.0,W::Regular,muted,H::Center);
                 if c.hit(235.0,93.0,72.0,20.0,"calendar-connect").clicked(){connect=true;}

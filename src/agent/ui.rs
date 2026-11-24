@@ -3,10 +3,10 @@
 use crate::agent::hooks::Health;
 use crate::agent::store::{Decision, Notice, NoticeKind, NotifyConfig, PendingKind, SessionState, Store};
 use crate::agent::{AgentId, Session};
-use crate::app::{App, AI_PAGE};
-use crate::app::extras::{setting_row, setting_row_nested, settings_card, settings_control_row_right, settings_group_fold, settings_hint, settings_label, settings_segmented};
-use crate::render::paint::{Card, H};
-use crate::render::theme::{self, W};
+use crate::island::{App, AI_PAGE};
+use crate::island::extras::{setting_row, setting_row_nested, settings_card, settings_control_row_right, settings_group_fold, settings_hint, settings_label, settings_segmented};
+use crate::visuals::paint::{Card, H};
+use crate::visuals::theme::{self, W};
 use eframe::egui::{self, Color32};
 
 /// 横幅对应的 AI 事件身份：会话键 + 事件类型，用于去重和失效判断。
@@ -195,7 +195,7 @@ impl App {
     pub(crate) fn draw_agent_light(&self, c: &Card, x: f32, y: f32) {
         let active = self.agent.store.active();
         if active.is_empty() {
-            c.ring(x, y, 4.3, 1.5, crate::render::paint::alpha(theme::GRAY, 0.55));
+            c.ring(x, y, 4.3, 1.5, crate::visuals::paint::alpha(theme::GRAY, 0.55));
             return;
         }
         let waiting = active.iter().filter(|session| session.waiting()).count();
@@ -224,7 +224,7 @@ impl App {
     }
 
     /// 岛内自由输入：真正的 egui 文本框，叠在详情页固定的输入行上。
-    pub(crate) fn agent_free_input(&mut self, ui: &mut egui::Ui, origin: egui::Pos2, cmds: &mut Vec<crate::app::Cmd>) {
+    pub(crate) fn agent_free_input(&mut self, ui: &mut egui::Ui, origin: egui::Pos2, cmds: &mut Vec<crate::island::Cmd>) {
         let Some((index, y)) = self.agent_free_row() else { self.agent.free_focus = false; return; };
         let rect = egui::Rect::from_min_size(origin + egui::Vec2::new(OPTION_X + 8.0, y + 2.0), egui::Vec2::new(OPTION_W - 16.0, OPTION_H - 4.0));
         let mut buf = std::mem::take(&mut self.agent.free);
@@ -237,7 +237,7 @@ impl App {
             .hint_text(egui::RichText::new("输入其他答案，回车完成").color(theme::DIM).font(theme::font(10.0, W::Regular)))
             .desired_width(rect.width());
         let response = ui.put(rect, editor);
-        if response.gained_focus() { cmds.push(crate::app::Cmd::Focus); }
+        if response.gained_focus() { cmds.push(crate::island::Cmd::Focus); }
         self.agent.free_focus = response.has_focus();
         // 回车只结束输入，文字留在行内；真正提交仍由「提交」按钮完成。
         self.agent.free = buf;
@@ -272,7 +272,7 @@ impl App {
         if sessions.is_empty() {
             c.text(209.5, 84.0, "还没有活跃会话", 13.0, W::Bold, theme::WHITE, H::Center);
             c.text(209.5, 102.0, "勾选 Agent 并安装 Hook 后，会话会出现在这里", 10.0, W::Regular, theme::GRAY, H::Center);
-            let (response, body) = crate::render::paint::capsule(c, 162.0, 114.0, 94.0, 24.0, "agent-setup", theme::BTN, theme::BTN_HOVER);
+            let (response, body) = crate::visuals::paint::capsule(c, 162.0, 114.0, 94.0, 24.0, "agent-setup", theme::BTN, theme::BTN_HOVER);
             body.text(209.0, 130.0, "去接入 Agent", 10.0, W::Semibold, theme::WHITE, H::Center);
             if response.clicked() { self.settings_tab = 15; self.open_settings(); }
             return;
@@ -303,9 +303,9 @@ impl App {
             list.fill(40.0, top, 320.0, height, 10.0, fill);
             let accent = state_color(session);
             let alpha = if waiting { 0.55 + 0.45 * ((self.t * 4.0).sin() * 0.5 + 0.5) as f32 } else { 0.9 };
-            list.fill(47.0, top + (height - 16.0) / 2.0, 3.0, 16.0, 1.5, crate::render::paint::alpha(accent, alpha));
+            list.fill(47.0, top + (height - 16.0) / 2.0, 3.0, 16.0, 1.5, crate::visuals::paint::alpha(accent, alpha));
             if waiting || session.stale() || matches!(session.state, SessionState::Failed | SessionState::Interrupted) {
-                list.stroke(40.0, top, 320.0, height, 10.0, 1.0, crate::render::paint::alpha(accent, 0.65));
+                list.stroke(40.0, top, 320.0, height, 10.0, 1.0, crate::visuals::paint::alpha(accent, 0.65));
             } else if hover > 0.01 {
                 list.stroke(40.0, top, 320.0, height, 10.0, 1.0, Color32::from_white_alpha((20.0 * hover) as u8));
             }
@@ -349,7 +349,7 @@ impl App {
             if waiting {
                 agent_icon(&list, session.agent, 300.0, top + height / 2.0, 14.0);
                 let handle_id = format!("agent-handle-{key}");
-                let (handle, body) = crate::render::paint::capsule(&list, 312.0, top + (height - 18.0) / 2.0, 44.0, 18.0, &handle_id, theme::BTN, theme::BTN_HOVER);
+                let (handle, body) = crate::visuals::paint::capsule(&list, 312.0, top + (height - 18.0) / 2.0, 44.0, 18.0, &handle_id, theme::BTN, theme::BTN_HOVER);
                 body.centered_text(334.0, top + height / 2.0, "处理", 9.0, W::Semibold, theme::WHITE, H::Center);
                 if handle.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("在岛上处理").clicked() {
                     handled = Some(key.clone());
@@ -550,9 +550,9 @@ impl App {
                 });
             }
             ui.separator();
-            crate::app::extras::settings_action_row(ui,|ui|{
-                if ui.add(crate::app::extras::settings_primary_button("重新扫描")).clicked() { self.agent.rescan(); }
-                if ui.add(crate::app::extras::settings_danger_button("清理旧 Hook")).clicked() {
+            crate::island::extras::settings_action_row(ui,|ui|{
+                if ui.add(crate::island::extras::settings_primary_button("重新扫描")).clicked() { self.agent.rescan(); }
+                if ui.add(crate::island::extras::settings_danger_button("清理旧 Hook")).clicked() {
                     let changed = crate::agent::hooks::cleanup_legacy();
                     self.agent.rescan();
                     self.say(if changed { "已清理 Fly Island / 提示音 Hook，备份已保留" } else { "没有发现需要清理的旧 Hook" });
@@ -672,7 +672,7 @@ impl crate::agent::AgentState {
 }
 
 fn button<'a>(c: &Card<'a>, x: f32, y: f32, w: f32, label: &str, color: Color32) -> egui::Response {
-    let (response, body) = crate::render::paint::capsule(c, x, y, w, 24.0, label, color, crate::render::paint::mix(color, Color32::WHITE, 0.12));
+    let (response, body) = crate::visuals::paint::capsule(c, x, y, w, 24.0, label, color, crate::visuals::paint::mix(color, Color32::WHITE, 0.12));
     body.text(x + w / 2.0, y + 16.0, label, 10.0, W::Semibold, theme::WHITE, H::Center);
     response
 }

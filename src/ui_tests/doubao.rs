@@ -96,7 +96,7 @@ fn doubao_quota_gallery() {
         image::imageops::crop_imm(&image,(image.width()-width)/2,0,width,96).to_image().save(path).unwrap();
         for connect in [false,true] {
             let mut h=H::new();if !connect{fixture(&mut h);}
-            h.app.settings.settings_theme=if light{crate::app::settings_theme::SettingsTheme::Light}else{crate::app::settings_theme::SettingsTheme::Dark};
+            h.app.settings.settings_theme=if light{crate::island::settings_theme::SettingsTheme::Light}else{crate::island::settings_theme::SettingsTheme::Dark};
             h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
             h.app.quota.provider=crate::quota::Provider::Doubao;h.app.quota.connect_open=connect;
             let size=Vec2::new(780.0,850.0);let ppp=1.25;
