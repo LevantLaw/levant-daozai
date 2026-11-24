@@ -17,7 +17,7 @@ pub(crate) const DINGTALK:NativeAdapter=NativeAdapter{
 };
 fn paths(client:Messenger)->Vec<String>{client.adapter().process_names.iter().map(|name|format!("*{}",name.to_ascii_lowercase())).collect()}
 fn start(client:Messenger,ctx:eframe::egui::Context)->Result<Box<dyn TaskbarSource>,String>{
-    Ok(Box::new(crate::wechat::Listener::for_client(client,ctx)?))
+    Ok(Box::new(crate::messenger::wechat::Listener::for_client(client,ctx)?))
 }
 fn main_frame(client:Messenger,class:&str,style:u32,extended:u32)->bool{
     if style&WS_CHILD.0!=0 || extended&(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE).0!=0{return false;}

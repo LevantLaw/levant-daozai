@@ -359,11 +359,11 @@ pub fn html_to_text(html: &str) -> String {
     let br = BREAK.get_or_init(|| {
         Regex::new(r"(?i)<br\s*/?>|</p>|</div>|</tr>|</li>|</h[1-6]>").expect("break regex")
     });
-    let visible=crate::mail_format::visible_html(html);
+    let visible=crate::mail::format::visible_html(html);
     let s = script.replace_all(&visible, " ");
     let s = br.replace_all(&s, "\n");
     let s = tags.replace_all(&s, "");
-    let s = crate::mail_format::decode(&s);
+    let s = crate::mail::format::decode(&s);
     let mut out = String::with_capacity(s.len());
     for line in s.lines() {
         let t = line.split_whitespace().collect::<Vec<_>>().join(" ");

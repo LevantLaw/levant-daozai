@@ -226,7 +226,7 @@ pub enum Cmd {
     MailSync,
     /// 测试某个邮箱的连接（授权码只在内存里传给工作线程）。
     MailTest(mail::Account, String),
-    MailManage(crate::mail_manage::Request),
+    MailManage(crate::mail::manage::Request),
     /// v0.5.6：用临时密码试连日历，成功后才允许落盘。
     CalendarTest(calendar::Config, String),
     /// 让外壳立即同步一次日历。
@@ -582,8 +582,8 @@ pub(crate) struct LyricsState {
 /// v0.5.5：邮件面板与设置表单的界面状态。正文只在内存里过一次，不落盘。
 #[derive(Default)]
 pub(crate) struct MailState {
-    pub privacy:crate::mail_privacy::Privacy,
-    pub manage:crate::mail_manage_ui::State,
+    pub privacy:crate::mail::privacy::Privacy,
+    pub manage:crate::mail::manage_ui::State,
     pub accounts: Vec<mail::Account>,
     /// 每个账号的连接状态，键是邮箱小写。
     pub status: HashMap<String, mail::Status>,
@@ -626,14 +626,14 @@ impl MailState {
 /// v0.5.6：日程（CalDAV）的界面状态。密码只在表单里暂存，保存后立刻清掉。
 #[derive(Default)]
 pub(crate) struct CalendarState {
-    pub local: Vec<crate::local_calendar::Entry>,
+    pub local: Vec<crate::calendar::local::Entry>,
     pub local_error: String,
-    pub draft: Option<crate::local_calendar::Draft>,
+    pub draft: Option<crate::calendar::local::Draft>,
     pub feeds: Vec<CalendarFeed>,
     pub config: Option<calendar::Config>,
     /// 未来 24 小时的日程（提醒也读这里）。
     pub events: Vec<mail::Meeting>,
-    pub view: crate::calendar_ui::State,
+    pub view: crate::calendar::ui::State,
     pub connected: bool,
     pub last_sync: String,
     /// 连续失败次数；>= 2 才在设置页显示红字。
@@ -655,7 +655,7 @@ pub(crate) struct CalendarState {
 pub(crate) struct CalendarFeed {
     pub config: calendar::Config,
     pub events: Vec<mail::Meeting>,
-    pub month: crate::calendar_ui::State,
+    pub month: crate::calendar::ui::State,
     pub connected: bool,
     pub last_sync: String,
     pub failures: u32,
@@ -690,7 +690,7 @@ impl CalendarState {
             username: config.as_ref().map(|cfg| cfg.username.clone()).unwrap_or_default(),
             server: config.as_ref().filter(|cfg| cfg.provider.custom_server()).and_then(|cfg| cfg.server.clone()).unwrap_or_default(), ..Default::default() };
         let feeds = calendar::load_configs().into_iter().map(CalendarFeed::new).collect();
-        let (local,local_error)=match crate::local_calendar::load(){Ok(events)=>(events,String::new()),Err(error)=>(vec![],error)};
+        let (local,local_error)=match crate::calendar::local::load(){Ok(events)=>(events,String::new()),Err(error)=>(vec![],error)};
         Self { config, form, feeds, local, local_error, ..Default::default() }
     }
 
@@ -918,17 +918,17 @@ pub struct App {
     /// v0.5.5：邮件账号、最近邮件与设置表单。
     pub(crate) mail: MailState,
     /// 岛内详情与独立阅读窗口各保留一份排版缓存。
-    mail_lines_cache: Vec<(std::sync::Arc<str>, std::sync::Arc<str>, u32, std::sync::Arc<Vec<crate::mail_format::Line>>)>,
+    mail_lines_cache: Vec<(std::sync::Arc<str>, std::sync::Arc<str>, u32, std::sync::Arc<Vec<crate::mail::format::Line>>)>,
     /// v0.5.6：日历（CalDAV）配置、未来 24 小时事件与设置表单。
     pub(crate) calendar: CalendarState,
-    pub(crate) quota: crate::quota_ui::State,
+    pub(crate) quota: crate::quota::ui::State,
     /// AI 会话：Agent 状态、Hook 与本地中继。
     pub(crate) agent: crate::agent::AgentState,
     /// 输入、其他通知或详情占用时，等它们结束后再展开的 AI 事件。
-    pub(crate) agent_open_after_notice: Option<crate::agent_ui::AgentAlert>,
+    pub(crate) agent_open_after_notice: Option<crate::agent::ui::AgentAlert>,
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
-    pub(crate) weather_source: crate::weather_source_ui::State,
+    pub(crate) weather_source: crate::weather::source_ui::State,
     pub(crate) updates: crate::updates::State,
     pub(crate) resident: bar::Motion,
     pub(crate) event_tray: crate::event_tray::EventTray,
@@ -956,9 +956,9 @@ impl App {
         let focus_seconds=settings.focus_minutes as f32*60.0;
         let initial_lyrics=settings.lyrics_enabled;
         let initial_page=settings.page_order.iter().copied().find(|page|settings.visible_pages[*page]).unwrap_or(0);
-        let weather_source=crate::weather_source_ui::State::load();
+        let weather_source=crate::weather::source_ui::State::load();
         let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
-        if weather_source.displayed==crate::weather_source_ui::Provider::Qweather {weather.snapshot=weather_source.runtime.snapshot();}
+        if weather_source.displayed==crate::weather::source_ui::Provider::Qweather {weather.snapshot=weather_source.runtime.snapshot();}
         let mut agent=crate::agent::AgentState::load();
         if settings.visible_pages.get(AI_PAGE).copied().unwrap_or(false) && agent.config.enabled { agent.start(ctx); }
         Self {
@@ -1068,7 +1068,7 @@ impl App {
             mail: MailState { accounts: mail::load_accounts(), ..Default::default() },
             mail_lines_cache: Vec::new(),
             calendar: CalendarState::load(),
-            quota: crate::quota_ui::State::load(),
+            quota: crate::quota::ui::State::load(),
             agent,
             agent_open_after_notice:None,
             weather,
@@ -1098,14 +1098,14 @@ impl App {
     }
     pub(crate) fn reveal_mail_code(&mut self,item:&mail::Item){self.mail.privacy.reveal(item,self.t);}
     /// 同一封邮件、同一段正文只解析一次排版，避免每帧重复切分几百个段落。
-    pub(crate) fn mail_body_lines(&mut self, item: &mail::Item) -> std::sync::Arc<Vec<crate::mail_format::Line>> {
+    pub(crate) fn mail_body_lines(&mut self, item: &mail::Item) -> std::sync::Arc<Vec<crate::mail::format::Line>> {
         // display_mail 每帧只 clone Arc：正文与 HTML 原文的指针都不变就说明是同一封邮件，
         // 长邮件不必每帧重新哈希几十 KB，更不必重新跑正则解析。
         if let Some((_,_,_,lines))=self.mail_lines_cache.iter().find(|(summary, html, uid, _)|
             *uid == item.uid
             && std::sync::Arc::ptr_eq(summary, &item.summary)
             && std::sync::Arc::ptr_eq(html, &item.html)){return lines.clone();}
-        let lines=std::sync::Arc::new(crate::mail_format::item_lines(item));
+        let lines=std::sync::Arc::new(crate::mail::format::item_lines(item));
         if self.mail_lines_cache.len()==2{self.mail_lines_cache.remove(0);}
         self.mail_lines_cache.push((item.summary.clone(),item.html.clone(),item.uid,lines.clone()));lines
     }
@@ -1114,15 +1114,15 @@ impl App {
         let mut safe=item.clone();
         if self.mail_code_hidden(item) {
             if let Some(code)=&item.code {
-                safe.subject=crate::mail_privacy::mask(&safe.subject,code);
-                safe.from=crate::mail_privacy::mask(&safe.from,code);
+                safe.subject=crate::mail::privacy::mask(&safe.subject,code);
+                safe.from=crate::mail::privacy::mask(&safe.from,code);
                 safe.summary=self.mail.privacy.masked_body(item);
                 // HTML 原文里可能还有未遮蔽的验证码，隐藏时必须一起丢弃。
                 // 用共享的空 Arc，让排版缓存对隐藏邮件也能按指针命中，不必每帧重解析。
                 static EMPTY: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
                 safe.html=EMPTY.get_or_init(||std::sync::Arc::from("")).clone();
                 safe.links.clear(); // Avoid tooltip/URL/copy leaks while hidden.
-                if let Some(event)=&mut safe.meeting {event.title=crate::mail_privacy::mask(&event.title,code);}
+                if let Some(event)=&mut safe.meeting {event.title=crate::mail::privacy::mask(&event.title,code);}
                 safe.code=None;
             }
         }
@@ -1137,7 +1137,7 @@ impl App {
             mail::Event::Status { account, status } => {
                 if !watching(&account){return;}
                 if status==mail::Status::Ready{
-                    self.mail.manage.data.remove(&(account.to_ascii_lowercase(),crate::mail_manage::Folder::Inbox));self.mail.manage.next_refresh=0.0;
+                    self.mail.manage.data.remove(&(account.to_ascii_lowercase(),crate::mail::manage::Folder::Inbox));self.mail.manage.next_refresh=0.0;
                     if (!self.mail.manage.trash_open||!self.settings.mail_sync_operations)&&self.mail.open_uid.as_ref().is_some_and(|(a,_)|a.eq_ignore_ascii_case(&account)){
                         self.mail.open_uid=None;self.mail.manage.auto_read=None;
                     }
@@ -1146,7 +1146,7 @@ impl App {
             }
             mail::Event::Mail { item, new } => {
                 if !watching(&item.account){return;}
-                if !new&&self.mail.manage.data.get(&(item.account.to_ascii_lowercase(),crate::mail_manage::Folder::Inbox)).is_some_and(|s|!s.entries.iter().any(|(uid,_)|*uid==item.uid)){return;}
+                if !new&&self.mail.manage.data.get(&(item.account.to_ascii_lowercase(),crate::mail::manage::Folder::Inbox)).is_some_and(|s|!s.entries.iter().any(|(uid,_)|*uid==item.uid)){return;}
                 self.mail.privacy.observe(&item,new,self.t,chrono::Utc::now().timestamp());
                 if self.mail_locally_removed(&item){
                     self.mail.manage.trash.retain(|m|m.uid!=item.uid||!m.account.eq_ignore_ascii_case(&item.account));self.mail.manage.trash.insert(0,item);self.mail.manage.trash.truncate(60);return;
@@ -1161,7 +1161,7 @@ impl App {
                 if new && self.mail_active() {
                     let item=&self.mail.recent[0];
                     let body=format!("{} · {}",item.from,item.subject);
-                    let body=item.code.as_ref().map(|code|crate::mail_privacy::mask(&body,code)).unwrap_or(body);
+                    let body=item.code.as_ref().map(|code|crate::mail::privacy::mask(&body,code)).unwrap_or(body);
                     self.alert("新邮件",body,5,false);
                 }
             }
@@ -1880,14 +1880,14 @@ impl App {
 
     /// AI 会话页按卡片数增高；详情页按待处理类型增高。
     fn agent_page_height(&self)->f32 {
-        let list = crate::agent_ui::agent_list_height(self.agent.store.visible().len(), self.agent.config.display.rows);
+        let list = crate::agent::ui::agent_list_height(self.agent.store.visible().len(), self.agent.config.display.rows);
         if self.agent.detail {
             match self.agent.selected_session().and_then(|session|session.pending.as_ref().map(|pending|&pending.kind)) {
                 Some(crate::agent::store::PendingKind::Question(questions)) => {
                     let index = self.agent.question_index.min(questions.len().saturating_sub(1));
-                    questions.get(index).map(|question|crate::agent_ui::question_height(question.options.len())).unwrap_or(list)
+                    questions.get(index).map(|question|crate::agent::ui::question_height(question.options.len())).unwrap_or(list)
                 }
-                Some(crate::agent::store::PendingKind::Approval(_)) => crate::agent_ui::approval_height(self.agent.approval_lines),
+                Some(crate::agent::store::PendingKind::Approval(_)) => crate::agent::ui::approval_height(self.agent.approval_lines),
                 None => list,
             }
         } else { list }
@@ -2078,10 +2078,10 @@ impl App {
                         let (agent_max,agent_step,agent_body)=if self.page==AI_PAGE && !self.agent.detail {
                             let count=self.agent.store.visible().len();
                             let rows=self.agent.config.display.rows;
-                            let viewport=crate::agent_ui::agent_card_area(count,rows);
-                            (crate::agent_ui::agent_scroll_max(count,rows),
-                                crate::agent_ui::agent_card_height(crate::agent_ui::agent_visible_rows(count,rows))+crate::agent_ui::AGENT_CARD_GAP,
-                                Rect::from_min_max(Pos2::new(40.0,crate::agent_ui::AGENT_LIST_TOP),Pos2::new(360.0,crate::agent_ui::AGENT_LIST_TOP+viewport)).contains(cursor))
+                            let viewport=crate::agent::ui::agent_card_area(count,rows);
+                            (crate::agent::ui::agent_scroll_max(count,rows),
+                                crate::agent::ui::agent_card_height(crate::agent::ui::agent_visible_rows(count,rows))+crate::agent::ui::AGENT_CARD_GAP,
+                                Rect::from_min_max(Pos2::new(40.0,crate::agent::ui::AGENT_LIST_TOP),Pos2::new(360.0,crate::agent::ui::AGENT_LIST_TOP+viewport)).contains(cursor))
                         } else {(0.0,0.0,false)};
                         let list=match self.page {
                             CALENDAR_PAGE if calendar_body=>Some((&mut self.calendar.view.first,calendar_max)),
@@ -2224,7 +2224,7 @@ impl App {
                     paint::bell(&c.scaled(18.0,15.0,0.85),18.0,15.0,theme::WHITE,paint::bell_swing(self.t-a.at));
                     c.circle(22.0,10.5,2.0,Color32::from_rgb(255,72,72));
                 }else{crate::extras::notice_badge(&c,18.0,15.0,&a);}
-                let button=crate::quota_ui::bar_tooltip(c.hit(0.0,0.0,36.0,BAR_H,"notice-badge"),format!("{}\n{}",a.title,a.body));
+                let button=crate::quota::ui::bar_tooltip(c.hit(0.0,0.0,36.0,BAR_H,"notice-badge"),format!("{}\n{}",a.title,a.body));
                 if button.clicked(){if let Some(kind)=a.health(){self.confirm_health_reminder(kind);}else{self.notice_details=!self.notice_details;}}
             }else if self.t<self.notification_bell_until || self.windows_unread {
                 paint::bell(&c.scaled(20.0,14.0,1.2),20.0,14.0,theme::WHITE,paint::bell_swing(self.t-self.notification_bell_at));
@@ -3090,7 +3090,7 @@ impl App {
             paint::bell(&base.scaled(x,14.0,bar::BELL_SCALE),x,14.0,theme::WHITE,paint::bell_swing(self.t-self.notification_bell_at));
             base.circle(x+4.0,9.5,2.0,Color32::from_rgb(255,72,72));
             let bell=base.hit(x-9.0,3.0,18.0,25.0,"bell-mail").on_hover_cursor(egui::CursorIcon::PointingHand);
-            if crate::quota_ui::bar_tooltip(bell,"Windows 通知 · 点击打开".into()).clicked(){
+            if crate::quota::ui::bar_tooltip(bell,"Windows 通知 · 点击打开".into()).clicked(){
                 self.show_page(WINDOWS_PAGE);
             }
         }
@@ -3110,7 +3110,7 @@ impl App {
             };
             let pill=base.hit(x-10.0,3.0,20.0,24.0,"agent-pill")
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
-            if crate::quota_ui::bar_tooltip(pill,hint).clicked(){self.show_page(AI_PAGE);}
+            if crate::quota::ui::bar_tooltip(pill,hint).clicked(){self.show_page(AI_PAGE);}
         }
         if let Some(x)=layout.x[bar::FOCUS] {
             crate::focus_bar::draw(base,row_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);

@@ -123,7 +123,7 @@ pub(crate) unsafe fn foreground_main_pid(source:Messenger,paths:&[String])->Opti
     if IsIconic(hwnd).as_bool() || !visible_main_frame(hwnd,source) || !matches(hwnd,paths){return None;}
     if Messenger::OFFICE.contains(&source) && !super::desktop::main_window(hwnd,source){return None;}
     let pid=window_pid(hwnd);
-    Some(if source==Messenger::Wechat{crate::wechat::account_pid(pid,paths)}else{pid})
+    Some(if source==Messenger::Wechat{crate::messenger::wechat::account_pid(pid,paths)}else{pid})
 }
 
 pub(crate) unsafe fn visible_main_frame(hwnd:HWND,source:Messenger)->bool{

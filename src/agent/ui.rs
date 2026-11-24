@@ -104,7 +104,7 @@ impl App {
         let mut notices = Vec::new();
         for update in updates {
             if let Some(sound) = update.sound {
-                if sound_allowed { crate::agent_sound::play(sound, &self.agent.config.sound); }
+                if sound_allowed { crate::agent::sound::play(sound, &self.agent.config.sound); }
             }
             if let Some(notice) = update.notice { notices.push(notice); }
         }
@@ -153,7 +153,7 @@ impl App {
         // 待处理详情不抢占，等用户答完或返回后再展开下一条。
         if pending { return; }
         self.agent_open_after_notice = None;
-        if !crate::agent_ui::agent_alert_valid(&self.agent.store, &self.agent.config.notify, &alert) { return; }
+        if !crate::agent::ui::agent_alert_valid(&self.agent.store, &self.agent.config.notify, &alert) { return; }
         self.agent_open_event(alert);
     }
 
@@ -746,11 +746,11 @@ pub(crate) fn agent_icon(c: &Card, agent: AgentId, x: f32, y: f32, size: f32) {
     let key = egui::Id::new(("agent-icon", agent.key(), pixels));
     let texture = ctx.data_mut(|data| data.get_temp::<egui::TextureHandle>(key)).or_else(|| {
         let bytes: &[u8] = match agent {
-            AgentId::Claude => include_bytes!("../assets/ai-icons/claude.svg"),
-            AgentId::Codex => include_bytes!("../assets/ai-icons/codex.svg"),
-            AgentId::ZCode => include_bytes!("../assets/ai-icons/zcode.svg"),
-            AgentId::Copilot => include_bytes!("../assets/ai-icons/copilot.svg"),
-            AgentId::Dsh => include_bytes!("../assets/ai-icons/deepseek.svg"),
+            AgentId::Claude => include_bytes!("../../assets/ai-icons/claude.svg"),
+            AgentId::Codex => include_bytes!("../../assets/ai-icons/codex.svg"),
+            AgentId::ZCode => include_bytes!("../../assets/ai-icons/zcode.svg"),
+            AgentId::Copilot => include_bytes!("../../assets/ai-icons/copilot.svg"),
+            AgentId::Dsh => include_bytes!("../../assets/ai-icons/deepseek.svg"),
         };
         let image = egui_extras::image::load_svg_bytes_with_size(bytes, Some(egui::load::SizeHint::Size(pixels, pixels))).ok()?;
         let texture = ctx.load_texture(format!("agent-icon-{}-{pixels}", agent.key()), image, egui::TextureOptions::LINEAR);

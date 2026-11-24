@@ -743,7 +743,7 @@ fn editing_local_calendar_clears_outdated_reminders() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for reschedule in [false,true] {
         let mut h=H::new();
-        let mut draft=crate::local_calendar::Draft::new(chrono::Local::now().date_naive()+chrono::Duration::days(1));
+        let mut draft=crate::calendar::local::Draft::new(chrono::Local::now().date_naive()+chrono::Duration::days(1));
         draft.title="原日程".into();
         let entry=draft.entry().unwrap();
         h.app.calendar.local=vec![entry.clone()];
@@ -848,7 +848,7 @@ fn ics_import_preserves_recurring_overnight_and_all_day_events_on_reimport() {
     let files=vec![("sample.ics".into(),ics)];
     h.app.import_ics(&files);assert_eq!(h.app.calendar.local.len(),5);
     h.app.import_ics(&files);assert_eq!(h.app.calendar.local.len(),5,"重复导入应跳过已有日程");
-    h.app.calendar.local=crate::local_calendar::load().unwrap();
+    h.app.calendar.local=crate::calendar::local::load().unwrap();
     assert_eq!(h.app.calendar_entries(day).len(),3);
     assert_eq!(h.app.calendar_entries(day+chrono::Duration::days(1)).len(),3);
     assert_eq!(h.app.calendar_entries(day+chrono::Duration::days(2)).len(),1);
@@ -873,7 +873,7 @@ fn local_calendar_editor_makes_storage_scope_visible_with_connected_accounts() {
     h.app.calendar.draft.as_mut().unwrap().title="自己的安排".into();
     h.click(H::local(334.0,199.0));h.frame(vec![]);
     assert!(h.app.calendar.draft.is_none());assert_eq!(h.app.calendar.local.len(),1);
-    assert_eq!(crate::local_calendar::load().unwrap()[0].event.title,"自己的安排");
+    assert_eq!(crate::calendar::local::load().unwrap()[0].event.title,"自己的安排");
     assert_eq!(h.app.calendar.events.len(),1);assert_eq!(h.app.calendar.events[0].uid,remote.uid);
     assert_eq!(crate::calendar::load_config().unwrap(),cfg);
     let uid=h.app.calendar.local[0].event.uid.clone();h.app.open_calendar_editor(Some(&uid));h.frame(vec![]);
@@ -895,15 +895,15 @@ fn local_calendar_can_create_edit_reload_and_remind_without_accounts() {
     h.app.save_calendar_editor();
     assert!(h.app.calendar.draft.is_none());assert_eq!(h.app.calendar.local.len(),1);
     let uid=h.app.calendar.local[0].event.uid.clone();
-    assert_eq!(crate::local_calendar::load().unwrap()[0].event.title,"自己的安排");
-    let entries=h.app.calendar_entries(start.date_naive());assert_eq!(entries.len(),1);assert!(matches!(entries[0].sources.as_slice(),[crate::calendar_ui::Source::Local]));
+    assert_eq!(crate::calendar::local::load().unwrap()[0].event.title,"自己的安排");
+    let entries=h.app.calendar_entries(start.date_naive());assert_eq!(entries.len(),1);assert!(matches!(entries[0].sources.as_slice(),[crate::calendar::ui::Source::Local]));
     h.frame(vec![]);
     assert!(h.app.history.iter().any(|alert|alert.meeting.as_ref().is_some_and(|(event,source)|event.uid==uid && source=="本机日程")));
     h.app.open_calendar_editor(Some(&uid));h.app.calendar.draft.as_mut().unwrap().title="改后的安排".into();h.app.save_calendar_editor();
-    let saved=crate::local_calendar::load().unwrap();assert_eq!(saved.len(),1);assert_eq!(saved[0].event.uid,uid);assert_eq!(saved[0].event.title,"改后的安排");
+    let saved=crate::calendar::local::load().unwrap();assert_eq!(saved.len(),1);assert_eq!(saved[0].event.uid,uid);assert_eq!(saved[0].event.title,"改后的安排");
     h.app.open_calendar_editor(Some(&uid));h.hover(H::local(300.0,40.0),1.0);
     h.click(H::local(84.0,199.0));assert_eq!(h.app.calendar.local.len(),1,"删除先确认");
-    h.click(H::local(84.0,199.0));assert!(h.app.calendar.local.is_empty());assert!(crate::local_calendar::load().unwrap().is_empty());
+    h.click(H::local(84.0,199.0));assert!(h.app.calendar.local.is_empty());assert!(crate::calendar::local::load().unwrap().is_empty());
 }
 
 #[test]
@@ -5053,7 +5053,7 @@ fn mail_meeting_notice_opens_its_calendar_day() {
     assert_ne!(h.app.page,5);
     let entries=h.app.calendar_entries(h.app.calendar.view.day);
     assert_eq!(entries.len(),1);
-    assert!(matches!(entries[0].sources[0],crate::calendar_ui::Source::Mail("demo@example.com")));
+    assert!(matches!(entries[0].sources[0],crate::calendar::ui::Source::Mail("demo@example.com")));
     assert!(!h.app.settings_open);
 }
 
@@ -5072,7 +5072,7 @@ fn calendar_merges_matching_invites_and_preserves_each_source() {
         let entries=h.app.calendar_entries(day);
         assert_eq!(entries.len(),1,"同一场会议只占一行");
         assert_eq!(entries[0].sources.len(),3,"工作日历及两个邮箱应保留各自来源");
-        assert!(matches!(entries[0].sources[0],crate::calendar_ui::Source::Calendar(Some(p)) if p==provider));
+        assert!(matches!(entries[0].sources[0],crate::calendar::ui::Source::Calendar(Some(p)) if p==provider));
     }
     h.app.calendar.events.clear();h.app.calendar.view.events.clear();
     for (i,item) in h.app.mail.recent.iter_mut().enumerate(){let event=item.meeting.as_mut().unwrap();event.uid.clear();event.title=format!("不同会议 {i}");}
@@ -5203,7 +5203,7 @@ fn calendar_layout_gallery() {
             h.app.mail.recent.push(crate::mail::Item {received_unix: None, account:"work@example.com".into(),from:"项目组".into(),subject:"会议邀请".into(),html: String::new().into(), summary:String::new().into(),links:vec![],code:None,time:String::new(),uid:3,meeting:Some(h.app.calendar.view.events[1].clone())});
         }
         if ["local","local-all-day","mixed"].contains(&mode){
-            let mut draft=crate::local_calendar::Draft::new(day);draft.title="散步与读书".into();draft.start_time="15:00".into();draft.end_time="16:00".into();
+            let mut draft=crate::calendar::local::Draft::new(day);draft.title="散步与读书".into();draft.start_time="15:00".into();draft.end_time="16:00".into();
             draft.all_day=mode!="local";h.app.calendar.local.push(draft.entry().unwrap());
         }
         if mode=="mixed" {
@@ -5611,9 +5611,9 @@ fn mail_reader_rich_html_gallery(){
 #[test]
 fn mail_plain_text_keeps_literal_stars_in_the_reader(){
     let h=H::new();h.ctx.set_embed_viewports(true);
-    let lines=crate::mail_format::lines("","保留 ** 原始字符");
+    let lines=crate::mail::format::lines("","保留 ** 原始字符");
     let out=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(700.0,620.0))),..Default::default()},|ctx|{
-        egui::CentralPanel::default().show(ctx,|ui|crate::mail_reader::body_ui(ui,&lines,14.0));
+        egui::CentralPanel::default().show(ctx,|ui|crate::mail::reader::body_ui(ui,&lines,14.0));
     });
     assert!(out.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="保留 ** 原始字符")));
 }
@@ -5631,10 +5631,10 @@ fn mail_detail_and_reader_keep_their_own_cached_body(){
 
 #[test]
 fn mail_html_headings_scale_with_the_body_font(){
-    let h=H::new();let lines=crate::mail_format::lines("<h1>缩放标题</h1>","");
+    let h=H::new();let lines=crate::mail::format::lines("<h1>缩放标题</h1>","");
     for (base,expected) in [(14.0,18.0),(28.0,36.0)]{
         let out=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(700.0,620.0))),..Default::default()},|ctx|{
-            egui::CentralPanel::default().show(ctx,|ui|crate::mail_reader::body_ui(ui,&lines,base));
+            egui::CentralPanel::default().show(ctx,|ui|crate::mail::reader::body_ui(ui,&lines,base));
         });
         let size=out.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()=="缩放标题"=>Some(t.galley.job.sections[0].format.font_id.size),_=>None}).unwrap();
         assert_eq!(size,expected,"正文缩放时标题应保持相同的字号比例");
@@ -6060,12 +6060,12 @@ fn mailbox_readability_gallery(){
         for account in h.app.mail.accounts.clone(){
             h.app.mail.manage.identities.insert(account.email.clone(),account.clone());
             let entries=h.app.mail.recent.iter().filter(|m|m.account==account.email).map(|m|(m.uid,m.uid%2==0)).collect();
-            h.app.mail.manage.data.insert((account.email,crate::mail_manage::Folder::Inbox),crate::mail_manage::Snapshot{validity:7,entries,items:vec![]});
+            h.app.mail.manage.data.insert((account.email,crate::mail::manage::Folder::Inbox),crate::mail::manage::Snapshot{validity:7,entries,items:vec![]});
         }
         if variant==3{
             h.app.mail.manage.trash=h.app.mail.recent.iter().take(2).cloned().map(|mut m|{m.code=None;m}).collect();
             h.app.mail.manage.trash_open=true;
-            h.app.mail.manage.data.insert(("work@qq.com".into(),crate::mail_manage::Folder::Trash),crate::mail_manage::Snapshot{validity:9,entries:vec![(1,true),(2,true)],items:vec![]});
+            h.app.mail.manage.data.insert(("work@qq.com".into(),crate::mail::manage::Folder::Trash),crate::mail::manage::Snapshot{validity:9,entries:vec![(1,true),(2,true)],items:vec![]});
         }
         h.app.show_page(5);
         let ppp=1.5;let mut raster=crate::preview_raster::Raster::new((crate::app::CANVAS_W*ppp)as usize,(WIN_H*ppp)as usize);
@@ -8775,7 +8775,7 @@ fn mail_reading_wheel_over_headers_never_turns_pages(){
 
 #[test]
 fn reader_actions_remain_bound_to_the_opened_mailbox() {
-    use crate::mail_manage::{Action,Folder,Request,Completed,Snapshot};
+    use crate::mail::manage::{Action,Folder,Request,Completed,Snapshot};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=managed_mail_fixture();
     let old=h.app.mail.recent[0].clone();
@@ -8789,7 +8789,7 @@ fn reader_actions_remain_bound_to_the_opened_mailbox() {
 
 #[test]
 fn local_reader_moves_and_restores_after_switching_the_main_list() {
-    use crate::mail_manage::{Action,Folder};
+    use crate::mail::manage::{Action,Folder};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=managed_mail_fixture();h.app.settings.mail_sync_operations=false;
     let item=h.app.mail.recent[0].clone();
     for folder in [Folder::Inbox,Folder::Trash]{
@@ -8813,7 +8813,7 @@ fn new_mail_preserves_an_explicit_reveal_in_the_trash(){
 }
 
 fn managed_mail_fixture()->H{
-    use crate::mail_manage::{Folder,Snapshot};
+    use crate::mail::manage::{Folder,Snapshot};
     let mut h=H::new();h.app.settings.mail_sync_operations=true;let account=crate::mail::Account{custom:None,email:"manage@example.com".into(),provider:crate::mail::Provider::Qq,enabled:true};
     h.app.mail.accounts=vec![account.clone()];
     h.app.mail.recent=(1..=3).map(|uid|crate::mail::Item{html:String::new().into(),received_unix:None,account:account.email.clone(),from:format!("发件人 {uid}"),subject:format!("测试邮件 {uid}"),time:format!("09:4{uid}"),code:None,summary:"完整的测试邮件正文。".repeat(10).into(),links:vec![],meeting:None,uid}).collect();
@@ -8823,7 +8823,7 @@ fn managed_mail_fixture()->H{
 }
 #[test]
 fn managed_mail_unread_filter_open_and_mark_read(){
-    use crate::mail_manage::{Action,Folder,Completed};
+    use crate::mail::manage::{Action,Folder,Completed};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=managed_mail_fixture();
     h.click(H::local(118.0,42.0));assert!(h.app.mail.manage.unread_only);
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="测试邮件 2")));
@@ -8837,7 +8837,7 @@ fn managed_mail_unread_filter_open_and_mark_read(){
 }
 #[test]
 fn managed_mail_trash_icon_and_restore_keep_inbox_uid_separate(){
-    use crate::mail_manage::{Action,Folder,Snapshot,Completed};
+    use crate::mail::manage::{Action,Folder,Snapshot,Completed};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=managed_mail_fixture();
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().starts_with("回收站"))),"回收站入口只显示图标");
     let item=h.app.mail.recent[0].clone();h.app.mail.manage.trash=vec![item];
@@ -8853,7 +8853,7 @@ fn managed_mail_trash_icon_and_restore_keep_inbox_uid_separate(){
 }
 #[test]
 fn managed_mail_actions_wait_for_the_server_and_batch_read_is_explicit(){
-    use crate::mail_manage::{Action,Completed};
+    use crate::mail::manage::{Action,Completed};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=managed_mail_fixture();h.cmds.clear();
     h.hover(H::local(354.0,64.0),0.2);h.click(H::local(354.0,64.0));
     let request=h.cmds.iter().find_map(|c|match c{crate::app::Cmd::MailManage(r)if r.action==(Action::Move{uid:1})=>Some(r.clone()),_=>None}).expect("删除应提交移到回收站");
@@ -8866,7 +8866,7 @@ fn managed_mail_actions_wait_for_the_server_and_batch_read_is_explicit(){
 
 #[test]
 fn mail_local_mode_persists_without_writing_to_the_server(){
-    use crate::mail_manage::{Action,Folder,Request,Completed};
+    use crate::mail::manage::{Action,Folder,Request,Completed};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=managed_mail_fixture();h.app.settings.mail_sync_operations=false;h.cmds.clear();
     let original=h.app.mail.recent.clone();let account=h.app.mail.accounts[0].clone();
     let snapshot=h.app.mail.manage.data[&("manage@example.com".into(),Folder::Inbox)].clone();
@@ -9218,12 +9218,12 @@ fn weather_icons_stay_bright_on_light_skins(){
     for palette in [CREAM,GLASS_LIGHT]{
         // 通用换色会把白云反成深色、把太阳压成暗金；天气图标改用自己的浅色版配色。
         assert!(luma(map_color(cloud,&palette))<90.0);
-        assert!(luma(crate::weather_ui::light_tone(cloud,&palette))>190.0,"浅色皮肤下的云应是淡蓝灰");
-        let bright=crate::weather_ui::light_tone(sun,&palette);
+        assert!(luma(crate::weather::ui::light_tone(cloud,&palette))>190.0,"浅色皮肤下的云应是淡蓝灰");
+        let bright=crate::weather::ui::light_tone(sun,&palette);
         assert!(bright.r()>=250&&bright.g()>=160&&bright.b()<80,"太阳保持明亮暖黄：{bright:?}");
-        let half=crate::weather_ui::light_tone(sun.gamma_multiply(0.5),&palette);assert_eq!(half.a(),sun.gamma_multiply(0.5).a(),"保留透明度");
+        let half=crate::weather::ui::light_tone(sun.gamma_multiply(0.5),&palette);assert_eq!(half.a(),sun.gamma_multiply(0.5).a(),"保留透明度");
     }
-    assert_eq!(crate::weather_ui::light_tone(cloud,&GLASS_DARK),map_color(cloud,&GLASS_DARK),"深色皮肤不受影响");
+    assert_eq!(crate::weather::ui::light_tone(cloud,&GLASS_DARK),map_color(cloud,&GLASS_DARK),"深色皮肤不受影响");
 }
 
 #[test]
@@ -9252,7 +9252,7 @@ fn weather_icon_atlas_preview(){
                     let tile=c.shifted(20.0+(index%3)as f32*298.0,84.0+(index/3)as f32*150.0);
                     tile.fill(0.0,0.0,286.0,138.0,11.0,egui::Color32::from_rgb(25,25,29));
                     tile.text(14.0,23.0,label,12.5,W::Semibold,theme::WHITE,Align::Left);
-                    crate::weather_ui::icon(&tile,32.0,63.0,33.0,weather::kind(code,day));
+                    crate::weather::ui::icon(&tile,32.0,63.0,33.0,weather::kind(code,day));
                     let snapshot=Snapshot{place:"杭州".into(),temp:if code==73{-6.0}else{19.0},code,day,at:chrono::Utc::now().timestamp(),..Default::default()};
                     tile.fill(65.0,46.0,148.0,30.0,15.0,egui::Color32::BLACK);
                     let bar=tile.shifted(65.0,46.0);bar.text(32.0,21.0,"10:18",15.5,W::Bold,theme::WHITE,Align::Center);

@@ -13,11 +13,11 @@ pub(crate) fn play(kind: SoundKind, config: &SoundConfig) {
     };
     if !enabled { return; }
     let wav: &'static [u8] = match kind {
-        SoundKind::Start => include_bytes!("../assets/agent-sounds/start.wav"),
-        SoundKind::Submit => include_bytes!("../assets/agent-sounds/submit.wav"),
-        SoundKind::Approval => include_bytes!("../assets/agent-sounds/approval.wav"),
-        SoundKind::Complete => include_bytes!("../assets/agent-sounds/complete.wav"),
-        SoundKind::Error => include_bytes!("../assets/agent-sounds/error.wav"),
+        SoundKind::Start => include_bytes!("../../assets/agent-sounds/start.wav"),
+        SoundKind::Submit => include_bytes!("../../assets/agent-sounds/submit.wav"),
+        SoundKind::Approval => include_bytes!("../../assets/agent-sounds/approval.wav"),
+        SoundKind::Complete => include_bytes!("../../assets/agent-sounds/complete.wav"),
+        SoundKind::Error => include_bytes!("../../assets/agent-sounds/error.wav"),
     };
     play_bytes(wav);
 }

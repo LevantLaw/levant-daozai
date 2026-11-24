@@ -25,7 +25,7 @@ pub(crate) struct Badge {
 impl App {
     pub(crate) fn mail_unread_count(&self) -> usize {
         if !self.settings.mail_enabled { return 0; }
-        self.mail.recent.iter().filter(|item| self.mail_seen(item, crate::mail_manage::Folder::Inbox) != Some(true)).count()
+        self.mail.recent.iter().filter(|item| self.mail_seen(item, crate::mail::manage::Folder::Inbox) != Some(true)).count()
     }
 
     /// 已到期且未完成的待办；重复待办只看当天的时刻。
@@ -104,7 +104,7 @@ impl App {
             let Some(x) = layout.x[badge.slot] else { continue; };
             let x = cx + x;
             let label = self.badge_label(badge.slot);
-            let response = crate::quota_ui::bar_tooltip(c.hit(x - badge.width / 2.0, 1.0, badge.width, 28.0, ("page-badge", badge.slot)), label);
+            let response = crate::quota::ui::bar_tooltip(c.hit(x - badge.width / 2.0, 1.0, badge.width, 28.0, ("page-badge", badge.slot)), label);
             self.paint_badge(c, badge.slot, x, theme::WHITE);
             if response.clicked() {
                 match badge.page {

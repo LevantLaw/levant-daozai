@@ -27,6 +27,8 @@ mod music_gaps;
 #[cfg(windows)]
 mod cover_search;
 
+pub(crate) mod volume;
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -420,8 +422,8 @@ impl ControlWorker {
     pub fn start(ctx:eframe::egui::Context)->Option<Self>{
         Self::start_with(ctx,|command,source|match command{
             Transport::Seek(seconds)=>seek(seconds,source),
-            Transport::SetVolume(percent)=>crate::music_volume::set_volume(source,percent),
-            Transport::SetMute(muted)=>crate::music_volume::set_mute(source,muted),
+            Transport::SetVolume(percent)=>crate::smtc::volume::set_volume(source,percent),
+            Transport::SetMute(muted)=>crate::smtc::volume::set_mute(source,muted),
             _=>{control(command,source);true}
         })
     }
@@ -456,8 +458,8 @@ impl ControlWorker {
 /// 控制当前媒体会话（播放/暂停、上一首、下一首）。
 #[cfg(windows)]
 pub fn control(cmd: Transport,source:&str) {
-    if let Transport::SetVolume(percent)=cmd {crate::music_volume::set_volume(source,percent);return;}
-    if let Transport::SetMute(muted)=cmd {crate::music_volume::set_mute(source,muted);return;}
+    if let Transport::SetVolume(percent)=cmd {crate::smtc::volume::set_volume(source,percent);return;}
+    if let Transport::SetMute(muted)=cmd {crate::smtc::volume::set_mute(source,muted);return;}
     if let Transport::Seek(seconds)=cmd {let _=seek(seconds,source);return;}
     if source.eq_ignore_ascii_case("bodian_pc.exe"){let _=bodian::control(cmd);return;}
     if source.eq_ignore_ascii_case("kwmusic.exe"){let _=kuwo::control(cmd);return;}
@@ -788,7 +790,7 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
         let mut playback_clock=PlaybackClock::default();
         let mut memory=MediaMemory::default();
         let mut selected_source=String::new();
-        let mut volume=crate::music_volume::Reader::default();
+        let mut volume=crate::smtc::volume::Reader::default();
         #[cfg(windows)]
         let mut netease=netease_playback::Reader::default();
         #[cfg(windows)]

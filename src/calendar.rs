@@ -8,6 +8,9 @@
 //! 配置文件里只有平台、用户名、日历地址；不落盘正文、不进日志。
 
 mod exchange;
+pub(crate) mod editor;
+pub(crate) mod local;
+pub(crate) mod ui;
 #[cfg(test)]
 mod compatibility_tests;
 #[cfg(test)]

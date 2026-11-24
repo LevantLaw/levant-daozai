@@ -1,5 +1,9 @@
 //! 天气：按城市（留空时按网络出口定位）读取 Open-Meteo 的实况与七日预报。
 //! 只保留最近一次结果用于离线展示，不读取、也不上传任何账号信息。
+pub(crate) mod ui;
+pub(crate) mod source_ui;
+pub(crate) mod qweather;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::Read;

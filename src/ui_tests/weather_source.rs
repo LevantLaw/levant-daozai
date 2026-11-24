@@ -1,6 +1,6 @@
 //! 和风设置的原生交互与截图；只使用占位凭据和合成天气。
 use super::*;
-use crate::{weather_source_ui::Provider,settings_theme::SettingsTheme};
+use crate::{weather::source_ui::Provider,settings_theme::SettingsTheme};
 
 fn fixture(theme:SettingsTheme)->H {
     let mut h=H::new();h.app.settings.settings_theme=theme;h.app.settings_tab=12;h.app.open_settings();h.ctx.set_embed_viewports(false);
@@ -11,7 +11,7 @@ fn fixture(theme:SettingsTheme)->H {
 #[test]
 fn weather_badge_only_dims_after_repeated_failures_and_old_data(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for (provider,interval) in [(Provider::Qweather,crate::qweather::CURRENT_INTERVAL),(Provider::OpenMeteo,crate::weather::INTERVAL)] {
+    for (provider,interval) in [(Provider::Qweather,crate::weather::qweather::CURRENT_INTERVAL),(Provider::OpenMeteo,crate::weather::INTERVAL)] {
         let mut h=H::new();h.app.weather_source.displayed=provider;
         for (age,failures,gray) in [(interval+900,0,false),(interval*3,0,false),(interval*3,1,false),(interval,2,false),(interval*3,2,true),(interval*3,0,false)] {
             if provider==Provider::Qweather&&failures>0 {continue;}
@@ -32,14 +32,14 @@ fn weather_badge_only_dims_after_repeated_failures_and_old_data(){
 
 // 通过真实的和风解析与缓存入口准备示例，避免逐帧轮询覆盖手工注入的天气。
 fn qweather_data_fixture(h:&mut H){
-    let location=crate::qweather::Location{position:crate::weather::Position{lat:30.27,lon:120.15,label:"杭州".into(),region:"浙江省 · 杭州市".into()},timezone:"Asia/Shanghai".into()};
+    let location=crate::weather::qweather::Location{position:crate::weather::Position{lat:30.27,lon:120.15,label:"杭州".into(),region:"浙江省 · 杭州市".into()},timezone:"Asia/Shanghai".into()};
     let today=chrono::Utc::now().with_timezone(&chrono_tz::Asia::Shanghai).date_naive();let now=chrono::Utc::now().timestamp();
     let days:Vec<_>=(0..7).map(|i|{let date=today+chrono::Duration::days(i);serde_json::json!({"forecastStartTime":format!("{date}T00:00+08:00"),"astro":{"sunrise":format!("{date}T06:23+08:00"),"sunset":format!("{date}T17:05+08:00")},"temperatureMax":{"value":23-i,"unit":"°C"},"temperatureMin":{"value":15-i/2,"unit":"°C"},"daytime":{"condition":{"code":"101"},"precipitation":{"probability":0.2}},"nighttime":{"precipitation":{"probability":0.3}}})}).collect();
     let credit=serde_json::json!({"attributions":["https://developer.qweather.com/attribution.html"]});
     let cache=serde_json::json!({"host":"example.re.qweatherapi.com","location":location,"current_at":now,"daily_at":now,"current":{"validTime":chrono::Utc::now().to_rfc3339(),"temperature":{"value":19,"unit":"°C"},"feelsLike":{"value":18,"unit":"°C"},"condition":{"code":"101","text":"多云"},"humidity":0.58,"wind":{"speed":{"value":3.333333,"unit":"m/s"}},"metadata":credit},"daily":{"days":days,"metadata":credit}});
     let dir=crate::model::config_dir();std::fs::create_dir_all(&dir).unwrap();std::fs::write(dir.join("qweather-cache.json"),serde_json::to_vec(&cache).unwrap()).unwrap();
     let source=&mut h.app.weather_source;source.displayed=Provider::Qweather;source.selected=Provider::Qweather;source.config.host="example.re.qweatherapi.com".into();source.config.location=Some(location.clone());source.config.saved=vec![location.clone()];source.host=source.config.host.clone();source.picked=Some(location.clone());
-    source.client=Some(crate::qweather::Client::new(&source.config.host,"fake-test-key",std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true))).unwrap());source.runtime.reset(&source.config.host,Some(location));h.app.weather.snapshot=source.runtime.snapshot();
+    source.client=Some(crate::weather::qweather::Client::new(&source.config.host,"fake-test-key",std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true))).unwrap());source.runtime.reset(&source.config.host,Some(location));h.app.weather.snapshot=source.runtime.snapshot();
 }
 
 fn draw(h:&mut H,events:Vec<egui::Event>,size:Vec2,scale:f32)->(egui::FullOutput,Vec<(egui::ViewportId,egui::FullOutput)>){
@@ -73,8 +73,8 @@ fn qweather_verified_connection_is_prominent_and_cities_have_dropdown_controls()
     assert!(texts.contains(&"添加城市"),"保存城市应有独立入口");
 }
 
-fn district(name:&str,index:usize)->crate::qweather::Location {
-    crate::qweather::Location{position:crate::weather::Position{lat:30.42+index as f64*0.01,lon:119.99,label:name.into(),region:"浙江省 · 杭州市".into()},timezone:"Asia/Shanghai".into()}
+fn district(name:&str,index:usize)->crate::weather::qweather::Location {
+    crate::weather::qweather::Location{position:crate::weather::Position{lat:30.42+index as f64*0.01,lon:119.99,label:name.into(),region:"浙江省 · 杭州市".into()},timezone:"Asia/Shanghai".into()}
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn qweather_five_saved_cities_are_independent_selectable_and_removable(){
     assert_eq!(h.app.weather_source.config.saved.len(),5);assert!(h.app.weather_source.displayed==Provider::OpenMeteo,"添加城市不能自动切换来源");
     h.app.weather_source.mock_choose_city(locations[0].clone());h.app.qweather_add_city();assert_eq!(h.app.weather_source.config.saved.len(),5,"同一城市不能重复保存");
     h.app.weather_source.mock_choose_city(district("建德",6));h.app.qweather_add_city();assert_eq!(h.app.weather_source.config.saved.len(),5,"第六个城市不能绕过上限");
-    assert_eq!(h.app.settings.weather_saved,original);assert_eq!(crate::qweather::Config::load().saved.len(),5);
+    assert_eq!(h.app.settings.weather_saved,original);assert_eq!(crate::weather::qweather::Config::load().saved.len(),5);
     h.app.weather_source.mock_choose_city(locations[0].clone());
     for _ in 0..3{draw(&mut h,vec![],egui::vec2(740.0,1100.0),1.0);}click(&mut h,"保存并启用");assert!(h.app.weather_source.displayed==Provider::Qweather);
     h.app.qweather_select_location(locations[3].clone());assert!(h.app.weather_source.config.location.as_ref()==Some(&locations[3]));
@@ -228,7 +228,7 @@ fn qweather_frontend_gallery(){
                 egui::CentralPanel::default().frame(egui::Frame::new().fill(if dark{egui::Color32::from_rgb(25,25,28)}else{egui::Color32::from_rgb(245,246,248)}).inner_margin(10)).show(ctx,|ui|{
                     ui.visuals_mut().override_text_color=Some(if dark{egui::Color32::WHITE}else{egui::Color32::from_rgb(30,34,41)});
                     let width=(ui.available_width()-ui.spacing().item_spacing.x)/2.0;
-                    ui.horizontal(|ui|{for provider in [Provider::OpenMeteo,Provider::Qweather]{crate::weather_source_ui::provider_option(ui,provider,provider==Provider::Qweather,width);}});
+                    ui.horizontal(|ui|{for provider in [Provider::OpenMeteo,Provider::Qweather]{crate::weather::source_ui::provider_option(ui,provider,provider==Provider::Qweather,width);}});
                 });
             });
             raster.update_textures(&out.textures_delta);raster.buf.fill([0.0,0.0,0.0,1.0]);raster.draw(&h.ctx.tessellate(out.shapes,out.pixels_per_point),out.pixels_per_point);raster.free_textures(&out.textures_delta);

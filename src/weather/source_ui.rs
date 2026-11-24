@@ -1,8 +1,8 @@
 //! 天气来源草稿、连接验证与安全启用。
-use crate::{app::{App,WEATHER_PAGE},extras::{settings_card,settings_hint,settings_label},settings_theme::color,qweather::{self,Client,Config,Error,Location}};
+use crate::{app::{App,WEATHER_PAGE},extras::{settings_card,settings_hint,settings_label},settings_theme::color,weather::qweather::{self,Client,Config,Error,Location}};
 use eframe::egui::{self,Color32,RichText};
 use std::sync::{Arc,atomic::{AtomicBool,Ordering},mpsc::Receiver};
-pub(crate) use qweather::{Provider,normalize_host};
+pub(crate) use super::qweather::{Provider,normalize_host};
 pub(crate) fn updated_at(at:i64)->String {
     if at<=0{return "未取得".into();}
     chrono::DateTime::from_timestamp(at,0).map(|d|d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string()).unwrap_or_else(||"未取得".into())
@@ -360,7 +360,7 @@ impl App {
                 egui::ScrollArea::vertical().id_salt("qweather-city-results").max_height(220.0).show(ui,|ui|{
                     for (index,location) in results.iter().enumerate(){
                         let chosen=self.weather_source.city_choice.as_ref()==Some(location);
-                        let row=crate::weather_ui::city_option(ui,&location.position,chosen,self.weather_source.config.saved.contains(location));
+                        let row=crate::weather::ui::city_option(ui,&location.position,chosen,self.weather_source.config.saved.contains(location));
                         if index==self.weather_source.highlighted {ui.painter().rect_stroke(row.rect.shrink(1.0),7.0,egui::Stroke::new(1.0,ui.visuals().selection.stroke.color),egui::StrokeKind::Inside);if keys.0||keys.1{row.scroll_to_me(None);}}
                         if row.clicked(){selected=Some(location.clone());}
                     }
@@ -381,7 +381,7 @@ impl App {
             let saved=self.weather_source.config.saved.clone();let(mut chosen,mut removed)=(None,None);
             for location in saved {
                 let cached=if active{self.weather.snapshot.as_ref().filter(|s|s.position.as_ref()==Some(&location.position))}else{None};
-                let (pick,remove)=crate::weather_ui::city_row(ui,self.weather_source.picked.as_ref()==Some(&location),true,&location.position.label,&location.position.region,cached,accent);
+                let (pick,remove)=crate::weather::ui::city_row(ui,self.weather_source.picked.as_ref()==Some(&location),true,&location.position.label,&location.position.region,cached,accent);
                 if pick {chosen=Some(location.clone());}if remove {removed=Some(location);}
             }
             if let Some(location)=removed{self.qweather_remove_city(&location);}
@@ -458,7 +458,7 @@ impl App {
                 settings_hint(ui,"教程可离线连续滚动查看，支持适应宽度与放大。");
                 ui.add_space(8.0);
                 if self.weather_source.tutorial_textures.is_empty(){
-                    for (index,bytes) in [include_bytes!("../assets/weather/qweather-01-project.png").as_slice(),include_bytes!("../assets/weather/qweather-02-api-key.png").as_slice(),include_bytes!("../assets/weather/qweather-03-daozai.png").as_slice()].into_iter().enumerate(){
+                    for (index,bytes) in [include_bytes!("../../assets/weather/qweather-01-project.png").as_slice(),include_bytes!("../../assets/weather/qweather-02-api-key.png").as_slice(),include_bytes!("../../assets/weather/qweather-03-daozai.png").as_slice()].into_iter().enumerate(){
                         let image=image::load_from_memory(bytes).expect("内置天气教程有效").to_rgba8();
                         if index==2{self.weather_source.tutorial_step10=self.weather_source.tutorial_textures.len();}
                         // 第 10 步使用下方的岛仔界面及最终操作说明。

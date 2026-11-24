@@ -149,7 +149,7 @@ impl App {
                 SideItem::Agent => {
                     self.draw_agent_light(c, cx, mid);
                     let item=c.hit(cx - 16.0, y, 32.0, h, "side-agent").on_hover_cursor(CursorIcon::PointingHand);
-                    if crate::quota_ui::bar_tooltip(item,"AI 会话".into()).clicked() {
+                    if crate::quota::ui::bar_tooltip(item,"AI 会话".into()).clicked() {
                         self.show_page(crate::app::AI_PAGE);
                     }
                 }
@@ -168,7 +168,7 @@ impl App {
                     paint::bell(&c.scaled(cx, mid, 1.1), cx, mid, theme::WHITE, paint::bell_swing(self.t - self.notification_bell_at));
                     c.circle(cx + 4.0, mid - 4.5, 2.0, Color32::from_rgb(255, 72, 72));
                     let bell=c.hit(cx - 16.0, y, 32.0, h, "side-bell").on_hover_cursor(CursorIcon::PointingHand);
-                    if crate::quota_ui::bar_tooltip(bell,"Windows 通知 · 点击打开".into()).clicked() {
+                    if crate::quota::ui::bar_tooltip(bell,"Windows 通知 · 点击打开".into()).clicked() {
                         self.show_page(crate::app::WINDOWS_PAGE);
                     }
                 }

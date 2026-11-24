@@ -1,5 +1,5 @@
 //! 岛内本机日程表单。
-use crate::{app::{App,Cmd,CALENDAR_PAGE},local_calendar::{self,Draft},paint::{self,Card,H},theme::{self,W}};
+use crate::{app::{App,Cmd,CALENDAR_PAGE},calendar::local::{self as local_calendar,Draft},paint::{self,Card,H},theme::{self,W}};
 use eframe::egui::{self,Color32};
 
 fn fallback_ics_uid(event:&crate::mail::Meeting)->String{

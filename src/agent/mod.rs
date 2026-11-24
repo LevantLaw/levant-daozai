@@ -6,6 +6,8 @@ pub mod bridge;
 pub mod focus;
 pub mod hooks;
 pub mod store;
+pub(crate) mod sound;
+pub(crate) mod ui;
 
 pub use store::{AgentState, Config, Session, SessionState};
 

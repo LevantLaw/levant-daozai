@@ -1,6 +1,6 @@
 //! 邮件全文阅读窗口：完整正文、收件账号和网页链接。
 use crate::app::{App,Cmd};
-use crate::mail_format::{self,Kind};
+use crate::mail::format::{self as mail_format,Kind};
 use eframe::egui::{self,Color32};
 
 /// `**...**` 内的片段用粗体（HTML 的 strong/b），其余常规字重。
@@ -79,7 +79,7 @@ impl App {
         let (mut close,mut link)=(false,None);
         let mut toggle=None;
         let mut action=None;
-        let folder=if self.mail.manage.reader_trash{crate::mail_manage::Folder::Trash}else{crate::mail_manage::Folder::Inbox};
+        let folder=if self.mail.manage.reader_trash{crate::mail::manage::Folder::Trash}else{crate::mail::manage::Folder::Inbox};
         let ready=self.mail_reader_ready(&raw,folder);
         let seen=self.mail_seen(&raw,folder)==Some(true);
         ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("daozai-mail-reader"),
@@ -97,11 +97,11 @@ impl App {
                     }
                 });
                 ui.horizontal(|ui|{
-                    if folder==crate::mail_manage::Folder::Trash{
-                        if ui.add_enabled(ready,egui::Button::new("恢复到收件箱")).clicked(){action=Some(crate::mail_manage::Action::Move{uid:raw.uid});}
+                    if folder==crate::mail::manage::Folder::Trash{
+                        if ui.add_enabled(ready,egui::Button::new("恢复到收件箱")).clicked(){action=Some(crate::mail::manage::Action::Move{uid:raw.uid});}
                     }else{
-                        if ui.add_enabled(ready,egui::Button::new(if seen{"标为未读"}else{"标为已读"})).clicked(){action=Some(crate::mail_manage::Action::Read{uid:raw.uid,seen:!seen});}
-                        if ui.add_enabled(ready,egui::Button::new("移到回收站")).clicked(){action=Some(crate::mail_manage::Action::Move{uid:raw.uid});}
+                        if ui.add_enabled(ready,egui::Button::new(if seen{"标为未读"}else{"标为已读"})).clicked(){action=Some(crate::mail::manage::Action::Read{uid:raw.uid,seen:!seen});}
+                        if ui.add_enabled(ready,egui::Button::new("移到回收站")).clicked(){action=Some(crate::mail::manage::Action::Move{uid:raw.uid});}
                     }
                     if !self.mail.manage.message.is_empty(){ui.label(egui::RichText::new(&self.mail.manage.message).size(11.0).color(Color32::from_gray(160)));}
                 });

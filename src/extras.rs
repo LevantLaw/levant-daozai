@@ -166,15 +166,15 @@ fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
                 c.poly(&[(x+0.5,y-0.8),(x+4.0,y-0.8),(x-1.0,y+4.5)],ink);
             }else{c.fill(x-8.0,y-3.5,12.0,7.0,1.0,ink);}
         },
-        "新邮件"|"收到新邮件"|"邮件验证码"=>crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Mail(""),x-14.0,y-14.0,28.0),
+        "新邮件"|"收到新邮件"|"邮件验证码"=>crate::calendar::ui::source_icon(c,crate::calendar::ui::Source::Mail(""),x-14.0,y-14.0,28.0),
         "喝水时间到了"|"今日饮水目标达成"=>HealthReminder::Water.icon(c,x,y,1.0),
         crate::app::SIT_TITLE=>HealthReminder::Sit.icon(c,x,y,1.0),
         "待办到时间了"=>crate::paint::checklist(c,x,y,23.0,Color32::from_rgb(190,180,255),Color32::from_rgb(43,35,66)),
         "会议提醒"=>{
             let label=a.meeting.as_ref().map(|(_,source)|source.as_str()).unwrap_or("");
-            let source=if label=="本机日程"{crate::calendar_ui::Source::Local}else if label.starts_with("邮件"){crate::calendar_ui::Source::Mail("")}
-                else{crate::calendar_ui::Source::Calendar(crate::calendar::Provider::ALL.into_iter().find(|provider|provider.label()==label))};
-            crate::calendar_ui::source_icon(c,source,x-14.0,y-14.0,28.0);
+            let source=if label=="本机日程"{crate::calendar::ui::Source::Local}else if label.starts_with("邮件"){crate::calendar::ui::Source::Mail("")}
+                else{crate::calendar::ui::Source::Calendar(crate::calendar::Provider::ALL.into_iter().find(|provider|provider.label()==label))};
+            crate::calendar::ui::source_icon(c,source,x-14.0,y-14.0,28.0);
         },
         "专注计时"=>crate::paint::stopwatch(&c.scaled(x,y,0.65),x,y,8.0,0.0,theme::RED_TOP),
         "岛仔已暂停音乐功能"=>page_icon(c,crate::app::MUSIC_PAGE,x,y,24.0),
@@ -445,7 +445,7 @@ impl App {
         let title=app.chars().filter(|c|!c.is_control()).take(80).collect::<String>();
         let body=if self.settings.notification_preview {
             let mut text=body.chars().filter(|c|!c.is_control()).take(300).collect::<String>();
-            if let Some(code)=crate::otp::extract("",&text,&[]) {text=crate::mail_privacy::mask(&text,&code.text);}
+            if let Some(code)=crate::mail::otp::extract("",&text,&[]) {text=crate::mail::privacy::mask(&text,&code.text);}
             text
         }else{"收到新通知 · 内容已隐藏".into()};
         if known.is_none() {
@@ -1126,7 +1126,7 @@ fn island_number_field(c:&Card,rect:Rect,value:egui::DragValue<'_>,id:impl std::
     ui.style_mut().text_styles.insert(egui::TextStyle::Body,c.font(11.0,W::Bold));
     ui.style_mut().explanation_tooltips=false;
     ui.visuals_mut().widgets.inactive.weak_bg_fill=Color32::TRANSPARENT;
-    crate::quota_ui::bar_tooltip(ui.put(rect,value.update_while_editing(false)),"点击输入数值".into())
+    crate::quota::ui::bar_tooltip(ui.put(rect,value.update_while_editing(false)),"点击输入数值".into())
 }
 /// 加减器：[−] 可输入数值 [+]，右缘对齐到 right。
 fn stepper(c:&Card,right:f32,y:f32,value:egui::DragValue<'_>,id:&str)->(i32,egui::Response) {

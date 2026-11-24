@@ -1,5 +1,5 @@
 //! 邮件列表整理状态与服务器操作反馈。
-use crate::{app::{App,Cmd},mail::{Account,Item},mail_manage::{Action,Folder,Request,Snapshot,Completed}};
+use crate::{app::{App,Cmd},mail::{Account,Item},mail::manage::{Action,Folder,Request,Snapshot,Completed}};
 use std::collections::{HashMap,HashSet};
 #[derive(Clone,Default,serde::Serialize,serde::Deserialize)]
 struct LocalFlags{seen:Option<bool>,removed:bool}

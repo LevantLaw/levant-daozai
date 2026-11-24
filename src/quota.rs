@@ -14,6 +14,7 @@ pub(crate) mod relay;
 pub(crate) mod api;
 pub(crate) mod kiro;
 mod native_auth;
+pub(crate) mod ui;
 
 pub struct Discovery {pub added:usize,pub notes:Vec<String>}
 impl Discovery {

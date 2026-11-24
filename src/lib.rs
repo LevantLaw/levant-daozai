@@ -8,15 +8,12 @@
 pub mod display_layout;
 pub mod diagnostics_tool;
 pub mod rtl_text;
-mod mail_privacy;
 pub mod poll_clock;
 pub mod resources;
 pub mod anim;
 pub mod oled_shift;
 pub mod app;
 pub mod agent;
-mod agent_sound;
-mod agent_ui;
 mod dnd;
 mod page_badges;
 #[cfg(test)]
@@ -26,31 +23,19 @@ pub mod child_process;
 mod settings_window;
 pub mod bt;
 pub mod calendar;
-mod calendar_ui;
-mod local_calendar;
-mod calendar_editor;
 pub mod glass;
 pub mod skin_paint;
 pub mod icons;
 pub mod input;
 pub mod lyrics;
 pub mod mail;
-pub mod mail_format;
-mod mail_reader;
-pub mod mail_manage;
-mod mail_manage_ui;
 pub mod clipboard;
 pub mod side_dock;
 mod task_picker;
 pub mod model;
 pub mod renderer;
-pub mod otp;
 pub mod quota;
-mod quota_ui;
 pub mod weather;
-mod weather_ui;
-mod weather_source_ui;
-mod qweather;
 mod pages;
 mod extras;
 mod pet;
@@ -72,7 +57,6 @@ pub mod paint;
 pub mod shape;
 mod fluid;
 pub mod smtc;
-pub mod music_volume;
 pub mod theme;
 pub mod settings_theme;
 mod updates;
@@ -81,8 +65,6 @@ pub use updates::record_install_size;
 
 #[cfg(windows)]
 pub mod native;
-#[cfg(windows)]
-pub mod wechat;
 #[cfg(windows)]
 pub mod tray;
 

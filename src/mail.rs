@@ -10,6 +10,12 @@
 use std::collections::HashMap;
 #[cfg(windows)]
 pub(crate) mod fetch;
+pub(crate) mod format;
+pub(crate) mod reader;
+pub(crate) mod manage;
+pub(crate) mod manage_ui;
+pub(crate) mod privacy;
+pub(crate) mod otp;
 
 pub const SERVICE: &str = "Daozai.Mail";
 pub const MICROSOFT_UNSUPPORTED: &str = "Outlook、Hotmail、Live 和 Microsoft 365 云邮箱需要 OAuth 授权，岛仔暂不支持密码直连。";
@@ -345,7 +351,7 @@ pub enum Event {
     Status { account: String, status: Status },
     Mail { item: Item, new: bool },
     Test { account: String, ok: bool, note: String },
-    Managed(crate::mail_manage::Completed),
+    Managed(crate::mail::manage::Completed),
 }
 
 // ---------------------------------------------------------------- 正文解析
@@ -588,8 +594,6 @@ fn ics_text(v: &str) -> String {
     out.trim().to_string()
 }
 
-use crate::otp;
-
 // ---------------------------------------------------------------- 凭据
 
 #[cfg(windows)]
@@ -802,8 +806,8 @@ mod service {
     pub struct Service {
         cmd: Sender<Cmd>,
         ev: Receiver<Event>,
-        manage: Sender<crate::mail_manage::Request>,
-        done: Receiver<crate::mail_manage::Completed>,
+        manage: Sender<crate::mail::manage::Request>,
+        done: Receiver<crate::mail::manage::Completed>,
     }
 
     impl Service {
@@ -813,7 +817,7 @@ mod service {
             let _ = std::thread::Builder::new()
                 .name("daozai-mail".into())
                 .spawn(move || supervisor(cmd_rx, ev_tx));
-            let (manage,done)=crate::mail_manage::start();
+            let (manage,done)=crate::mail::manage::start();
             Self { cmd: cmd_tx, ev: ev_rx,manage,done }
         }
 
@@ -825,7 +829,7 @@ mod service {
             let _ = self.cmd.send(Cmd::Test(account, password));
         }
 
-        pub fn manage(&self,request:crate::mail_manage::Request){let _=self.manage.send(request);}
+        pub fn manage(&self,request:crate::mail::manage::Request){let _=self.manage.send(request);}
 
         pub fn try_recv(&self) -> Option<Event> {
             self.done.try_recv().ok().map(Event::Managed).or_else(||self.ev.try_recv().ok())
@@ -1479,7 +1483,7 @@ mod service {
         }
         pub fn sync(&self, _accounts: &[Account], _interval_secs: u32) {}
         pub fn test(&self, _account: Account, _password: String) {}
-        pub fn manage(&self,_request:crate::mail_manage::Request){}
+        pub fn manage(&self,_request:crate::mail::manage::Request){}
         pub fn try_recv(&self) -> Option<Event> {
             None
         }
@@ -1502,9 +1506,9 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
         let parsed=super::parse_message(raw);
         assert!(!parsed.text.trim().is_empty(),"text/plain 仍要保留作摘要与兜底");
         assert!(parsed.html.contains("<h1>"),"HTML 原文必须保留");
-        let lines=crate::mail_format::lines(&parsed.html,&parsed.text);
-        assert_eq!(lines[0].kind,crate::mail_format::Kind::Title,"真实邮件应走 HTML 排版");
-        assert!(lines.iter().any(|l|l.kind==crate::mail_format::Kind::Bullet));
+        let lines=crate::mail::format::lines(&parsed.html,&parsed.text);
+        assert_eq!(lines[0].kind,crate::mail::format::Kind::Title,"真实邮件应走 HTML 排版");
+        assert!(lines.iter().any(|l|l.kind==crate::mail::format::Kind::Bullet));
     }
     #[test]
     fn quality_cancelled_meetings_are_not_active_events() {

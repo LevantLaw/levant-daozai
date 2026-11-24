@@ -289,21 +289,21 @@ impl App {
                         let faded = c.faded(alpha);
                         let faded = if alpha < 0.8 { faded.ghost() } else { faded };
                         crate::focus_bar::draw(&faded, item_x, 15.0, self.t, &self.pomo, self.phase_secs(self.pomo.phase), false);
-                        if crate::quota_ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-focus"), "专注 · 点击打开".into()).clicked() {
+                        if crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-focus"), "专注 · 点击打开".into()).clicked() {
                             self.show_page(crate::app::FOCUS_PAGE);
                         }
                     }
                     Item::Music => {
                         let faded=c.faded(alpha);
                         crate::paint::playback_bars_box(&faded, item_x, 15.0, self.t, self.media.playing, theme::WHITE, bar_layout::GLYPH, bar_layout::MUSIC_H);
-                        if crate::quota_ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-music"), "音乐 · 点击打开".into()).clicked() {
+                        if crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-music"), "音乐 · 点击打开".into()).clicked() {
                             self.show_page(crate::app::MUSIC_PAGE);
                         }
                     }
                     Item::Battery => {
                         crate::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, bar_layout::BATTERY_SCALE);
                         let level = self.resident_power.0.map(|pct| format!("{pct}%")).unwrap_or_else(|| "电量不可用".into());
-                        crate::quota_ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-battery"), format!("电量 · {level} · 只读"));
+                        crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-battery"), format!("电量 · {level} · 只读"));
                     }
                     Item::Mail | Item::Health | Item::Todo | Item::Shelf | Item::Calendar => self.draw_tray_badge(c, item_x, item, alpha),
                 }
@@ -324,7 +324,7 @@ impl App {
         };
         self.paint_badge(&c.faded(alpha), slot, x, theme::WHITE);
         let width = crate::page_badges::badge_width(slot);
-        let response = crate::quota_ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, ("page-badge", slot)), self.badge_label(slot));
+        let response = crate::quota::ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, ("page-badge", slot)), self.badge_label(slot));
         if response.clicked() {
             let page = match item {
                 Item::Mail => Some(crate::app::MAIL_PAGE),

@@ -315,7 +315,7 @@ mod tests {
     fn live_kuwo_pause_retains_position_and_focus(){
         use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
         let mut reader=Reader::default();let before=reader.poll().expect("未读取到酷我播放状态");assert!(before.playing);
-        assert!(crate::music_volume::read("kwmusic.exe").is_some(),"应读取酷我音频服务的应用音量");
+        assert!(crate::smtc::volume::read("kwmusic.exe").is_some(),"应读取酷我音频服务的应用音量");
         let foreground=unsafe{GetForegroundWindow()};assert!(control(super::super::Transport::Toggle));
         std::thread::sleep(Duration::from_millis(600));let paused=reader.poll().unwrap();
         std::thread::sleep(Duration::from_millis(600));let later=reader.poll().unwrap();

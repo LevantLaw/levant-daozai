@@ -116,14 +116,14 @@ pub(crate) fn source_icon(c:&Card,source:Source<'_>,x:f32,y:f32,size:f32) {
         rect.shrink(rect.width()*0.1)
     }else{rect};
     let icon=match source {
-        Source::Calendar(Some(calendar::Provider::DingTalk))=>egui::include_image!("../assets/calendar/dingtalk.svg"),
-        Source::Calendar(Some(calendar::Provider::WeCom))=>egui::include_image!("../assets/calendar/wecom.svg"),
-        Source::Mail(_)=>egui::include_image!("../assets/calendar/mail.svg"),
-        Source::Calendar(Some(calendar::Provider::Feishu))=>egui::include_image!("../assets/calendar/feishu.svg"),
-        Source::Calendar(Some(calendar::Provider::ICloud))=>egui::include_image!("../assets/calendar/icloud.svg"),
-        Source::Calendar(Some(calendar::Provider::Exchange))=>egui::include_image!("../assets/calendar/outlook.svg"),
-        Source::Local=>egui::include_image!("../assets/calendar/windows.svg"),
-        _=>egui::include_image!("../assets/settings-icons/calendar-days.svg"),
+        Source::Calendar(Some(calendar::Provider::DingTalk))=>egui::include_image!("../../assets/calendar/dingtalk.svg"),
+        Source::Calendar(Some(calendar::Provider::WeCom))=>egui::include_image!("../../assets/calendar/wecom.svg"),
+        Source::Mail(_)=>egui::include_image!("../../assets/calendar/mail.svg"),
+        Source::Calendar(Some(calendar::Provider::Feishu))=>egui::include_image!("../../assets/calendar/feishu.svg"),
+        Source::Calendar(Some(calendar::Provider::ICloud))=>egui::include_image!("../../assets/calendar/icloud.svg"),
+        Source::Calendar(Some(calendar::Provider::Exchange))=>egui::include_image!("../../assets/calendar/outlook.svg"),
+        Source::Local=>egui::include_image!("../../assets/calendar/windows.svg"),
+        _=>egui::include_image!("../../assets/settings-icons/calendar-days.svg"),
     };
     let egui::ImageSource::Bytes{uri,bytes}=icon else{return};
     let pixels=(rect.width()*c.ui.ctx().pixels_per_point()).ceil() as u32;

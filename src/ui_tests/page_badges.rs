@@ -7,8 +7,8 @@ fn mail_item(uid:u32)->crate::mail::Item {
 fn add_unread_mail(h:&mut H) {
     h.app.mail.accounts=vec![crate::mail::Account{custom:None,email:"test@qq.com".into(),provider:crate::mail::Provider::Qq,enabled:true}];
     h.app.mail.recent=vec![mail_item(7)];
-    h.app.mail.manage.data.insert(("test@qq.com".into(),crate::mail_manage::Folder::Inbox),
-        crate::mail_manage::Snapshot{validity:1,entries:vec![(7,false)],items:vec![]});
+    h.app.mail.manage.data.insert(("test@qq.com".into(),crate::mail::manage::Folder::Inbox),
+        crate::mail::manage::Snapshot{validity:1,entries:vec![(7,false)],items:vec![]});
 }
 
 fn add_due_todo(h:&mut H) {

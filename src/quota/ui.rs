@@ -143,10 +143,10 @@ fn logo_texture(ctx:&egui::Context,provider:Provider,pixels:u32)->Option<egui::T
     if let Some(texture)=ctx.data_mut(|data|data.get_temp::<egui::TextureHandle>(key)){return Some(texture);}
     // WorkBuddy 图标来自官方 WorkBuddyAI 客户端的 workbuddy-app-icon SVG，保留原始配色。
     let mut image=if provider==Provider::Doubao{
-        let bitmap=image::load_from_memory(include_bytes!("../assets/ai-icons/doubao.png")).ok()?.resize_exact(pixels,pixels,image::imageops::FilterType::Lanczos3).to_rgba8();
+        let bitmap=image::load_from_memory(include_bytes!("../../assets/ai-icons/doubao.png")).ok()?.resize_exact(pixels,pixels,image::imageops::FilterType::Lanczos3).to_rgba8();
         egui::ColorImage::from_rgba_unmultiplied([pixels as usize,pixels as usize],bitmap.as_raw())
     }else{
-        let bytes:&[u8]=match provider{Provider::ZCode=>include_bytes!("../assets/ai-icons/zcode.svg"),Provider::Codex=>include_bytes!("../assets/ai-icons/codex.svg"),Provider::Claude=>include_bytes!("../assets/ai-icons/claude.svg"),Provider::Kimi=>include_bytes!("../assets/ai-icons/kimi.svg"),Provider::GrokBot=>include_bytes!("../assets/ai-icons/grokbot.svg"),Provider::Gemini=>include_bytes!("../assets/ai-icons/gemini.svg"),Provider::WorkBuddy=>include_bytes!("../assets/ai-icons/workbuddy.svg"),Provider::DeepSeek=>include_bytes!("../assets/ai-icons/deepseek.svg"),Provider::Kiro=>include_bytes!("../assets/ai-icons/kiro.svg"),Provider::OpenCodeGo=>include_bytes!("../assets/ai-icons/opencode.svg"),Provider::MiniMax=>include_bytes!("../assets/ai-icons/minimax.svg"),Provider::Glm=>include_bytes!("../assets/ai-icons/glm.svg"),_=>include_bytes!("../assets/ai-icons/api-key.svg")};
+        let bytes:&[u8]=match provider{Provider::ZCode=>include_bytes!("../../assets/ai-icons/zcode.svg"),Provider::Codex=>include_bytes!("../../assets/ai-icons/codex.svg"),Provider::Claude=>include_bytes!("../../assets/ai-icons/claude.svg"),Provider::Kimi=>include_bytes!("../../assets/ai-icons/kimi.svg"),Provider::GrokBot=>include_bytes!("../../assets/ai-icons/grokbot.svg"),Provider::Gemini=>include_bytes!("../../assets/ai-icons/gemini.svg"),Provider::WorkBuddy=>include_bytes!("../../assets/ai-icons/workbuddy.svg"),Provider::DeepSeek=>include_bytes!("../../assets/ai-icons/deepseek.svg"),Provider::Kiro=>include_bytes!("../../assets/ai-icons/kiro.svg"),Provider::OpenCodeGo=>include_bytes!("../../assets/ai-icons/opencode.svg"),Provider::MiniMax=>include_bytes!("../../assets/ai-icons/minimax.svg"),Provider::Glm=>include_bytes!("../../assets/ai-icons/glm.svg"),_=>include_bytes!("../../assets/ai-icons/api-key.svg")};
         egui_extras::image::load_svg_bytes_with_size(bytes,Some(egui::load::SizeHint::Size(pixels,pixels))).ok()?
     };
     // 白色标识使用矢量覆盖率，避免透明边缘再次变暗。
@@ -165,7 +165,7 @@ fn logo(c:&Card,provider:Provider,x:f32,y:f32,size:f32){
 fn deepseek_badge_svg(skin:crate::model::Skin)->String{
     use crate::model::Skin;
     let (fill,rim)=match skin{Skin::Classic=>("#e9edff","#cfd7ff"),Skin::Cream=>("#e9edff","#dce2fc"),Skin::GlassLight=>("#f5f7ff","#dfe5fa"),Skin::GlassDark|Skin::Fluid=>("#dce4fa","#b8c9ec")};
-    let whale=include_str!("../assets/ai-icons/deepseek.svg").replace("currentColor","#4d6bfe").replace("width=\"1em\"","x=\"12.5\" width=\"75\"").replace("height=\"1em\"","y=\"12.5\" height=\"75\"");
+    let whale=include_str!("../../assets/ai-icons/deepseek.svg").replace("currentColor","#4d6bfe").replace("width=\"1em\"","x=\"12.5\" width=\"75\"").replace("height=\"1em\"","y=\"12.5\" height=\"75\"");
     format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"{fill}\" stroke=\"{rim}\" stroke-width=\"3\"/>{whale}</svg>")
 }
 fn deepseek_badge(c:&Card,skin:crate::model::Skin,x:f32,y:f32,size:f32){
@@ -964,7 +964,7 @@ mod tests {
         state.busy.insert("test".into());assert!(state.balance_loading("test"));
     }
     #[test] fn zcode_badge_has_clear_corners_and_a_visible_edge(){
-        let icon=egui_extras::image::load_svg_bytes_with_size(include_bytes!("../assets/ai-icons/zcode.svg"),Some(egui::load::SizeHint::Size(26,26))).unwrap();
+        let icon=egui_extras::image::load_svg_bytes_with_size(include_bytes!("../../assets/ai-icons/zcode.svg"),Some(egui::load::SizeHint::Size(26,26))).unwrap();
         for (x,y) in [(3,3),(22,3),(3,22),(22,22)] {assert_eq!(icon[(x,y)].a(),0);}
         assert!(icon[(13,1)].a()>180);
         assert!(icon.pixels.iter().filter(|p|p.r()>230&&p.a()>240).count()>35);
@@ -1050,7 +1050,7 @@ mod tests {
                         assert!(image.pixels.iter().any(|pixel|pixel.a()>150&&pixel.b()>pixel.r().saturating_add(20)),"豆包头像应保留官方原始配色");
                         assert!(image.pixels.iter().any(|pixel|pixel.a()==0),"豆包头像应保留透明底");
                     }else if provider==Provider::MiniMax{
-                        let original=egui_extras::image::load_svg_bytes_with_size(include_bytes!("../assets/ai-icons/minimax.svg"),Some(egui::load::SizeHint::Size(pixels as u32,pixels as u32))).unwrap();
+                        let original=egui_extras::image::load_svg_bytes_with_size(include_bytes!("../../assets/ai-icons/minimax.svg"),Some(egui::load::SizeHint::Size(pixels as u32,pixels as u32))).unwrap();
                         assert_eq!(image.pixels,original.pixels,"MiniMax 应保留品牌颜色和透明边缘");
                     }else{for pixel in &image.pixels {let expected=if keeps_brand_color(provider){*pixel}else if provider==Provider::DeepSeek{Color32::from_rgba_unmultiplied(77,107,254,pixel.a())}else{Color32::from_white_alpha(pixel.a())};assert_eq!(*pixel,expected,"标识颜色与透明边缘应保持一致");}}
                 }
