@@ -11,13 +11,7 @@ use crate::render::paint::{self, Card, H};
 use crate::render::theme::{self, size, W};
 use eframe::egui::{Color32, CursorIcon, Pos2, Rect, Vec2};
 
-/// 侧边停靠时的透明画布（窗口）大小，逻辑点。
-pub const SIDE_W: f32 = 500.0;
-pub const SIDE_H: f32 = 600.0;
-/// 收起时竖向胶囊的厚度。
-pub const SIDE_BAR_W: f32 = 36.0;
-/// 岛体中心能离开屏幕竖直中线的预留：展开面板（最高约 294）与肩部、阴影留在屏幕内。
-pub const SIDE_HALF_EXTENT: f32 = 150.0;
+pub use crate::model::{SIDE_BAR_W, SIDE_H, SIDE_HALF_EXTENT, SIDE_W};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SideItem {

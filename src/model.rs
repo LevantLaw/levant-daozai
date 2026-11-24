@@ -24,6 +24,21 @@ pub fn config_dir() -> PathBuf {
     env_dir("APPDATA").join("Daozai")
 }
 
+// ---------- 画布与岛体几何（逻辑点） ----------
+pub const PW: f32 = 419.0; // 展开面板宽
+pub const PH: f32 = 140.0; // 展开面板内容高（不含顶部状态行）
+pub const BAR_H: f32 = 30.0; // 收起药丸高
+pub const WIN_W: f32 = 640.0; // 窗口（透明画布）
+pub const CANVAS_W: f32 = WIN_W + 320.0; // 保留右侧通知及阴影的完整空间，原岛仍按 WIN_W 定位。
+pub const WIN_H: f32 = 300.0;
+/// 侧边停靠时的透明画布（窗口）大小，逻辑点。
+pub const SIDE_W: f32 = 500.0;
+pub const SIDE_H: f32 = 600.0;
+/// 收起时竖向胶囊的厚度。
+pub const SIDE_BAR_W: f32 = 36.0;
+/// 岛体中心能离开屏幕竖直中线的预留：展开面板（最高约 294）与肩部、阴影留在屏幕内。
+pub const SIDE_HALF_EXTENT: f32 = 150.0;
+
 fn read_kv(path: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
     if let Ok(text) = fs::read_to_string(path) {
@@ -231,6 +246,10 @@ impl MotionSpeed {
         }
     }
 }
+
+/// 岛内提醒音；由外壳或平台层播放。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotificationSound { Silent, Complete, Reminder, Email, Sonar }
 
 #[derive(Clone, Debug)]
 pub struct Settings {

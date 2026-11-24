@@ -111,7 +111,7 @@ mod shift_slack_tests {
     use crate::model::Dock;
 
     fn slack(bounds:Bounds,dock:Dock,scale:f32,offset:f32)->(i32,i32){
-        let half=if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {ISLAND_HALF_EXTENT};
+        let half=if dock.is_side() {crate::model::SIDE_HALF_EXTENT} else {ISLAND_HALF_EXTENT};
         shift_slack(bounds,scale,half,offset,dock)
     }
 
@@ -150,7 +150,7 @@ mod shift_slack_tests {
         let m=Bounds{left:0,top:0,right:1920,bottom:1080};
         for dock in [Dock::Left,Dock::Right] {
             let (back,forth)=slack(m,dock,1.0,0.0);
-            assert_eq!((back,forth),((540.0-crate::side_dock::SIDE_HALF_EXTENT) as i32,(540.0-crate::side_dock::SIDE_HALF_EXTENT) as i32));
+            assert_eq!((back,forth),((540.0-crate::model::SIDE_HALF_EXTENT) as i32,(540.0-crate::model::SIDE_HALF_EXTENT) as i32));
             assert_eq!(slack(m,dock,1.0,1.0).1,0,"贴到最下后不能再往下挪");
         }
     }
@@ -169,7 +169,7 @@ mod shift_slack_tests {
                     for offset in [-1.0,-0.6,0.0,0.6,1.0] {
                         let (back,forth)=slack(m,dock,scale,offset);
                         assert!(back>=0 && forth>=0,"余量不能为负：{m:?} {dock:?} {scale} {offset}");
-                        let half=if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {ISLAND_HALF_EXTENT} as f64*scale as f64;
+                        let half=if dock.is_side() {crate::model::SIDE_HALF_EXTENT} else {ISLAND_HALF_EXTENT} as f64*scale as f64;
                         let (low,high)=limits(m,dock);
                         let travel=((high-low)/2.0-half).max(0.0);
                         let center=(low+high)/2.0+travel*offset as f64;

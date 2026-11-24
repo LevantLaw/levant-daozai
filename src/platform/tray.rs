@@ -498,8 +498,8 @@ impl Drop for Tray {
 }
 
 /// 播放固定映射的铃声；托盘气泡被 Windows 隐藏时也能听到。
-pub fn play_notification_sound(sound: crate::app::NotificationSound) {
-    use crate::app::NotificationSound;
+pub fn play_notification_sound(sound: crate::model::NotificationSound) {
+    use crate::model::NotificationSound;
     use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_MEMORY, SND_NODEFAULT, SND_NOSTOP};
     // 异步播放期间 Windows 仍会读取这段内嵌的 WAV。
     let wav: &[u8] = match sound {

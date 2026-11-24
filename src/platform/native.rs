@@ -197,8 +197,8 @@ fn glass_diagnostic(message: &str) {
 }
 
 /// 把逻辑坐标的轮廓换算成物理像素，作为去重的键和区域的输入。
-fn glass_key(shapes: &[crate::app::GlassShape], ppp: f32) -> Vec<i32> {
-    use crate::app::GlassShape;
+fn glass_key(shapes: &[crate::render::glass_shape::GlassShape], ppp: f32) -> Vec<i32> {
+    use crate::render::glass_shape::GlassShape;
     let px = |v: f32| (v * ppp).round() as i32;
     let mut key = Vec::new();
     for shape in shapes {
@@ -449,7 +449,7 @@ struct ShapeAlpha {
 }
 
 impl ShapeAlpha {
-    fn set_shapes(&mut self, shapes: &[crate::app::GlassShape], ppp: f32) {
+    fn set_shapes(&mut self, shapes: &[crate::render::glass_shape::GlassShape], ppp: f32) {
         let key = glass_key(shapes, ppp);
         if key == self.key { return; }
         self.polygons = shapes.iter().map(|shape| shape.outline().iter().map(|p| (p.x * ppp, p.y * ppp)).collect()).collect();
@@ -548,15 +548,15 @@ impl Window {
         unsafe {
             // 顶部：水平居中 + 水平偏移；左右：贴边 + 竖直偏移，画布换成竖向的大小。
             let origin=if dock.is_side() {
-                crate::platform::display_layout::side_origin(bounds,dock,(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H),crate::side_dock::SIDE_HALF_EXTENT,scale,offset)
-            } else {crate::platform::display_layout::island_origin_offset(bounds,crate::app::WIN_W,scale,offset)};
+                crate::platform::display_layout::side_origin(bounds,dock,(crate::model::SIDE_W,crate::model::SIDE_H),crate::model::SIDE_HALF_EXTENT,scale,offset)
+            } else {crate::platform::display_layout::island_origin_offset(bounds,crate::model::WIN_W,scale,offset)};
             let Some((x,y))=origin else{return false;};
             // OLED 像素偏移：只沿不贴边的一轴让开，并按展开面板的余量收窄——位置拉满或屏幕太窄时少挪、不挪，
             // 贴边的一侧也保持严丝合缝，刘海不会和屏幕边缘裂开。
-            let (back,forth)=crate::platform::display_layout::shift_slack(bounds,scale,if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {crate::platform::display_layout::ISLAND_HALF_EXTENT},offset,dock);
+            let (back,forth)=crate::platform::display_layout::shift_slack(bounds,scale,if dock.is_side() {crate::model::SIDE_HALF_EXTENT} else {crate::platform::display_layout::ISLAND_HALF_EXTENT},offset,dock);
             let (dx,dy)=(shift.0.clamp(-back,forth),shift.1.clamp(-back,forth));
             let (x,y)=if dock.is_side() {(x,y+dy)} else {(x+dx,y)};
-            let (canvas_w,canvas_h)=if dock.is_side() {(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,crate::app::WIN_H)};
+            let (canvas_w,canvas_h)=if dock.is_side() {(crate::model::SIDE_W,crate::model::SIDE_H)} else {(crate::model::CANVAS_W,crate::model::WIN_H)};
             let (w,h)=((canvas_w*scale).round() as i32,(canvas_h*scale).round() as i32);
             let mut current=RECT::default();
             if GetWindowRect(self.hwnd,&mut current).is_err(){return false;}
@@ -640,7 +640,7 @@ impl Window {
         hit_rect: (f32, f32, f32, f32),
         notice_hit: Option<(f32,f32,f32,f32)>,
         file_drop_zone: Option<(f32,f32,f32,f32)>,
-        glass: Option<&[crate::app::GlassShape]>,
+        glass: Option<&[crate::render::glass_shape::GlassShape]>,
         ppp: f32,
         editing: bool,
         expanded: bool,
@@ -686,7 +686,7 @@ impl Window {
                     }
                 }
                 if let Some(backdrop) = &mut self.backdrop {
-                    match backdrop.show(self.hwnd, &crate::app::blur_pieces(shapes, ppp)) {
+                    match backdrop.show(self.hwnd, &crate::render::glass_shape::blur_pieces(shapes, ppp)) {
                         Ok(()) => self.blur = true,
                         Err(error) => {
                             glass_diagnostic(&format!("模糊层更新失败：{error:?}"));
@@ -819,7 +819,7 @@ mod tests {
             let saved=hit().lock().unwrap_or_else(|e|e.into_inner()).clone();
             {
                 let mut native=Window{hwnd,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),page_wheel_hook:None,browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable,opaque_surface:surface_needs_outline_clip(backend,vendor,renderer),outline:ShapeAlpha::default()};
-                let shapes=[crate::app::GlassShape::Round(eframe::egui::Rect::from_min_max(eframe::egui::pos2(80.0,60.0),eframe::egui::pos2(320.0,160.0)),25.0)];
+                let shapes=[crate::render::glass_shape::GlassShape::Round(eframe::egui::Rect::from_min_max(eframe::egui::pos2(80.0,60.0),eframe::egui::pos2(320.0,160.0)),25.0)];
                 native.update((0.0,0.0,400.0,200.0),(80.0,60.0,240.0,100.0),None,None,Some(&shapes),ppp,false,false);
                 let region=CreateRectRgn(0,0,0,0);
                 GetWindowRgn(hwnd,region);
@@ -843,7 +843,7 @@ mod tests {
     #[test]
     fn opaque_readback_uses_outline_alpha_instead_of_jagged_clip(){
         let _guard=NATIVE_STATE_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-        use crate::app::GlassShape;
+        use crate::render::glass_shape::GlassShape;
         use eframe::egui::{pos2,Rect};
         use windows::Win32::Graphics::Gdi::{CreateRectRgn,DeleteObject,GetWindowRgn,PtInRegion};
         unsafe {
@@ -893,7 +893,7 @@ mod tests {
 
     #[test]
     fn glass_region_follows_the_island_outline_instead_of_its_bounding_box(){
-        use crate::app::GlassShape;
+        use crate::render::glass_shape::GlassShape;
         use eframe::egui::{pos2,Rect};
         use windows::Win32::Graphics::Gdi::PtInRegion;
         let outline=crate::render::shape::outline(Rect::from_min_max(pos2(100.0,0.0),pos2(300.0,60.0)),5.0,8.0,20.0);

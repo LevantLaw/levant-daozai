@@ -2,6 +2,7 @@
 pub mod anim;
 pub(crate) mod fluid;
 pub mod glass;
+pub mod glass_shape;
 pub mod paint;
 pub mod renderer;
 pub mod rtl_text;

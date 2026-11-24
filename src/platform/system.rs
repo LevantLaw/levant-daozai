@@ -443,20 +443,20 @@ pub(crate) fn is_browser_process(name:&str)->bool {
 fn browser_overlaps_island(browser:RECT,island:RECT,dock:crate::model::Dock)->bool {
     if dock.is_side() {return window_covers_side(browser,island,dock);}
     // 窗口是 CANVAS_W 宽的透明画布，岛体中心固定在画布左侧 WIN_W/2 处（与水平位置、大小无关）。
-    let scale=(island.right-island.left) as f32/crate::app::CANVAS_W;
-    let center=island.left as f32+crate::app::WIN_W*scale/2.0;
-    let half=crate::app::PW*scale/2.0;
+    let scale=(island.right-island.left) as f32/crate::model::CANVAS_W;
+    let center=island.left as f32+crate::model::WIN_W*scale/2.0;
+    let half=crate::model::PW*scale/2.0;
     (browser.left as f32)<center+half && (browser.right as f32)>center-half
-        && (browser.top as f32)<island.top as f32+crate::app::BAR_H*scale && browser.bottom>island.top
+        && (browser.top as f32)<island.top as f32+crate::model::BAR_H*scale && browser.bottom>island.top
 }
 
 /// 左右停靠：画布是 SIDE_W × SIDE_H，岛体贴在画布的左 / 右边、竖直居中。
 /// 前台窗口盖住岛所在的那一段屏幕边缘（例如最大化、全屏或贴边摆放）即视为遮挡。
 fn window_covers_side(window:RECT,island:RECT,dock:crate::model::Dock)->bool {
-    let scale=(island.right-island.left) as f32/crate::side_dock::SIDE_W;
-    let cy=island.top as f32+crate::side_dock::SIDE_H*scale/2.0;
-    let half=crate::app::PH*scale/2.0;
-    let strip=crate::side_dock::SIDE_BAR_W*scale;
+    let scale=(island.right-island.left) as f32/crate::model::SIDE_W;
+    let cy=island.top as f32+crate::model::SIDE_H*scale/2.0;
+    let half=crate::model::PH*scale/2.0;
+    let strip=crate::model::SIDE_BAR_W*scale;
     let vertical=(window.top as f32)<cy+half && (window.bottom as f32)>cy-half;
     let horizontal=if dock==crate::model::Dock::Left {(window.left as f32)<island.left as f32+strip && window.right>island.left}
         else {(window.right as f32)>island.right as f32-strip && window.left<island.right};

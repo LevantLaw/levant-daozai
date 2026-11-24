@@ -9,7 +9,7 @@
 //! 肩部按物理像素逐行拼出，模糊因此严格贴合岛体轮廓；岛体的着色、高光与文字仍由 egui
 //! 画在上层的岛仔窗口里。（直接挂在岛仔窗口上时，部分显卡会把视觉层叠到内容之上。）
 
-use crate::app::BlurPiece;
+use crate::render::glass_shape::BlurPiece;
 use windows::core::Interface;
 use windows::Foundation::Numerics::{Vector2, Vector3};
 use windows::System::DispatcherQueueController;
