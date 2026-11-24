@@ -338,8 +338,8 @@ fn fixed_notification_sound_mapping(){
 }
 
 #[test]
-fn external_notifications_ring_sonar_and_im_stays_silent(){
-    use crate::app::{Cmd, NotificationSound};
+fn external_notifications_keep_source_sound(){
+    use crate::app::Cmd;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.frame(vec![]);
     h.app.settings.read_notifications=true;
@@ -348,14 +348,10 @@ fn external_notifications_ring_sonar_and_im_stays_silent(){
 
     h.app.pending.clear();
     h.app.receive_notification_from("测试应用".into(),"test.notification".into(),"外部通知".into(),None);
-    assert!(h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(NotificationSound::Sonar))),"外部通知播放 sonar");
-    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::Notify(..))),"接管时不再叠加 Windows Toast");
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(..))),"外部通知沿用来源 Toast 铃声");
+    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::Notify(..))),"外部通知不发 Windows Toast");
 
-    h.app.settings.sound=false;h.app.pending.clear();
-    h.app.receive_notification_from("测试应用".into(),"test.notification".into(),"第二条".into(),None);
-    assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(..))),"关闭声音后不播放");
-
-    h.app.settings.sound=true;h.app.settings.qq_notifications=true;h.app.pending.clear();
+    h.app.settings.qq_notifications=true;h.app.pending.clear();
     h.app.receive_notification_from("QQ".into(),"QQ".into(),"新消息".into(),Some(crate::app::Unread::of(crate::app::Messenger::Qq)));
     assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,Cmd::PlayNotificationSound(..))),"即时通讯保持静音");
 }

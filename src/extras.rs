@@ -490,8 +490,6 @@ impl App {
         if known.is_none() {
             self.notification_bell_at=self.t;
             self.notification_bell_until=self.t+hold;
-            // 来源 Toast 的声音已被临时静音，外部通知统一改播 sonar；即时通讯保持静音。
-            if self.settings.sound {self.pending.push(Cmd::PlayNotificationSound(NotificationSound::Sonar));}
         }
         self.enqueue_alert(Alert{source:AlertSource::External(id.clone()),title:title.clone(),body:body.clone(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread,banner_at:self.t,agent:None},false);
         if known.is_none() {
