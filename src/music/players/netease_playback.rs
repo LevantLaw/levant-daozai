@@ -111,7 +111,7 @@ impl Playback {
 }
 
 #[derive(Default)]
-pub(super) struct CoverCache {
+pub(crate) struct CoverCache {
     url:String,image:Option<Arc<eframe::egui::ColorImage>>,
     pending:Option<mpsc::Receiver<Option<Arc<eframe::egui::ColorImage>>>>,
     retry_at:Option<Instant>,
@@ -121,7 +121,7 @@ impl CoverCache {
     fn get(&mut self,url:&str)->Option<Arc<eframe::egui::ColorImage>>{
         self.get_with(url,fetch_cover)
     }
-    pub(super) fn get_with(&mut self,url:&str,load:impl FnOnce(&str)->Option<Arc<eframe::egui::ColorImage>>+Send+'static)->Option<Arc<eframe::egui::ColorImage>>{
+    pub(crate) fn get_with(&mut self,url:&str,load:impl FnOnce(&str)->Option<Arc<eframe::egui::ColorImage>>+Send+'static)->Option<Arc<eframe::egui::ColorImage>>{
         // 切歌时丢弃旧请求的接收端，迟到的封面不能覆盖新歌。
         if self.url!=url{*self=Self{url:url.into(),worker:self.worker.take(),..Default::default()};}
         if self.url.is_empty(){return None;}
@@ -146,14 +146,14 @@ impl CoverCache {
 /// 本地日志和队列都没有歌名时（漫游、私人 FM 续载、每日推荐等网易云不落盘的歌），按歌曲 ID 在线查一次。
 /// 只保留当前这首；请求在后台进行，不占媒体轮询线程；失败按 10 秒、60 秒再试，第三次失败后这首歌不再请求。
 #[derive(Default)]
-pub(super) struct DetailCache {
+pub(crate) struct DetailCache {
     id:Option<u64>,value:Option<(NowPlaying,String)>,failures:usize,retry_at:Option<Instant>,
     pending:Option<mpsc::Receiver<Option<(NowPlaying,String)>>>,
     worker:Option<std::thread::JoinHandle<()>>,
 }
 const DETAIL_RETRY:[Duration;2]=[Duration::from_secs(10),Duration::from_secs(60)];
 impl DetailCache {
-    pub(super) fn get_with(&mut self,id:u64,load:impl FnOnce(u64)->Option<(NowPlaying,String)>+Send+'static)->Option<(NowPlaying,String)>{
+    pub(crate) fn get_with(&mut self,id:u64,load:impl FnOnce(u64)->Option<(NowPlaying,String)>+Send+'static)->Option<(NowPlaying,String)>{
         // 换歌时丢弃旧请求的接收端，迟到的结果不能套到新歌上。
         if self.id!=Some(id){*self=Self{id:Some(id),worker:self.worker.take(),..Default::default()};}
         if let Some(receiver)=&self.pending{
@@ -290,7 +290,7 @@ fn cover_failure_can_retry_without_a_minute_of_blank_artwork(){
     assert!(cache.retry_at.unwrap().duration_since(before)<Duration::from_secs(5),"封面暂时失败后不能空白一分钟");
 }
 
-pub(super) fn fetch_cover(url:&str)->Option<Arc<eframe::egui::ColorImage>>{
+pub(crate) fn fetch_cover(url:&str)->Option<Arc<eframe::egui::ColorImage>>{
     let url=cover_url(url)?;
     let response=ureq::AgentBuilder::new().timeout(Duration::from_secs(5)).redirects(0).build().get(&url).call().ok()?;
     let limit=2*1024*1024;let mut bytes=Vec::new();
@@ -300,7 +300,7 @@ pub(super) fn fetch_cover(url:&str)->Option<Arc<eframe::egui::ColorImage>>{
 }
 
 #[derive(Default)]
-pub(super) struct Reader {
+pub(crate) struct Reader {
     pid:u32,offset:u64,prefix:Vec<u8>,carry:Vec<u8>,skip_line:bool,
     playback:Playback,lookup:(Option<u64>,u64),cover:CoverCache,
     queue_print:Vec<Option<(std::time::SystemTime,u64)>>,
@@ -308,7 +308,7 @@ pub(super) struct Reader {
     queue_missed:Option<u64>,detail:DetailCache,
 }
 impl Reader {
-    pub(super) fn pending(&self)->bool {
+    pub(crate) fn pending(&self)->bool {
         self.pid!=0 && self.playback.media.song_id.is_some() && (!self.playback.ready || !self.playback.media.is_music())
     }
     fn ingest(&mut self,bytes:&[u8],now:u64,replay:bool){
@@ -368,14 +368,14 @@ impl Reader {
         }
         self.playback.snapshot(now)
     }
-    pub(super) fn poll(&mut self)->Option<NowPlaying>{
+    pub(crate) fn poll(&mut self)->Option<NowPlaying>{
         let path=std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("NetEase/CloudMusic/cloudmusic.elog");
         let sampled=std::time::Instant::now();
         let mut media=self.read(&path,process_id(),monotonic_millis())?;
         if self.cover.url==self.playback.artwork_url{media.artwork=self.cover.image.clone();}
         media.sampled_at=Some(sampled);Some(media)
     }
-    pub(super) fn fill_artwork(&mut self,media:&mut NowPlaying){
+    pub(crate) fn fill_artwork(&mut self,media:&mut NowPlaying){
         if media.source.eq_ignore_ascii_case("cloudmusic.exe") && media.song_id==self.playback.media.song_id && media.artwork.is_none(){
             media.artwork=self.cover.get(&self.playback.artwork_url);
         }
@@ -469,7 +469,7 @@ fn control_hotkey(command:super::Transport)->Option<&'static str>{
         super::Transport::Prev=>Some("prev_local"),super::Transport::Seek(_)|super::Transport::SetVolume(_)|super::Transport::SetMute(_)=>None}
 }
 
-pub(super) fn control(command:super::Transport){
+pub(crate) fn control(command:super::Transport){
     use windows::{core::{w,HSTRING,PCWSTR},Win32::{Foundation::{LPARAM,WPARAM},System::DataExchange::GlobalFindAtomW,
         UI::WindowsAndMessaging::{FindWindowW,PostMessageW,WM_HOTKEY}}};
     let Some(name)=control_hotkey(command) else{return;};
@@ -775,7 +775,7 @@ mod tests{
     fn live_native_netease_playback_and_lyrics(){
         let mut reader=Reader::default();let first=reader.poll().expect("未读到网易云原生播放事件");
         println!("歌曲={} 歌手={} ID={:?} 播放={} 进度={:.2}/{:.2}",first.title,first.artist,first.song_id,first.playing,first.position,first.duration);
-        let lyrics=crate::lyrics::fetch_for_source(&first.source,&first.title,&first.artist,first.duration,first.song_id).unwrap();
+        let lyrics=crate::music::lyrics::fetch_for_source(&first.source,&first.title,&first.artist,first.duration,first.song_id).unwrap();
         assert!(lyrics.synced && !lyrics.lines.is_empty());println!("已获取 {} 行同步歌词",lyrics.lines.len());
         std::thread::sleep(std::time::Duration::from_secs(2));let next=reader.poll().unwrap();
         if first.playing && next.playing && first.song_id==next.song_id{assert!(next.position>first.position);}

@@ -15,7 +15,7 @@ fn main()->eframe::Result<()> {
     }
     struct Probe {
         app:App,native:daozai::os::native::Window,start:Instant,frame_at:Instant,
-        lyrics:Vec<daozai::lyrics::Lyrics>,song:usize,artwork:Arc<egui::ColorImage>,
+        lyrics:Vec<daozai::music::lyrics::Lyrics>,song:usize,artwork:Arc<egui::ColorImage>,
         mode:String,seconds:f64,frames:u64,next_sample:f64,baseline:Option<usize>,peak:usize,active_frames:u64,
     }
     impl eframe::App for Probe {
@@ -32,7 +32,7 @@ fn main()->eframe::Result<()> {
             let title=format!("连续切歌检查 {song}");
             let env=Env{t,clock:"16:30:00".into(),today:"2026-11-04".into(),battery:Some(80),charging:true,
                 cursor:(self.mode=="expanded").then_some(egui::pos2(WIN_W/2.0,12.0)),
-                media:daozai::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:title.clone(),artist:"测试".into(),song_id:Some(song as u64+1),duration:240.0,position:(t%2.0)*120.0,playing:true,artwork:Some(self.artwork.clone()),playback_type:daozai::smtc::MediaKind::Music,..Default::default()},..Default::default()};
+                media:daozai::music::NowPlaying{source:"cloudmusic.exe".into(),title:title.clone(),artist:"测试".into(),song_id:Some(song as u64+1),duration:240.0,position:(t%2.0)*120.0,playing:true,artwork:Some(self.artwork.clone()),playback_type:daozai::music::MediaKind::Music,..Default::default()},..Default::default()};
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{
                 let out=self.app.frame(ui,egui::Rect::from_min_size(ui.max_rect().min,egui::vec2(WIN_W,WIN_H)),&env);
                 if out.hit.width()>280.0{self.active_frames+=1;}
@@ -65,7 +65,7 @@ fn main()->eframe::Result<()> {
     let cache=std::path::PathBuf::from(std::env::var_os("APPDATA").unwrap()).join("Daozai/lyrics");
     let lyrics=std::fs::read_dir(cache).unwrap().filter_map(|e|{
         let path=e.ok()?.path();if path.extension()?.to_str()? != "lrc"{return None;}
-        let lyrics=daozai::lyrics::parse_lrc(&std::fs::read_to_string(path).ok()?);
+        let lyrics=daozai::music::lyrics::parse_lrc(&std::fs::read_to_string(path).ok()?);
         (lyrics.synced&&lyrics.lines.len()>10).then_some(lyrics)
     }).take(100).collect::<Vec<_>>();assert!(!lyrics.is_empty(),"需要实际缓存歌词作为测试数据");
     println!("cached_songs={}",lyrics.len());

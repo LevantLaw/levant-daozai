@@ -22,7 +22,7 @@ fn weather_content_tap_keeps_other_controls_independent(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for (x,y,target) in [(375.0,crate::island::WEATHER_H-7.0,8),(394.0,18.0,8),(398.0,88.0,9),(20.0,88.0,7)] {
         let mut h=H::new();h.app.settings.pet=false;
-        h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
+        h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
         h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:19.0,..Default::default()});
         h.app.show_page(8);h.hover(H::local(250.0,65.0),1.0);
         let point=if x==394.0 {settings_button(&h)}else{H::local(x,y)};
@@ -347,7 +347,7 @@ fn weather_attribution_opens_its_source_without_changing_pages(){
 #[test]
 fn weather_refresh_keeps_music_and_settings_shortcuts_separate(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
     h.app.show_page(8);h.hover(H::local(300.0,60.0),1.0);
     let rect=|name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap().rect;
     let refresh=rect("weather-refresh");

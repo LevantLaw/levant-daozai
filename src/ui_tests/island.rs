@@ -290,7 +290,7 @@ fn resident_layout_gallery(){
                 if i%2==0 {snapshot.windows.push(crate::quota::Window{label:"5 小时".into(),seconds:Some(18000),remaining:58.0,reset:None,amount:None});}
             }
         }
-        if music {h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
+        if music {h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
         if focus {h.app.pomo.running=true;h.app.pomo.remaining=1283.0;}
         if pet {h.app.pet.react(crate::island::extras::PetState::Happy);}
         h
@@ -376,7 +376,7 @@ fn ui_alignment_layout_gallery(){
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_UI_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     fn fixture()->H{
         let mut h=H::new();h.app.settings.pet=false;h.app.settings.island_lyrics=false;h.power=(Some(76),false);
-        h.media=crate::smtc::NowPlaying{title:"愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光".into(),artist:"The Lanterns · Live Session".into(),duration:240.0,position:65.0,playing:true,..Default::default()};
+        h.media=crate::music::NowPlaying{title:"愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光".into(),artist:"The Lanterns · Live Session".into(),duration:240.0,position:65.0,playing:true,..Default::default()};
         h.app.todos.items=["整理会议资料","Review design details","确认项目需求与下一阶段开发排期"].into_iter().map(|text|crate::model::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
         h.app.shelf.items=["项目设计方案与交付说明.pdf","design-preview.png","本周工作安排.docx","project-files.zip","notes.md"].into_iter().map(std::path::PathBuf::from).collect();
         h.app.mail.accounts=vec![crate::mail::Account {custom: None, email:"product-team@example.com".into(),provider:crate::mail::Provider::Qq,enabled:true}];
@@ -399,7 +399,7 @@ fn ui_alignment_layout_gallery(){
         if name=="meeting-dingtalk" || name=="meeting-wecom" {
             h.app.meeting_alert(crate::mail::Meeting{all_day:false,title:"项目评审与下阶段安排".into(),start:chrono::Local::now().timestamp()+600,end:None,at:String::new(),uid:name.into()},if name=="meeting-dingtalk"{"钉钉"}else{"企业微信"}.into(),7);
         }
-        if name=="lyrics"{h.app.show_lyrics=true;h.app.set_lyrics(&h.media.title,&h.media.artist,240.0,crate::lyrics::parse_lrc("[00:00]慢慢走过这段时光\n[01:00]愿每个认真生活的人都能找到属于自己的光\n[01:10]愿风带你去远方"));}
+        if name=="lyrics"{h.app.show_lyrics=true;h.app.set_lyrics(&h.media.title,&h.media.artist,240.0,crate::music::lyrics::parse_lrc("[00:00]慢慢走过这段时光\n[01:00]愿每个认真生活的人都能找到属于自己的光\n[01:10]愿风带你去远方"));}
         if name=="mail-detail"{h.app.mail.open_uid=Some(("product-team@example.com".into(),0));}
         if name=="reminder"{h.app.open_task_reminder(0);}
         let (width,height)=((WIN_W*ppp)as u32,(WIN_H*ppp)as u32);let mut raster=crate::preview_raster::Raster::new(width as usize,height as usize);
@@ -506,7 +506,7 @@ fn hover_tooltips_fit_native_region_and_release_it_after_leaving(){
         } else {
             h.app.settings.island_lyrics=true;
             h.media.title="测试歌曲".into();h.media.artist="歌手".into();h.media.duration=240.0;h.media.playing=true;
-            h.app.set_lyrics("测试歌曲","歌手",240.0,crate::lyrics::parse_lrc("[00:00]测试歌词"));
+            h.app.set_lyrics("测试歌曲","歌手",240.0,crate::music::lyrics::parse_lrc("[00:00]测试歌词"));
             h.app.alert("邮件验证码","收到邮件，验证码 123456，请在十分钟内使用",5,false);
             h.hover(Pos2::new(600.0,220.0),1.0);
             label="邮件验证码\n收到邮件，验证码 123456，请在十分钟内使用".to_string();
@@ -638,7 +638,7 @@ fn expanded_status_row_keeps_entries_clickable_and_time_short(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.settings.clock_12h=true;h.app.settings.clock_period=2;h.app.settings.clock_seconds=true;
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     h.app.windows_unread=true;
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let rect=|h:&H,name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap_or_else(||panic!("展开态缺少 {name}")).rect;
@@ -767,7 +767,7 @@ fn memory_profile_long_listening_session(){
     let mut h=H::new();h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
     println!("{:<16} {}","创建界面后",rss());
     let mut seed=12345u64;let mut next=||{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);(seed>>33) as u32};
-    let run=|h:&mut H,media:&crate::smtc::NowPlaying|{
+    let run=|h:&mut H,media:&crate::music::NowPlaying|{
         h.t+=1.0/60.0;
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::island::CANVAS_W,WIN_H))),time:Some(h.t),max_texture_side:Some(side),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
@@ -776,7 +776,7 @@ fn memory_profile_long_listening_session(){
         let out=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let _=app.frame(ui,Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H)),&env);});});
         h.shapes=out.shapes;
     };
-    let idle=crate::smtc::NowPlaying::default();
+    let idle=crate::music::NowPlaying::default();
     for _ in 0..30 {run(&mut h,&idle);}
     report("启动后",&h);
     for page in 0..8 {h.app.show_page(page);for _ in 0..20 {run(&mut h,&idle);}}
@@ -786,10 +786,10 @@ fn memory_profile_long_listening_session(){
         let lines:Vec<String>=(0..40).map(|_|(0..8+next()%5).map(|_|char::from_u32(0x4E00+next()%3000).unwrap()).collect()).collect();
         let lrc=lines.iter().enumerate().map(|(i,l)|format!("[{:02}:{:02}.00]{l}\n",i*3/60,i*3%60)).collect::<String>();
         let title=format!("测试歌曲{song}");
-        h.app.set_lyrics(&title,"歌手",200.0,crate::lyrics::parse_lrc(&lrc));
+        h.app.set_lyrics(&title,"歌手",200.0,crate::music::lyrics::parse_lrc(&lrc));
         if song==songs/2 {h.app.show_page(0);}
         for i in 0..40 {
-            let media=crate::smtc::NowPlaying{title:title.clone(),artist:"歌手".into(),duration:200.0,position:i as f64*3.0+0.5,playing:false,..Default::default()};
+            let media=crate::music::NowPlaying{title:title.clone(),artist:"歌手".into(),duration:200.0,position:i as f64*3.0+0.5,playing:false,..Default::default()};
             for _ in 0..2 {run(&mut h,&media);}
         }
         if (song+1)%20==0 {report(&format!("听完{}首",song+1),&h);}

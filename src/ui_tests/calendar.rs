@@ -21,12 +21,12 @@ fn complex_script_lyrics_preview(){
                 let mut h=H::new();h.app.settings.pet=false;
                 if !fixed {h.ctx.set_fonts(crate::visuals::theme::fonts_without_tibetan());}
                 h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
-                let media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:title.into(),artist:artist.into(),duration:215.0,playing:true,position:7.0,
-                    playback_type:crate::smtc::MediaKind::Music,..Default::default()};
+                let media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:title.into(),artist:artist.into(),duration:215.0,playing:true,position:7.0,
+                    playback_type:crate::music::MediaKind::Music,..Default::default()};
                 h.media=media.clone();h.frame(vec![]);
                 h.app.ly=crate::island::LyricsState{key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
                     song:Some(crate::island::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:None}),
-                    lyrics:Some(crate::lyrics::parse_lrc(lrc)),..Default::default()};
+                    lyrics:Some(crate::music::lyrics::parse_lrc(lrc)),..Default::default()};
                 if open {h.app.show_page(0);}
                 let (w,hgt)=(crate::island::CANVAS_W,WIN_H);
                 let mut raster=feature_raster_sized(w,hgt);
@@ -63,7 +63,7 @@ fn changing_qq_metadata_cannot_spawn_lyrics_workers_while_one_is_running(){
     let id=worker.thread().id();h.app.ly_worker=Some(worker);
     h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;
     for step in 0..1440 {
-        h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:format!("歌曲{}",step%2),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
+        h.media=crate::music::NowPlaying{source:"QQMusic.exe".into(),title:format!("歌曲{}",step%2),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
         h.t=step as f64*0.25;h.frame(vec![]);
         assert_eq!(h.app.ly_worker.as_ref().unwrap().thread().id(),id,"旧请求未结束时不得另开取词线程");
         assert!(h.app.ly.rx.is_none(),"不能为抖动的歌曲堆积请求");
@@ -274,10 +274,10 @@ fn calendar_combines_platforms_and_settings_tabs_do_not_filter_events() {
 fn switching_music_source_discards_previous_lyrics() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
     h.frame(vec![]);
     for source in ["QQMusic.exe","cloudmusic.exe","汽水音乐","KuGou.exe","QQMusic.exe"] {
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:01]旧来源歌词"));
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:01]旧来源歌词"));
         h.media.source=source.into();
         h.frame(vec![]);
         assert!(h.app.ly.lyrics.is_none(),"切换到 {source} 后必须重新选择歌词来源");
@@ -287,11 +287,11 @@ fn switching_music_source_discards_previous_lyrics() {
 #[test]
 fn closing_a_player_then_starting_native_netease_restores_music_and_lyrics(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{source:"SodaMusic.exe".into(),title:"旧歌曲".into(),artist:"歌手".into(),playing:true,duration:120.0,..Default::default()};h.frame(vec![]);
-    h.app.set_lyrics("旧歌曲","歌手",120.0,crate::lyrics::parse_lrc("[00:01]旧歌词"));
+    h.media=crate::music::NowPlaying{source:"SodaMusic.exe".into(),title:"旧歌曲".into(),artist:"歌手".into(),playing:true,duration:120.0,..Default::default()};h.frame(vec![]);
+    h.app.set_lyrics("旧歌曲","歌手",120.0,crate::music::lyrics::parse_lrc("[00:01]旧歌词"));
     h.media=Default::default();h.frame(vec![]);assert!(h.app.media.title.is_empty());assert!(h.app.ly.lyrics.is_none());
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),song_id:Some(123),title:"新歌曲".into(),artist:"歌手".into(),playing:true,position:7.0,duration:120.0,..Default::default()};h.frame(vec![]);
-    h.app.set_lyrics("新歌曲","歌手",120.0,crate::lyrics::parse_lrc("[00:05]新歌词\n[00:10]下一句"));h.frame(vec![]);
+    h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),song_id:Some(123),title:"新歌曲".into(),artist:"歌手".into(),playing:true,position:7.0,duration:120.0,..Default::default()};h.frame(vec![]);
+    h.app.set_lyrics("新歌曲","歌手",120.0,crate::music::lyrics::parse_lrc("[00:05]新歌词\n[00:10]下一句"));h.frame(vec![]);
     assert_eq!(h.app.media.title,"新歌曲");assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("新歌词"));
     h.media.song_id=Some(124);h.frame(vec![]);assert!(h.app.ly.lyrics.is_none(),"歌名相同但歌曲 ID 不同仍需重新取词");
 }
@@ -313,9 +313,9 @@ fn quality_late_calendar_response_does_not_restore_disconnected_account() {
 fn kugou_external_seek_updates_lyrics_in_both_directions(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{source:"KuGou.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,playing:true,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"KuGou.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,playing:true,..Default::default()};
     h.frame(vec![]);
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]开头\n[00:30]中段\n[01:00]后段"));
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]开头\n[00:30]中段\n[01:00]后段"));
     for (position,line) in [(65.0,"后段"),(10.0,"开头"),(35.0,"中段")] {
         h.media.position=position;h.media.sampled_at=Some(std::time::Instant::now());h.frame(vec![]);
         assert_eq!(h.app.island_lyric().map(|(_,text)|text),Some(line),"酷狗跳转后应立即切换到对应歌词");
@@ -327,8 +327,8 @@ fn music_clients_keep_lyrics_across_two_repeat_cycles(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for source in ["kugou","QQMusic.exe","cloudmusic.exe","汽水音乐","Spotify.exe","kwmusic.exe"] {
         let mut h=H::new();h.app.settings.island_lyrics=true;
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"循环测试".into(),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
-        h.frame(vec![]);h.app.set_lyrics("循环测试","歌手",120.0,crate::lyrics::parse_lrc("[00:00]开头\n[00:05]第一段\n[01:50]尾声"));
+        h.media=crate::music::NowPlaying{source:source.into(),title:"循环测试".into(),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
+        h.frame(vec![]);h.app.set_lyrics("循环测试","歌手",120.0,crate::music::lyrics::parse_lrc("[00:00]开头\n[00:05]第一段\n[01:50]尾声"));
         for (position,line) in [(119.0,"尾声"),(0.0,"开头"),(8.0,"第一段"),(119.0,"尾声"),(0.0,"开头"),(8.0,"第一段")] {
             h.media.position=position;h.media.sampled_at=Some(std::time::Instant::now());h.frame(vec![]);
             assert_eq!(h.app.island_lyric().map(|(_,text)|text),Some(line),"{source} 第二、三遍也必须显示相应歌词");
@@ -341,9 +341,9 @@ fn failed_lyrics_can_be_retried_from_the_music_page(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
     h.app.ly.key="Track|Artist|120".into();
-    h.app.ly.error=Some(crate::lyrics::FetchError::Unavailable("HTTP 502".into()));
+    h.app.ly.error=Some(crate::music::lyrics::FetchError::Unavailable("HTTP 502".into()));
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="暂未获取歌词，请重试")),"展开内应保留歌词错误提示");
     h.click(H::local(310.0,68.0));
@@ -354,8 +354,8 @@ fn failed_lyrics_can_be_retried_from_the_music_page(){
 fn music_lyrics_show_in_a_separate_right_column() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:01]上一句\n[00:05]当前歌词\n[00:10]下一句"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:01]上一句\n[00:05]当前歌词\n[00:10]下一句"));
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let current=h.shapes.iter().find_map(|shape|match &shape.shape {
         egui::Shape::Text(text) if text.galley.text()=="当前歌词"=>Some(text.pos),_=>None,
@@ -375,7 +375,7 @@ fn music_lyrics_show_in_a_separate_right_column() {
 fn disabling_lyrics_disconnects_pending_workers(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"KuGou.exe".into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
+    h.media=crate::music::NowPlaying{source:"KuGou.exe".into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
     h.frame(vec![]);h.app.opts.fetch_lyrics=true;
     h.app.show_lyrics=false;h.app.settings.island_lyrics=false;
     h.app.ly.key="测试歌曲|歌手|0".into();h.app.ly.loading=true;
@@ -383,7 +383,7 @@ fn disabling_lyrics_disconnects_pending_workers(){
     let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
     h.frame(vec![]);
     assert!(native.send(None).is_err(),"关闭歌词后应停止本机轮询");
-    assert!(network.send(Err(crate::lyrics::FetchError::NotFound)).is_err());
+    assert!(network.send(Err(crate::music::lyrics::FetchError::NotFound)).is_err());
     assert!(h.app.ly.key.is_empty(),"再次开启时应能重新加载歌词");
 }
 
@@ -392,41 +392,41 @@ fn late_native_lyrics_bypass_pending_network_for_both_clients(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for source in ["KuGou.exe","SodaMusic.exe"] {
         let mut h=H::new();
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
+        h.media=crate::music::NowPlaying{source:source.into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
         h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
         h.app.ly.key="测试歌曲|歌手|0".into();h.app.ly.loading=true;
         let (network,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
         let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
-        native.send(Some(crate::lyrics::parse_lrc("[00:01.00]本机歌词"))).unwrap();h.frame(vec![]);
+        native.send(Some(crate::music::lyrics::parse_lrc("[00:01.00]本机歌词"))).unwrap();h.frame(vec![]);
         assert!(!h.app.ly.loading,"本机歌词不能等待在线请求结束");
         assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].text,"本机歌词");
-        assert!(network.send(Err(crate::lyrics::FetchError::NotFound)).is_err(),"迟到的网络结果必须丢弃");
+        assert!(network.send(Err(crate::music::lyrics::FetchError::NotFound)).is_err(),"迟到的网络结果必须丢弃");
     }
 }
 
 #[test]
 fn kugou_fallback_waits_for_late_native_lyrics(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"测试歌曲".into(),artist:"歌手".into(),position:22.8,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"kugou".into(),title:"测试歌曲".into(),artist:"歌手".into(),position:22.8,..Default::default()};
     h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;h.app.ly.key="测试歌曲|歌手|0".into();
     let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:23.930]测试歌词"),true))).unwrap();h.frame(vec![]);
+    tx.send(Ok((crate::music::lyrics::parse_lrc("[00:23.930]测试歌词"),true))).unwrap();h.frame(vec![]);
     assert!(h.app.ly.retry_at.is_some(),"临时通用歌词必须继续等待迟到的酷狗原生歌词");
     h.t=h.app.ly.retry_at.unwrap()+0.1;h.frame(vec![]);
     assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].t,23.930,"接回原生歌词期间不能清空现有歌词");assert!(!h.app.ly.loading);
     let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:22.991]测试歌词"),false))).unwrap();h.frame(vec![]);
+    tx.send(Ok((crate::music::lyrics::parse_lrc("[00:22.991]测试歌词"),false))).unwrap();h.frame(vec![]);
     assert!((h.app.ly.lyrics.as_ref().unwrap().lines[0].t-22.991).abs()<0.001);assert!(h.app.ly.retry_at.is_none(),"接回原生歌词后应停止重查");
 }
 
 #[test]
 fn kugou_missing_lyrics_rechecks_late_cache_without_flashing_loading() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"不存在的测试歌曲".into(),artist:"测试歌手".into(),duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"kugou".into(),title:"不存在的测试歌曲".into(),artist:"测试歌手".into(),duration:120.0,..Default::default()};
     h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
     h.app.ly.key="不存在的测试歌曲|测试歌手|120".into();
     let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Err(crate::lyrics::FetchError::NotFound)).unwrap();h.frame(vec![]);
+    tx.send(Err(crate::music::lyrics::FetchError::NotFound)).unwrap();h.frame(vec![]);
     let retry=h.app.ly.retry_at.expect("酷狗尚未写入缓存时仍需自动检查");
     assert!((retry-h.t-5.0).abs()<0.001);
     // 歌词通道全进程只有 1 个名额，前面测试的歌词线程可能还在查网络；占着时这一帧会直接跳过。
@@ -435,9 +435,9 @@ fn kugou_missing_lyrics_rechecks_late_cache_without_flashing_loading() {
     assert_eq!(crate::support::resources::LYRICS.active(),0,"歌词名额被其他测试长期占用");
     h.t=retry+0.1;h.frame(vec![]);
     assert!(!h.app.ly.loading,"检查本机缓存不能反复闪出加载提示");
-    assert_eq!(h.app.ly.error,Some(crate::lyrics::FetchError::NotFound));
+    assert_eq!(h.app.ly.error,Some(crate::music::lyrics::FetchError::NotFound));
     let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:01.00]迟到的原生歌词"),false))).unwrap();h.frame(vec![]);
+    tx.send(Ok((crate::music::lyrics::parse_lrc("[00:01.00]迟到的原生歌词"),false))).unwrap();h.frame(vec![]);
     assert!(h.app.ly.lyrics.is_some());assert!(h.app.ly.error.is_none());assert!(h.app.ly.retry_at.is_none());
 }
 
@@ -450,15 +450,15 @@ fn island_lyrics_pause_returns_to_resident_and_resume_follows_current_position()
         h.app.settings.tray_weather=false;h.app.settings.tray_focus=false;
         h.power=(Some(75),false);h.app.pomo.running=true;h.app.pomo.remaining=600.0;
         h.app.weather.snapshot=Some(crate::weather::Snapshot{temp:21.0,..Default::default()});
-        h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
+        h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
         for _ in 0..90 {h.frame(vec![]);}
         let resident_width=h.app.current_width();let resident_height=h.hit.height();
         h.app.settings.island_lyrics=true;h.media.playing=true;
-        let lyrics=if synced {crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句歌词")}else{crate::lyrics::from_plain("没有时间戳的歌词")};
+        let lyrics=if synced {crate::music::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句歌词")}else{crate::music::lyrics::from_plain("没有时间戳的歌词")};
         h.app.set_lyrics("Track","Artist",120.0,lyrics);
         for _ in 0..90 {h.frame(vec![]);}
         assert!(visible(&h,if synced{"当前歌词"}else{"Track"}));
-        assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_LYRICS);
+        assert_eq!(h.app.media_poll_interval(),crate::music::POLL_LYRICS);
         h.media.playing=false;h.frame(vec![]);
         assert!(h.app.island_lyric().is_none(),"暂停后应退出收起态歌词显示");
         for _ in 0..90 {h.frame(vec![]);}
@@ -470,13 +470,13 @@ fn island_lyrics_pause_returns_to_resident_and_resume_follows_current_position()
         let secs=h.app.pomo.remaining.ceil() as u32;
         assert!(visible(&h,&format!("{:02}:{:02}",secs/60,secs%60)),"暂停音乐不能隐藏专注倒计时");
         assert!(h.app.settings.island_lyrics && h.app.ly.lyrics.is_some(),"暂停只切换显示形态，应保留开关和歌词缓存");
-        assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_BACKGROUND);
+        assert_eq!(h.app.media_poll_interval(),crate::music::POLL_BACKGROUND);
         h.media.position=12.0;for _ in 0..30 {h.frame(vec![]);}
         assert!(!visible(&h,"下一句歌词"));
         h.media.playing=true;for _ in 0..90 {h.frame(vec![]);}
         assert!(visible(&h,if synced{"下一句歌词"}else{"Track"}),"继续播放后应按最新进度恢复歌词或歌名");
         assert!(!visible(&h,"09:41"));
-        assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_LYRICS);
+        assert_eq!(h.app.media_poll_interval(),crate::music::POLL_LYRICS);
     }
 }
 
@@ -485,8 +485,8 @@ fn music_lyrics_island_toggle_is_independent_and_persistent() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.show_lyrics=false;h.app.settings.lyrics_enabled=false;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.click(H::local(313.0,118.0));
     assert!(h.app.settings.island_lyrics);
@@ -504,8 +504,8 @@ fn music_lyrics_island_toggle_is_independent_and_persistent() {
 fn island_lyrics_arrive_just_before_vocals_and_finish_fading_before_the_timestamp(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.4,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.4,duration:120.0,playing:true,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
     for _ in 0..60 {h.frame(vec![]);}
     for step in 1..=30 {
         h.media.position=9.4+step as f64/60.0;
@@ -531,14 +531,14 @@ fn island_lyrics_arrive_just_before_vocals_and_finish_fading_before_the_timestam
 fn expanded_and_segmented_lyrics_share_the_early_display_time(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.8,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.8,duration:120.0,playing:true,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let next=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text()=="下一句"=>Some(text),_=>None}).unwrap();
     assert_eq!(next.galley.job.sections[0].format.font_id.size,12.0,"展开歌词也应在开唱前高亮下一句");
     h.hover(Pos2::new(WIN_W/2.0,PH+crate::island::STATUS_H+30.0),1.0);
     let line="愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光";
-    h.media.position=6.0;h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
+    h.media.position=6.0;h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
     for _ in 0..60{h.frame(vec![]);}
     let shown=|h:&H|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if line.contains(t.galley.text())&&!t.galley.text().is_empty()=>Some(t.galley.text().to_owned()),_=>None}).unwrap();
     let first=shown(&h);
@@ -551,9 +551,9 @@ fn expanded_and_segmented_lyrics_share_the_early_display_time(){
 fn island_lyrics_center_segments_in_a_fixed_height(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
     for line in ["晚风","愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光","晚风"] {
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
         for _ in 0..90 {
             h.frame(vec![]);
             assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="09:41")),"切换显示段时应保持歌词布局");
@@ -575,18 +575,18 @@ fn island_lyrics_center_segments_in_a_fixed_height(){
 fn island_lyrics_keep_title_fallback_and_intro_and_gaps(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:1.0,duration:120.0,playing:true,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:1.0,duration:120.0,playing:true,..Default::default()};
     for state in 0..6 {
         h.app.ly=Default::default();
         h.app.ly.key="Track|Artist|120".into();
         h.media.position=if state==1 {7.0}else{1.0};
         match state {
-            0=>h.app.ly.lyrics=Some(crate::lyrics::parse_lrc("[00:05]第一句")),
-            1=>h.app.ly.lyrics=Some(crate::lyrics::parse_lrc("[00:01]第一句\n[00:05]\n[00:10]下一句")),
+            0=>h.app.ly.lyrics=Some(crate::music::lyrics::parse_lrc("[00:05]第一句")),
+            1=>h.app.ly.lyrics=Some(crate::music::lyrics::parse_lrc("[00:01]第一句\n[00:05]\n[00:10]下一句")),
             2=>h.app.ly.loading=true,
-            3=>h.app.ly.error=Some(crate::lyrics::FetchError::NotFound),
-            4=>h.app.ly.error=Some(crate::lyrics::FetchError::Unavailable("503".into())),
-            _=>h.app.ly.lyrics=Some(crate::lyrics::from_plain("没有时间戳")),
+            3=>h.app.ly.error=Some(crate::music::lyrics::FetchError::NotFound),
+            4=>h.app.ly.error=Some(crate::music::lyrics::FetchError::Unavailable("503".into())),
+            _=>h.app.ly.lyrics=Some(crate::music::lyrics::from_plain("没有时间戳")),
         }
         for _ in 0..90 {h.frame(vec![]);}
         if let Some(error)=&h.app.ly.error {
@@ -608,7 +608,7 @@ fn island_lyrics_keep_title_fallback_and_intro_and_gaps(){
 fn island_lyrics_title_fallback_shows_cover_and_elides_long_names(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"没有歌词的钢琴曲".repeat(20),artist:"示例演奏者".into(),playing:true,artwork:Some(std::sync::Arc::new(egui::ColorImage::new([8,8],egui::Color32::BLUE))),..Default::default()};
+    h.media=crate::music::NowPlaying{title:"没有歌词的钢琴曲".repeat(20),artist:"示例演奏者".into(),playing:true,artwork:Some(std::sync::Arc::new(egui::ColorImage::new([8,8],egui::Color32::BLUE))),..Default::default()};
     for _ in 0..90 {h.frame(vec![]);}
     let text=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==h.media.title=>Some(t),_=>None}).expect("无歌词时应绘制当前歌名");
     assert_eq!(text.galley.rows.len(),1,"长歌名只显示一行");
@@ -622,8 +622,8 @@ fn island_lyrics_title_fallback_shows_cover_and_elides_long_names(){
 fn island_lyrics_title_fallback_follows_track_changes_and_normal_mode(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"上一首".into(),artist:"示例歌手".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("上一首","示例歌手",120.0,crate::lyrics::parse_lrc("[00:05]上一首的歌词"));
+    h.media=crate::music::NowPlaying{title:"上一首".into(),artist:"示例歌手".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
+    h.app.set_lyrics("上一首","示例歌手",120.0,crate::music::lyrics::parse_lrc("[00:05]上一首的歌词"));
     for _ in 0..90 {h.frame(vec![]);}
     h.media.title="下一首纯音乐".into();h.media.playing=false;
     for _ in 0..90 {h.frame(vec![]);}
@@ -631,7 +631,7 @@ fn island_lyrics_title_fallback_follows_track_changes_and_normal_mode(){
     h.media.playing=true;for _ in 0..60 {h.frame(vec![]);}
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==h.media.title)),"继续播放且歌词未到达时应显示新歌名");
     h.media.playing=false;
-    h.app.set_lyrics("下一首纯音乐","示例歌手",120.0,crate::lyrics::parse_lrc("[00:05]新歌的当前歌词"));
+    h.app.set_lyrics("下一首纯音乐","示例歌手",120.0,crate::music::lyrics::parse_lrc("[00:05]新歌的当前歌词"));
     for _ in 0..30 {h.frame(vec![]);}
     assert!(h.app.island_lyric().is_none(),"暂停时歌词到达也应保持常驻形态");
     h.media.playing=true;for _ in 0..30 {h.frame(vec![]);}
@@ -661,16 +661,16 @@ fn island_lyrics_layout_gallery(){
     let cover=std::sync::Arc::new(cover);
     for name in ["lyrics","loading","missing","no-cover","long-title","paused","intro","gap","idle"] {
         let mut h=H::new();h.app.settings.island_lyrics=true;
-        h.media=crate::smtc::NowPlaying{title:"晚风与星光".into(),artist:"示例歌手".into(),position:7.0,duration:120.0,playing:name!="paused",artwork:Some(cover.clone()),..Default::default()};
+        h.media=crate::music::NowPlaying{title:"晚风与星光".into(),artist:"示例歌手".into(),position:7.0,duration:120.0,playing:name!="paused",artwork:Some(cover.clone()),..Default::default()};
         if name=="long-title" {h.media.title="愿每一个认真生活的人都能在平凡的日子里找到属于自己的光（钢琴独奏版）".into();}
         h.app.ly.key=format!("{}|{}|120",h.media.title,h.media.artist);
         match name {
-            "lyrics"|"paused"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::lyrics::parse_lrc("[00:05]愿你在平凡的日子里，找到自己的光")),
+            "lyrics"|"paused"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::music::lyrics::parse_lrc("[00:05]愿你在平凡的日子里，找到自己的光")),
             "loading"=>h.app.ly.loading=true,
-            "intro"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::lyrics::parse_lrc("[00:20]晚风")),
-            "gap"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::lyrics::parse_lrc("[00:01]第一句\n[00:05]\n[00:10]下一句")),
+            "intro"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::music::lyrics::parse_lrc("[00:20]晚风")),
+            "gap"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::music::lyrics::parse_lrc("[00:01]第一句\n[00:05]\n[00:10]下一句")),
             "idle"=>h.media=Default::default(),
-            _=>h.app.ly.error=Some(crate::lyrics::FetchError::NotFound),
+            _=>h.app.ly.error=Some(crate::music::lyrics::FetchError::NotFound),
         }
         if name=="no-cover" {h.media.artwork=None;}
         let mut raster=crate::preview_raster::Raster::new(1280,540);
@@ -700,10 +700,10 @@ fn music_lyrics_keep_syncing_when_only_the_collapsed_lyrics_are_enabled() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.opts.fetch_lyrics=true;h.app.show_lyrics=false;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
     let (tx,rx)=std::sync::mpsc::channel();
     h.app.ly.key="Track|Artist|120".into();h.app.ly.loading=true;h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"),false))).unwrap();
+    tx.send(Ok((crate::music::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"),false))).unwrap();
     h.frame(vec![]);
     assert!(!h.app.ly.loading);
     assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"));
@@ -716,8 +716,8 @@ fn music_lyrics_respect_the_switch_and_do_not_show_stale_or_unsynced_lines() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]当前歌词"));
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.region.height()>30.0,"主动开启岛上歌词后应可在收起状态阅读");
     h.app.settings.island_lyrics=false;
@@ -726,7 +726,7 @@ fn music_lyrics_respect_the_switch_and_do_not_show_stale_or_unsynced_lines() {
     h.app.settings.island_lyrics=true;
     h.media.title="Another track".into();h.frame(vec![]);
     assert!(h.app.island_lyric().is_none(),"换歌后不能显示上一首的歌词");
-    h.app.set_lyrics("Another track","Artist",120.0,crate::lyrics::from_plain("没有时间戳的歌词"));h.frame(vec![]);
+    h.app.set_lyrics("Another track","Artist",120.0,crate::music::lyrics::from_plain("没有时间戳的歌词"));h.frame(vec![]);
     assert!(h.app.island_lyric().is_none(),"不能将纯文本歌词伪装成当前句");
 }
 
@@ -740,9 +740,9 @@ fn quiet_water_hours_cover_overnight(){
 fn starting_timer_keeps_lyrics_album_and_mascot_with_a_compact_countdown(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.island_lyrics=true;h.app.settings.pet=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,
         artwork:Some(std::sync::Arc::new(egui::ColorImage::new([32,32],egui::Color32::from_rgb(70,120,220)))),..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]晚风吹过了山岗\n[00:15]下一句"));
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]晚风吹过了山岗\n[00:15]下一句"));
     for _ in 0..120 {h.frame(vec![]);}
     for phase in [crate::island::Phase::Focus,crate::island::Phase::Rest] {
         h.app.pomo.phase=phase;h.app.pomo.remaining=h.app.phase_secs(phase);h.app.pomo.running=true;
@@ -767,8 +767,8 @@ fn lyric_app_notification_respects_preview_and_restores_current_lyrics(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for preview in [false,true]{
         let mut h=H::new();h.app.settings.island_lyrics=true;h.app.settings.read_notifications=true;h.app.settings.notification_preview=preview;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]首句歌词\n[00:20]后续歌词"));
+        h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]首句歌词\n[00:20]后续歌词"));
         for _ in 0..60{h.frame(vec![]);}
         h.app.receive_notification("测试消息".into(),"notice.test".into(),"下午一起开会".into());
         h.frame(vec![]);let at=h.app.notice.as_ref().unwrap().at;
@@ -802,7 +802,7 @@ fn full_notifications_return_when_island_lyrics_are_not_visible(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for (lyrics,music) in [(false,false),(false,true),(true,false)]{
         let mut h=H::new();h.app.settings.pet=true;h.app.settings.island_lyrics=lyrics;
-        if music {h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
+        if music {h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
         for _ in 0..90{h.frame(vec![]);}h.app.alert("大写锁定","已开启",5,false);for _ in 0..60{h.frame(vec![]);}
         for label in ["大写锁定","已开启"]{assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==label&&t.opacity_factor>0.9&&s.clip_rect.contains(t.visual_bounding_rect().center()))),"非岛上歌词状态应直接显示通知文案：{label}");}
         assert!((h.app.current_width()-crate::island::HUD_W-44.0).abs()<1.0,"完整提示保留吉祥物与文案的宽度");
@@ -814,8 +814,8 @@ fn lyric_notifications_extend_right_and_keep_the_lyrics_in_place(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let text=|h:&H,label:&str|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==label&&t.opacity_factor>0.9&&s.clip_rect.contains(t.visual_bounding_rect().center())=>Some(t.visual_bounding_rect()),_=>None}).unwrap_or_else(||panic!("应保留可见内容：{label}"));
         let mut h=H::new();h.app.settings.pet=true;h.app.settings.island_lyrics=true;h.power=(Some(75),false);
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+        h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
         for _ in 0..90{h.frame(vec![]);}
         let label="晚风吹过了山岗";let original=text(&h,label);let right=WIN_W/2.0+h.app.current_width()/2.0;
         h.app.alert("大写锁定","已开启",5,false);
@@ -829,8 +829,8 @@ fn lyric_notifications_extend_right_and_keep_the_lyrics_in_place(){
 #[test]
 fn an_open_page_and_lyrics_can_coexist_with_notifications_and_the_bell(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
     for _ in 0..90{h.frame(vec![]);}
     h.app.notification_apps.items.push(("mail.test".into(),"邮件".into(),true));h.app.settings.read_notifications=true;h.app.receive_notification("邮件".into(),"mail.test".into(),"收到新邮件".into());h.frame(vec![]);
     assert!(h.app.island_lyric().is_some(),"通知铃铛不能关闭岛上歌词");
@@ -1167,8 +1167,8 @@ fn meeting_long_titles_scroll_to_the_end_while_short_titles_stay_still(){
 fn calendar_notice_overrides_island_lyrics_and_restores_the_current_line(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.pet=false;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:180.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",180.0,crate::lyrics::parse_lrc("[00:00]首句歌词\n[00:20]后续歌词"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:180.0,..Default::default()};
+    h.app.set_lyrics("Track","Artist",180.0,crate::music::lyrics::parse_lrc("[00:00]首句歌词\n[00:20]后续歌词"));
     for _ in 0..60{h.frame(vec![]);}
     assert!(h.app.compact_notices());
     h.app.meeting_alert(crate::mail::Meeting{ all_day:false,title:"优先会议".into(),start:chrono::Local::now().timestamp()+600,end:None,at:String::new(),uid:"priority".into()},"飞书".into(),7);

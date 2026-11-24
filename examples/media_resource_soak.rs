@@ -2,11 +2,11 @@
 #[cfg(windows)]
 fn main(){
     use std::{time::{Duration,Instant},collections::HashSet,sync::atomic::Ordering};
-    use daozai::{support::resources,smtc};
+    use daozai::{support::resources,music};
     let seconds=std::env::args().nth(1).map(|s|s.parse().unwrap()).unwrap_or(180);
     let directory=std::env::temp_dir().join(format!("daozai-media-resources-{}",std::process::id()));
     let monitor=resources::Monitor::start(directory.clone()).unwrap();
-    let state=smtc::shared();let poller=smtc::spawn_poller(state.clone(),Default::default());
+    let state=music::shared();let poller=music::spawn_poller(state.clone(),Default::default());
     let start=Instant::now();let mut next=0;let mut tracks=HashSet::new();let mut covers=0;
     while start.elapsed()<Duration::from_secs(seconds){
         let elapsed=start.elapsed().as_secs();poller.store(elapsed%20<18,Ordering::Relaxed);

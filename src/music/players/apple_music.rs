@@ -1,9 +1,9 @@
 //! Apple Music 系统会话中的歌手与专辑字段。
-pub(super) fn is_source(source:&str)->bool{
+pub(crate) fn is_source(source:&str)->bool{
     source.eq_ignore_ascii_case("AppleMusic.exe") || source.eq_ignore_ascii_case("AppleInc.AppleMusicWin_nzyj5cx40ttqa!App")
 }
 
-pub(super) fn metadata(artist:String,album:String)->(String,String){
+pub(crate) fn metadata(artist:String,album:String)->(String,String){
     if let Some((singer,record))=artist.split_once(" — "){
         let (singer,record)=(singer.trim(),record.trim());
         if !singer.is_empty() && !record.is_empty(){

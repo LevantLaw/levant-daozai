@@ -64,7 +64,7 @@ fn resident_quota_moves_left_and_releases_battery_space(){
 #[test]
 fn resident_quotas_coexist_with_music_and_focus(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_quota=false;h.app.settings.tray_focus=false;h.quota_accounts(3);
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     h.app.pomo.running=true;h.app.pomo.remaining=600.0;
     for _ in 0..90 {h.frame(vec![]);}
     assert_eq!(h.quota_centers().len(),3,"播放和专注状态不应挤掉常驻额度");

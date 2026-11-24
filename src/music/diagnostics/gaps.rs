@@ -1,7 +1,7 @@
 //! 音乐识别缺口记录：一首歌播放一段时间后，歌手、时长、封面、类型等仍缺哪一样，就在
 //! `diagnostics/music-gaps.log` 记一行（每首歌最多一行，信息齐全的歌不记）。
 //! 用户反馈「没封面」「没歌词」时，诊断包里能直接看出是哪一层缺了：播放器没给，还是我们没补上。
-use super::{MediaKind,NowPlaying};
+use crate::music::playback::{MediaKind,NowPlaying};
 use std::time::{Duration,Instant};
 
 /// 等这么久再判断：系统缩略图、本机补全和在线补全都是异步的，刚换歌时缺东西是正常的。
@@ -53,9 +53,9 @@ impl Tracker {
 /// 写一行缺口记录，附上播放器版本（同一首歌只会写一次，读版本的开销可以忽略）。
 pub(crate) fn record(line:&str,source:&str) {
     if cfg!(test){return;}
-    let version=super::music_log::player_exe(source).and_then(|exe|{
-        let pid=*super::player_process::pids_named(exe).first()?;
-        Some(format!(" · {exe} {}",super::music_log::file_version(&super::player_process::image_path(pid)?)))
+    let version=super::log::player_exe(source).and_then(|exe|{
+        let pid=*crate::music::playback::process::pids_named(exe).first()?;
+        Some(format!(" · {exe} {}",super::log::file_version(&crate::music::playback::process::image_path(pid)?)))
     }).unwrap_or_default();
     let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"music-gaps.log",&format!("{now} {line}{version}"));

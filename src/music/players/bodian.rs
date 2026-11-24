@@ -207,7 +207,7 @@ fn fetch_cover(url:&str)->Option<Arc<eframe::egui::ColorImage>>{
 }
 
 #[derive(Default)]
-pub(super) struct Reader {
+pub(crate) struct Reader {
     target:Option<Target>,discovered:Option<Instant>,key:Option<(String,u64)>,metadata:Option<(NowPlaying,String)>,
     playlist_cursor:usize,lookup:Option<Instant>,cover:super::netease_playback::CoverCache,
 }
@@ -231,7 +231,7 @@ impl Reader {
     }
 }
 
-pub(super) fn control(command:super::Transport)->bool{
+pub(crate) fn control(command:super::Transport)->bool{
     use windows::{core::w,Win32::{Foundation::{LPARAM,WPARAM},UI::WindowsAndMessaging::{FindWindowW,GetWindowThreadProcessId,SendMessageTimeoutW,SMTO_ABORTIFHUNG,SMTO_ERRORONEXIT,WM_HOTKEY}}};
     let id=match command{super::Transport::Toggle=>1,super::Transport::Next=>3,super::Transport::Prev=>4,_=>return false};
     (||->Option<()> {
@@ -257,20 +257,20 @@ pub(super) fn control(command:super::Transport)->bool{
     })().is_some()
 }
 
-fn decode_lyrics(bytes:&[u8])->Option<crate::lyrics::Lyrics>{
+fn decode_lyrics(bytes:&[u8])->Option<crate::music::lyrics::Lyrics>{
     if bytes.len()>1024*1024{return None;}
     let raw=std::str::from_utf8(bytes).ok()?;let key=b"BD1BYDH79nXZ";
     let decoded=String::from_utf16(&raw.encode_utf16().enumerate().map(|(i,c)|c^key[i%key.len()] as u16).collect::<Vec<_>>()).ok()?;
     if !decoded.starts_with("[kuwo:"){return None;}
     static WORD:std::sync::OnceLock<regex::Regex>=std::sync::OnceLock::new();
     let clean=WORD.get_or_init(||regex::Regex::new(r"<\d+,-?\d+>").unwrap()).replace_all(&decoded,"");
-    let mut lyrics=crate::lyrics::parse_lrc(&clean);
+    let mut lyrics=crate::music::lyrics::parse_lrc(&clean);
     let offset=decoded.lines().find_map(|line|line.strip_prefix("[offset:")?.strip_suffix(']')?.parse::<f32>().ok()).unwrap_or(0.0);
     if !offset.is_finite() || offset.abs()>86400000.0{return None;}
     for line in &mut lyrics.lines{line.t=(line.t+offset/1000.0).max(0.0);}
     lyrics.synced.then_some(lyrics)
 }
-pub(crate) fn read_lyrics(id:u64)->Option<crate::lyrics::Lyrics>{
+pub(crate) fn read_lyrics(id:u64)->Option<crate::music::lyrics::Lyrics>{
     if id==0{return None;}
     let file=std::fs::File::open(data_root()?.join("cache/lyric").join(format!("{id}.lrc"))).ok()?;
     if file.metadata().ok()?.len()>1024*1024{return None;}

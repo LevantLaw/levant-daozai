@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, Color32, Pos2};
 use daozai::island::{self, App, Cmd, Env, Options};
-use daozai::smtc;
+use daozai::music;
 #[cfg(windows)]
 use daozai::messenger::{self,OpenError,TaskbarEvent};
 use daozai::support::poll_clock::PollClock;
@@ -19,14 +19,14 @@ struct Shell {
     /// 兼容渲染上一次请求读回画面的时刻（无输入的持续动画按约 30 帧/秒读回）。
     #[cfg(windows)]
     readback_at: Option<Instant>,
-    media: smtc::Shared,
+    media: music::Shared,
     seek_rx: Option<(&'static str,std::sync::mpsc::Receiver<bool>)>,
-    media_control:Option<smtc::ControlWorker>,
+    media_control:Option<music::ControlWorker>,
     music_volume_rx:Option<(String,std::sync::mpsc::Receiver<bool>)>,
     _resource_monitor:Option<daozai::support::resources::Monitor>,
     resource_at:PollClock,
     guard_notified:bool,
-    media_enabled: smtc::Poller,
+    media_enabled: music::Poller,
     /// 刚点过播放控制或音量时，短时间内按最快频率采样，让按钮状态及时回显。
     media_fast_until: Option<Instant>,
     placed: bool,
@@ -154,8 +154,8 @@ impl Shell {
         #[cfg(feature="record")]
         if let Ok(mode)=std::env::var("DAOZAI_QUOTA_DEMO"){app.quota_demo(&mode);}
         startup::report::startup("初始化媒体和托盘");
-        let media = smtc::shared();
-        let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
+        let media = music::shared();
+        let media_enabled=music::spawn_poller(media.clone(),cc.egui_ctx.clone());
         media_enabled.store(app.settings.visible_pages[0],std::sync::atomic::Ordering::Relaxed);
         #[cfg(windows)]
         let autostart = daozai::os::tray::autostart_enabled();
@@ -365,7 +365,7 @@ impl eframe::App for Shell {
         }
         self.media_enabled.store(self.app.settings.visible_pages[0] && !guarded,std::sync::atomic::Ordering::Relaxed);
         if self.media_fast_until.is_some_and(|until|Instant::now()>=until){self.media_fast_until=None;}
-        self.media_enabled.set_interval(if self.media_fast_until.is_some(){smtc::POLL_FAST}else{self.app.media_poll_interval()});
+        self.media_enabled.set_interval(if self.media_fast_until.is_some(){music::POLL_FAST}else{self.app.media_poll_interval()});
         // 设置里改了岛体大小：下一帧起主窗口按新倍率栅格化，定位逻辑随像素比变化同步调整画布。
         #[cfg(windows)] eframe::set_root_viewport_scale(self.app.settings.island_scale());
         #[cfg(windows)]
@@ -668,20 +668,20 @@ impl eframe::App for Shell {
         for cmd in out.cmds {
             match cmd {
                 Cmd::Media(t) => {
-                    self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(smtc::POLL_FAST);
+                    self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(music::POLL_FAST);
                     let source=self.media.lock().map(|media|media.source.clone()).unwrap_or_default();
                     let message=if source.eq_ignore_ascii_case("cloudmusic.exe"){"网易云暂未适配进度跳转，请在客户端调整"}
                         else if source.eq_ignore_ascii_case("bodian_pc.exe"){"波点音乐暂未适配进度跳转，请在客户端调整"}
                         else if source.eq_ignore_ascii_case("kwmusic.exe"){"酷我音乐暂未适配进度跳转，请在客户端调整"}
                         else{"播放器未完成跳转，请打开客户端后重试"};
-                    if self.media_control.is_none(){self.media_control=smtc::ControlWorker::start(ctx.clone());}
+                    if self.media_control.is_none(){self.media_control=music::ControlWorker::start(ctx.clone());}
                     match self.media_control.as_ref().ok_or(()).and_then(|worker|worker.submit(t,source)){
                         Ok(Some(rx))=>self.seek_rx=Some((message,rx)),Ok(None)=>{},Err(())=>self.app.say("播放器正在响应，请稍后重试"),
                     }
                 }
                 Cmd::MusicVolume(command,source)=>{
-                    self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(smtc::POLL_FAST);
-                    if self.media_control.is_none(){self.media_control=smtc::ControlWorker::start(ctx.clone());}
+                    self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(music::POLL_FAST);
+                    if self.media_control.is_none(){self.media_control=music::ControlWorker::start(ctx.clone());}
                     match self.media_control.as_ref().ok_or(()).and_then(|worker|worker.submit(command,source.clone())){
                         Ok(Some(rx))=>self.music_volume_rx=Some((source,rx)),
                         _=>self.app.say("音乐应用音量暂不可调，请稍后重试"),

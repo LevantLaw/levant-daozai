@@ -69,8 +69,8 @@ mod platform {
     }};
 
     fn matches(pid:u32,source:&str)->bool {
-        if source.eq_ignore_ascii_case("kwmusic.exe") && crate::smtc::player_process::image_is(pid,"KwService.exe"){return crate::smtc::kuwo::is_service(pid);}
-        if let Some(exe)=super::executable(source){return crate::smtc::player_process::image_is(pid,&exe);}
+        if source.eq_ignore_ascii_case("kwmusic.exe") && crate::music::playback::process::image_is(pid,"KwService.exe"){return crate::music::players::kuwo::is_service(pid);}
+        if let Some(exe)=super::executable(source){return crate::music::playback::process::image_is(pid,&exe);}
         if pid==0 || !source.contains('!'){return false;}
         unsafe {
             let Ok(process)=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,false,pid) else{return false;};

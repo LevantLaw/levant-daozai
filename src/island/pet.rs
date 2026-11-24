@@ -123,7 +123,7 @@ mod tests {
             for frame in 0..32 {
                 let t=sequence as f64/10.0;sequence+=1;
                 let env=Env{t,clock:"09:41:00".into(),today:"2026-11-07".into(),date:"11月7日 周六".into(),idle_seconds:Some(0.0),
-                    media:crate::smtc::NowPlaying{title:"晚风与星光".into(),artist:"示例歌手".into(),playing:true,duration:240.0,..Default::default()},..Default::default()};
+                    media:crate::music::NowPlaying{title:"晚风与星光".into(),artist:"示例歌手".into(),playing:true,duration:240.0,..Default::default()},..Default::default()};
                 let input=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
                     viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
                 let output=ctx.run(input,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{app.frame(ui,ui.max_rect(),&env);});});

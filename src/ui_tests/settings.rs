@@ -290,7 +290,7 @@ fn battery_module_can_disable_only_the_power_warning() {
 fn mascot_stays_beside_the_clock_and_all_resident_components(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.pet=false;h.app.settings.tray_quota=false;h.app.settings.tray_focus=false;h.power=(Some(80),true);h.quota_accounts(5);
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     h.app.pomo.running=true;h.app.pomo.remaining=1200.0;
     for _ in 0..120 {h.frame(vec![]);}let width=h.app.current_width();
     h.app.settings.pet=true;for _ in 0..120 {h.frame(vec![]);}
@@ -965,7 +965,7 @@ fn skin_gallery(){
     for (skin,shape) in crate::model::Skin::ALL.into_iter().flat_map(|s|crate::model::IslandShape::ALL.map(|p|(s,p))) {
         for open in [false,true] {
             let mut h=H::new();h.app.settings.skin=skin;h.app.settings.island_shape=shape;h.app.settings.pet=true;h.app.opts.pet_idle=0.0;
-            h.media=crate::smtc::NowPlaying{title:"Paper Boats".into(),artist:"The Lanterns".into(),position:64.0,duration:201.0,playing:true,..Default::default()};
+            h.media=crate::music::NowPlaying{title:"Paper Boats".into(),artist:"The Lanterns".into(),position:64.0,duration:201.0,playing:true,..Default::default()};
             let mut raster=crate::preview_raster::Raster::new(w,hgt);
             for frame in 0..120 {
                 let t=frame as f64/60.0;
@@ -1077,7 +1077,7 @@ fn skin_gallery_pages(){
             h.quota_accounts(2);
             h.app.todos.items.push(crate::model::TodoItem{text:"整理岛仔皮肤反馈".into(),done_on:None,due:Some("2026-11-05 10:00".into()),reminded:false,..Default::default()});
             h.app.todos.items.push(crate::model::TodoItem{text:"已完成的事项".into(),done_on:Some("2026-11-04".into()),due:None,reminded:false,..Default::default()});
-            h.media=crate::smtc::NowPlaying{title:"Paper Boats".into(),artist:"The Lanterns".into(),position:64.0,duration:201.0,playing:true,..Default::default()};
+            h.media=crate::music::NowPlaying{title:"Paper Boats".into(),artist:"The Lanterns".into(),position:64.0,duration:201.0,playing:true,..Default::default()};
             let (w,hgt)=((crate::island::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize);
             let mut raster=crate::preview_raster::Raster::new(w,hgt);
             for frame in 0..140 {
@@ -1240,7 +1240,7 @@ fn tray_members_show_together_in_the_dragged_order(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_music=true;
     h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:9.0,code:0,day:true,..Default::default()});
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track A".into(),artist:"Artist".into(),playing:true,..Default::default()};
+    h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"Track A".into(),artist:"Artist".into(),playing:true,..Default::default()};
     for _ in 0..20{h.frame(vec![]);}
     // 同一轮刷新里天气和音乐都变化，两个事件同时进入显示窗口。
     h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:10.0,code:0,day:true,..Default::default()});

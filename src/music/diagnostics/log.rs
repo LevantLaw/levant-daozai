@@ -12,7 +12,7 @@ pub(crate) fn player_exe(source:&str)->Option<&'static str> {
         "spotify"|"spotify.exe"=>"Spotify.exe",
         "kwmusic.exe"=>"kwmusic.exe",
         "bodian_pc.exe"=>"bodian_pc.exe",
-        _ if super::apple_music::is_source(source)=>"AppleMusic.exe",
+        _ if crate::music::players::apple_music::is_source(source)=>"AppleMusic.exe",
         _=>return None,
     })
 }
@@ -64,8 +64,8 @@ pub(crate) fn player(source:&str) {
         source.clone_into(&mut last);
     }
     let Some(exe)=player_exe(source) else{return;};
-    for pid in super::player_process::pids_named(exe) {
-        let Some(path)=super::player_process::image_path(pid) else{continue;};
+    for pid in crate::music::playback::process::pids_named(exe) {
+        let Some(path)=crate::music::playback::process::image_path(pid) else{continue;};
         let version=file_version(&path);
         if changed(&format!("播放器 · {exe} pid{pid}"),&version) {
             write(&format!("播放器 · {source} → {exe} 版本{version}"));

@@ -98,7 +98,7 @@ fn health_notice_body_and_lyrics_badge_confirm_without_recording_water(){
         let mut h=H::new();h.frame(vec![]);
         if lyrics {
             h.app.settings.island_lyrics=true;
-            h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"测试歌曲".into(),artist:"歌手".into(),playing:true,duration:200.0,..Default::default()};
+            h.media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:"测试歌曲".into(),artist:"歌手".into(),playing:true,duration:200.0,..Default::default()};
         }
         h.app.alert("喝水时间到了","喝点水吧",2,false);for _ in 0..60{h.frame(vec![]);}
         if lyrics{h.click_notice_badge();}else{h.click_text("喝水时间到了");}

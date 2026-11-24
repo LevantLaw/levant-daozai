@@ -1,11 +1,11 @@
 //! 换歌与歌曲信息补全时的歌词状态：不串歌、不闪烁、不叠加网络线程。
 use super::*;
-use crate::smtc::NowPlaying;
+use crate::music::NowPlaying;
 
 fn song(source:&str,title:&str,artist:&str,duration:f64)->NowPlaying{
     // 播放器上报为音乐：歌手暂时为空时仍按歌曲处理（与真实客户端一致）。
     NowPlaying{source:source.into(),title:title.into(),artist:artist.into(),duration,playing:true,position:7.0,
-        playback_type:crate::smtc::MediaKind::Music,..Default::default()}
+        playback_type:crate::music::MediaKind::Music,..Default::default()}
 }
 
 fn lyrics_on(h:&mut H){h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;h.app.show_lyrics=true;}
@@ -27,7 +27,7 @@ fn showing(h:&mut H,media:&NowPlaying,lrc:&str){
     h.app.ly=crate::island::LyricsState{
         key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
         song:Some(crate::island::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:media.song_id}),
-        lyrics:Some(crate::lyrics::parse_lrc(lrc)),..Default::default()
+        lyrics:Some(crate::music::lyrics::parse_lrc(lrc)),..Default::default()
     };
     h.frame(vec![]);
 }
@@ -44,7 +44,7 @@ fn switching_songs_clears_old_lyrics_immediately_even_while_a_request_is_running
     assert!(h.app.island_lyric().is_none());
     assert!(h.app.ly.loading,"新歌应立即显示查找状态，不等旧请求结束");
     assert!(h.app.ly.key.starts_with("新歌|"));
-    assert!(late.send(Ok((crate::lyrics::parse_lrc("[00:01]迟到的旧歌词"),false))).is_err(),"上一首迟到的结果必须丢弃");
+    assert!(late.send(Ok((crate::music::lyrics::parse_lrc("[00:01]迟到的旧歌词"),false))).is_err(),"上一首迟到的结果必须丢弃");
     assert!(h.app.ly.pending.is_some() && h.app.ly.rx.is_none(),"在线查询排队，等旧请求结束");
     assert_eq!(h.app.ly_worker.as_ref().unwrap().thread().id(),id,"旧请求未结束时不得另开取词线程");
     finish(&mut h,release);
@@ -106,7 +106,7 @@ fn native_lyrics_polling_starts_on_switch_without_waiting_for_the_old_request(){
         assert!(h.app.ly.pending.is_some() && h.app.ly.rx.is_none(),"{source}：在线查询仍排队等待旧请求");
         // 本机歌词先到：排队的在线查询取消，不再联网。
         let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
-        native.send(Some(crate::lyrics::parse_lrc("[00:01]本机歌词"))).unwrap();h.frame(vec![]);
+        native.send(Some(crate::music::lyrics::parse_lrc("[00:01]本机歌词"))).unwrap();h.frame(vec![]);
         assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].text,"本机歌词");
         assert!(!h.app.ly.loading && h.app.ly.pending.is_none(),"{source}：本机歌词到达后取消排队的在线查询");
         finish(&mut h,release);

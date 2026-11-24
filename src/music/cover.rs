@@ -1,6 +1,6 @@
 //! 封面兜底：播放器没给封面（系统缩略图缺失、电台 / FM 等模式）时，按歌名和歌手在线找一张。
 //! 与播放器、播放模式无关；只在等过一会儿仍没有封面时才请求，每首歌最多请求两次。
-use super::NowPlaying;
+use super::playback::NowPlaying;
 use eframe::egui::ColorImage;
 use std::{sync::{mpsc,Arc},time::{Duration,Instant}};
 
@@ -55,9 +55,9 @@ pub(crate) fn pick(songs:&[serde_json::Value],title:&str,artist:&str,duration:f6
         let singers=song.get("ar").or_else(||song.get("artists"))?.as_array()?.iter().filter_map(|a|a.get("name")?.as_str()).collect::<Vec<_>>().join("/");
         let length=song.get("dt").or_else(||song.get("duration")).and_then(|v|v.as_f64()).unwrap_or_default()/1000.0;
         let matched=if artist.trim().is_empty() {
-            duration>0.0 && (length-duration).abs()<=3.0 && crate::lyrics::same_song(title,"",name,"")
+            duration>0.0 && (length-duration).abs()<=3.0 && crate::music::lyrics::same_song(title,"",name,"")
         } else {
-            crate::lyrics::same_song(title,artist,name,&singers)
+            crate::music::lyrics::same_song(title,artist,name,&singers)
                 && (duration<=0.0 || length<=0.0 || (length-duration).abs()<=(duration*0.03).max(10.0))
         };
         if !matched {return None;}
@@ -80,13 +80,13 @@ fn search(title:String,artist:String,duration:f64)->Found {
     if value.get("code").and_then(|v|v.as_i64())!=Some(200){return None;}
     let cover=pick(value.pointer("/result/songs")?.as_array()?,&title,&artist,duration)?;
     // 只接受网易云图片域名，按 256 缩略图下载，复用现有的大小与尺寸上限。
-    super::netease_playback::fetch_cover(&cover)
+    super::players::netease_playback::fetch_cover(&cover)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::smtc::MediaKind;
+    use crate::music::MediaKind;
     fn songs()->Vec<serde_json::Value>{serde_json::from_value(serde_json::json!([
         {"name":"遥远的她 (Live)","ar":[{"name":"张学友"}],"dt":300000,"al":{"picUrl":"https://p2.music.126.net/live.jpg"}},
         {"name":"遥远的她","ar":[{"name":"张学友"}],"dt":253000,"al":{"picUrl":"https://p2.music.126.net/studio.jpg"}},
@@ -118,6 +118,7 @@ mod tests {
     }
     #[test]
     fn search_waits_then_runs_once_in_background_and_follows_the_song(){
+        let _serial=crate::support::test_support::serial();
         let start=Instant::now();let mut cache=CoverSearch::default();
         let media=NowPlaying{title:"晴天".into(),artist:"周杰伦".into(),playback_type:MediaKind::Music,..Default::default()};
         let calls=Arc::new(std::sync::atomic::AtomicUsize::new(0));

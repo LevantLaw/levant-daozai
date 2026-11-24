@@ -96,7 +96,7 @@ fn expanded_status_row_compresses_gaps_before_shrinking_icons(){
     h.app.settings.tray_calendar=false;
     h.app.settings.tray_music=false;
     h.power=(Some(80),true);
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     h.app.pomo.running=true;h.app.pomo.remaining=600.0;
     h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:-12.0,..Default::default()});
     add_unread_mail(&mut h);

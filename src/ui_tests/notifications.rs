@@ -246,8 +246,8 @@ fn closing_app_notification_keeps_queued_messages_and_the_resident_bell(){
     for lyrics in [false,true]{
         let mut h=H::new();h.app.settings.island_lyrics=lyrics;h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
         if lyrics {
-            h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-            h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
+            h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
+            h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
         }
         for _ in 0..60{h.frame(vec![]);}
         h.app.receive_notification("测试消息".into(),"notice.test".into(),"第一条消息".into());
@@ -293,8 +293,8 @@ fn notice_mode_layout_gallery(){
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_NOTICE_MODES_PREVIEW").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     for lyrics in [false,true]{
         let mut h=H::new();h.app.settings.pet=true;h.app.settings.island_lyrics=lyrics;h.app.pomo.running=lyrics;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
+        h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
         let mut raster=crate::preview_raster::Raster::new(1920,405);
         for frame in 0..120{
             let t=frame as f64/60.0;if frame==30{h.app.alert("大写锁定","已开启",5,false);}
@@ -319,8 +319,8 @@ fn right_notice_preview(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_RIGHT_NOTICE_PREVIEW").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     h.app.settings.pet=true;h.app.settings.island_lyrics=true;h.app.pomo.running=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
     let mut video=std::process::Command::new(std::env::var_os("DAOZAI_FFMPEG").unwrap_or_else(||"ffmpeg".into())).args(["-y","-loglevel","error","-f","rawvideo","-pix_fmt","rgba","-s","1920x405","-r","30","-i","-","-vf","crop=1440:210:105:0","-c:v","libx264","-crf","19","-pix_fmt","yuv420p"]).arg(dest.join("右侧通知演示.mp4")).stdin(std::process::Stdio::piped()).spawn().unwrap();
     let mut pipe=video.stdin.take().unwrap();let mut raster=crate::preview_raster::Raster::new(1920,405);
     for frame in 0..420{
@@ -453,8 +453,8 @@ fn compact_canvas_preserves_panel_and_notice_pixels(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(width:f32,page:Option<usize>,notice:bool)->Vec<u8>{
         let mut h=H::new();h.app.settings.island_lyrics=true;
-        let media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+        let media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
         if let Some(page)=page{h.app.show_page(page);}
         let mut raster=crate::preview_raster::Raster::new(1280,270);
         let mut rgba=Vec::new();
@@ -576,8 +576,8 @@ fn compact_font_atlas_preserves_panel_and_notice_pixels(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(texture_side:usize,page:Option<usize>,notice:bool)->Vec<u8>{
         let mut h=H::new();h.app.settings.island_lyrics=true;
-        let media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+        let media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+        h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
         if let Some(page)=page{h.app.show_page(page);}
         let mut raster=crate::preview_raster::Raster::new(1280,270);
         let mut rgba=Vec::new();

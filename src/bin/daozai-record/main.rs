@@ -8,8 +8,8 @@ mod raster;
 
 use eframe::egui::{self, Color32, Event, Pos2, Rect, Shape, Stroke, Vec2};
 use daozai::island::{App, Cmd, Env, FrameOut, Options, WIN_H, WIN_W};
-use daozai::lyrics;
-use daozai::smtc::{NowPlaying, Transport};
+use daozai::music::lyrics;
+use daozai::music::{NowPlaying, Transport};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

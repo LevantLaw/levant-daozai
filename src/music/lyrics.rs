@@ -216,12 +216,12 @@ pub fn fetch_for_display_with(source:&str,track:&str,artist:&str,duration:f64,so
         }
         #[cfg(windows)]
         if source.eq_ignore_ascii_case("bodian_pc.exe") {
-            if let Some(lyrics)=song_id.and_then(crate::smtc::bodian::read_lyrics){trace(||"波点本地:命中".into());return Ok((lyrics,false));}
+            if let Some(lyrics)=song_id.and_then(super::players::bodian::read_lyrics){trace(||"波点本地:命中".into());return Ok((lyrics,false));}
             return cached.map(Ok).unwrap_or_else(||fetch(track,artist,duration)).map(|lyrics|(lyrics,true));
         }
         #[cfg(windows)]
         if source.eq_ignore_ascii_case("kwmusic.exe") {
-            if let Some(lyrics)=crate::smtc::kuwo::read_lyrics(track,artist){trace(||"酷我本地:命中".into());return Ok((lyrics,false));}
+            if let Some(lyrics)=super::players::kuwo::read_lyrics(track,artist){trace(||"酷我本地:命中".into());return Ok((lyrics,false));}
             return cached.map(Ok).unwrap_or_else(||fetch(track,artist,duration)).map(|lyrics|(lyrics,true));
         }
         fetch_for_source(source,track,artist,duration,song_id).map(|lyrics|(lyrics,false))
@@ -240,11 +240,11 @@ pub fn fetch_for_display_with(source:&str,track:&str,artist:&str,duration:f64,so
 pub fn fetch_for_source(source:&str,track:&str,artist:&str,duration:f64,song_id:Option<u64>)->Result<Lyrics,FetchError> {
     #[cfg(windows)]
     if source.eq_ignore_ascii_case("kwmusic.exe") {
-        if let Some(lyrics)=crate::smtc::kuwo::read_lyrics(track,artist){trace(||"酷我本地:命中".into());return Ok(lyrics);}
+        if let Some(lyrics)=super::players::kuwo::read_lyrics(track,artist){trace(||"酷我本地:命中".into());return Ok(lyrics);}
     }
     #[cfg(windows)]
     if source.eq_ignore_ascii_case("bodian_pc.exe") {
-        if let Some(lyrics)=song_id.and_then(crate::smtc::bodian::read_lyrics){trace(||"波点本地:命中".into());return Ok(lyrics);}
+        if let Some(lyrics)=song_id.and_then(super::players::bodian::read_lyrics){trace(||"波点本地:命中".into());return Ok(lyrics);}
     }
     if source.to_ascii_lowercase().contains("qqmusic") {
         let common=cache_path(track,artist,duration);

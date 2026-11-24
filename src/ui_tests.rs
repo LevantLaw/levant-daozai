@@ -76,7 +76,7 @@ struct H {
     page_transition:bool,
     shapes:Vec<egui::epaint::ClippedShape>,
     bt: Vec<crate::os::bt::Device>,
-    media: crate::smtc::NowPlaying,
+    media: crate::music::NowPlaying,
     power: (Option<u8>, bool),
     network: Option<bool>,
     system_idle: Option<f64>,

@@ -154,7 +154,7 @@ fn wake_route(source:Messenger,visible:bool,iconic:bool)->WakeRoute {
 
 /// 启动提醒窗口所属进程自己的程序（单实例：不会多开，飞书把已有主窗口显示出来），再等窗口出现。
 unsafe fn relaunch(window:HWND,pid:u32,paths:&[String])->Result<(),OpenError>{
-    let Some(path)=crate::smtc::player_process::image_path(pid) else{wake_step("无法读取客户端程序路径");return Err(OpenError::Unavailable);};
+    let Some(path)=crate::music::playback::process::image_path(pid) else{wake_step("无法读取客户端程序路径");return Err(OpenError::Unavailable);};
     // 只启动已核实属于该客户端（安装路径或文件名加发行商签名）的程序。
     if !path_allowed(&normalized(&path),paths) {wake_step("客户端程序不在已知安装路径中");return Err(OpenError::Unavailable);}
     let directory=std::path::Path::new(&path).parent().map(std::path::Path::to_path_buf);

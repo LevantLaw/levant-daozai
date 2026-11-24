@@ -128,7 +128,7 @@ fn fetch_cover(id:&str)->Option<Arc<eframe::egui::ColorImage>>{
     if bytes.len()>2*1024*1024{return None;}super::decode_artwork(&bytes).map(Arc::new)
 }
 #[derive(Default)]
-pub(super) struct Reader {target:Option<Target>,discovered:Option<Instant>,cover:super::netease_playback::CoverCache}
+pub(crate) struct Reader {target:Option<Target>,discovered:Option<Instant>,cover:super::netease_playback::CoverCache}
 impl Reader {
     pub fn poll(&mut self)->Option<NowPlaying>{
         if self.target.is_none() && self.discovered.is_none_or(|at|at.elapsed()>=Duration::from_secs(3)) {
@@ -148,13 +148,13 @@ fn lyric_directory()->Option<PathBuf>{
     let len=unsafe{GetPrivateProfileStringW(w!("lyric").as_ptr(),w!("LrcSavePath").as_ptr(),w!("").as_ptr(),path.as_mut_ptr(),path.len() as u32,file.as_ptr())} as usize;
     (len>0 && len<path.len()-1).then(||PathBuf::from(String::from_utf16_lossy(&path[..len])))
 }
-fn parse_lyrics(bytes:&[u8])->Option<crate::lyrics::Lyrics>{
-    if bytes.len()>1024*1024{return None;}let raw=decode(bytes)?;let mut lyrics=crate::lyrics::parse_lrc(&raw);
+fn parse_lyrics(bytes:&[u8])->Option<crate::music::lyrics::Lyrics>{
+    if bytes.len()>1024*1024{return None;}let raw=decode(bytes)?;let mut lyrics=crate::music::lyrics::parse_lrc(&raw);
     let offset=raw.lines().find_map(|line|line.strip_prefix("[offset:")?.strip_suffix(']')?.parse::<i32>().ok()).unwrap_or_default() as f32/1000.0;
     for line in &mut lyrics.lines{line.t=(line.t+offset).max(0.0);}
     lyrics.synced.then_some(lyrics)
 }
-pub(crate) fn read_lyrics(title:&str,artist:&str)->Option<crate::lyrics::Lyrics>{
+pub(crate) fn read_lyrics(title:&str,artist:&str)->Option<crate::music::lyrics::Lyrics>{
     if title.is_empty() || artist.is_empty() || title.contains(['\\','/',':','*','?','"','<','>','|']) || artist.contains(['\\','/',':','*','?','"','<','>','|']){return None;}
     let file=std::fs::File::open(lyric_directory()?.join(format!("{artist}-{title}.lrc"))).ok()?;
     if file.metadata().ok()?.len()>1024*1024{return None;}
@@ -217,7 +217,7 @@ fn seek_point(rect:RECT,seconds:f64,maximum:u32,left:u32,right:u32)->Option<i32>
     let width=rect.right as f64-rect.left as f64-left as f64-right as f64;
     Some((rect.left as f64+left as f64+width*seconds/maximum as f64).round().min((rect.right-1) as f64) as i32)
 }
-pub(super) fn seek(seconds:f64)->bool{
+pub(crate) fn seek(seconds:f64)->bool{
     (||->Option<()> {
         if !seconds.is_finite() || seconds<0.0{return None;}
         let target=Target::discover()?;let service=Process::open(target.pid,"KwService.exe")?;
@@ -240,7 +240,7 @@ pub(super) fn seek(seconds:f64)->bool{
         None
     })().is_some()
 }
-pub(super) fn control(command:super::Transport)->bool{
+pub(crate) fn control(command:super::Transport)->bool{
     let Some((window,pid))=main_window()else{return false;};
     match command{
         super::Transport::Next=>click_button(window,pid,"Next").is_some(),
@@ -315,7 +315,7 @@ mod tests {
     fn live_kuwo_pause_retains_position_and_focus(){
         use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
         let mut reader=Reader::default();let before=reader.poll().expect("未读取到酷我播放状态");assert!(before.playing);
-        assert!(crate::smtc::volume::read("kwmusic.exe").is_some(),"应读取酷我音频服务的应用音量");
+        assert!(crate::music::playback::volume::read("kwmusic.exe").is_some(),"应读取酷我音频服务的应用音量");
         let foreground=unsafe{GetForegroundWindow()};assert!(control(super::super::Transport::Toggle));
         std::thread::sleep(Duration::from_millis(600));let paused=reader.poll().unwrap();
         std::thread::sleep(Duration::from_millis(600));let later=reader.poll().unwrap();

@@ -1,33 +1,23 @@
 //! 系统媒体会话（SMTC）读取：Windows 10/11 的“正在播放”。
 //! 与原工具使用同一套 API（GlobalSystemMediaTransportControlsSessionManager）。
 
-mod apple_music;
 #[cfg(windows)]
-mod netease_timeline;
+pub(crate) mod process;
 #[cfg(windows)]
-mod netease_playback;
-#[cfg(windows)]
-pub(crate) mod bodian;
-#[cfg(windows)]
-pub(crate) mod kuwo;
-#[cfg(windows)]
-mod kugou_metadata;
-#[cfg(windows)]
-mod kugou_control;
-#[cfg(windows)]
-mod player_seek;
-#[cfg(windows)]
-pub(crate) mod player_process;
-#[cfg(windows)]
-mod music_log;
-
-#[cfg(windows)]
-mod music_gaps;
-
-#[cfg(windows)]
-mod cover_search;
-
+pub(crate) mod seek;
 pub(crate) mod volume;
+
+use super::players::apple_music;
+#[cfg(windows)]
+use super::cover as cover_search;
+#[cfg(windows)]
+use super::diagnostics::{gaps as music_gaps, log as music_log};
+#[cfg(windows)]
+use super::players::{bodian, kugou_control, kugou_metadata, kuwo, netease_playback, netease_timeline};
+#[cfg(windows)]
+use self::process as player_process;
+#[cfg(windows)]
+use self::seek as player_seek;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -174,7 +164,7 @@ impl ArtworkCache {
     }
 }
 
-fn decode_artwork(bytes:&[u8])->Option<eframe::egui::ColorImage> {
+pub(crate) fn decode_artwork(bytes:&[u8])->Option<eframe::egui::ColorImage> {
     let decoded=(||{
         if bytes.len()>8*1024*1024{return None;}
         let mut reader=image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
@@ -253,7 +243,7 @@ fn choose_media(system:Option<NowPlaying>,native:Option<NowPlaying>)->Option<Now
         if system.source.eq_ignore_ascii_case("cloudmusic.exe") && native.source.eq_ignore_ascii_case("cloudmusic.exe"){
             // SMTC 与网易云日志的歌手分隔符、合唱署名写法不同；按规范化后的歌名与歌手集合判断，避免同一首歌丢失 song_id。
             // 系统会话常只报主艺人（如「雄之助」对「雄之助、WaMi」），署名一方包含另一方也算同一首（#202）。
-            let same=crate::lyrics::song_relation(&system.title,&system.artist,&native.title,&native.artist).is_some();
+            let same=crate::music::lyrics::song_relation(&system.title,&system.artist,&native.title,&native.artist).is_some();
             let newer=match (native.event_time_ms,system.event_time_ms){(Some(n),Some(s))=>Some(n>s),_=>None};
             let use_native=newer.unwrap_or(same && system.playing==native.playing);
             let mut media=if use_native{native.clone()}else{system.clone()};
@@ -422,8 +412,8 @@ impl ControlWorker {
     pub fn start(ctx:eframe::egui::Context)->Option<Self>{
         Self::start_with(ctx,|command,source|match command{
             Transport::Seek(seconds)=>seek(seconds,source),
-            Transport::SetVolume(percent)=>crate::smtc::volume::set_volume(source,percent),
-            Transport::SetMute(muted)=>crate::smtc::volume::set_mute(source,muted),
+            Transport::SetVolume(percent)=>volume::set_volume(source,percent),
+            Transport::SetMute(muted)=>volume::set_mute(source,muted),
             _=>{control(command,source);true}
         })
     }
@@ -458,8 +448,8 @@ impl ControlWorker {
 /// 控制当前媒体会话（播放/暂停、上一首、下一首）。
 #[cfg(windows)]
 pub fn control(cmd: Transport,source:&str) {
-    if let Transport::SetVolume(percent)=cmd {crate::smtc::volume::set_volume(source,percent);return;}
-    if let Transport::SetMute(muted)=cmd {crate::smtc::volume::set_mute(source,muted);return;}
+    if let Transport::SetVolume(percent)=cmd {volume::set_volume(source,percent);return;}
+    if let Transport::SetMute(muted)=cmd {volume::set_mute(source,muted);return;}
     if let Transport::Seek(seconds)=cmd {let _=seek(seconds,source);return;}
     if source.eq_ignore_ascii_case("bodian_pc.exe"){let _=bodian::control(cmd);return;}
     if source.eq_ignore_ascii_case("kwmusic.exe"){let _=kuwo::control(cmd);return;}
@@ -605,7 +595,7 @@ fn seek_apple(session:&windows::Media::Control::GlobalSystemMediaTransportContro
 #[cfg(not(windows))]
 pub fn seek(_seconds:f64,_source:&str)->bool {false}
 
-fn seek_arrived(current:f64,target:f64,elapsed:f64)->bool {
+pub(crate) fn seek_arrived(current:f64,target:f64,elapsed:f64)->bool {
     current.is_finite() && target.is_finite() && current>=target-3.0 && current<=target+elapsed+3.0
 }
 
@@ -656,7 +646,7 @@ fn kugou_repeated_samples_do_not_freeze_lyrics() {
     let mut media=NowPlaying{source:"KuGou.exe".into(),title:"歌曲".into(),artist:"歌手".into(),
         position:42.0,playing:true,sampled_at:Some(start),..Default::default()};
     clock.update(&mut media);
-    let lyrics=crate::lyrics::parse_lrc("[00:42.00]第一句\n[00:45.00]第二句");
+    let lyrics=crate::music::lyrics::parse_lrc("[00:42.00]第一句\n[00:45.00]第二句");
     for second in 1..=8 {
         let now=start+Duration::from_secs(second);
         media.sampled_at=Some(now);
@@ -737,7 +727,7 @@ impl MediaMemory {
             // 一路来源暂时没有 song_id（SMTC 不提供）不算换歌；两路都有且不同才是另一首。
             let same=media.source==old.source && media.title==old.title
                 && (media.song_id.is_none() || old.song_id.is_none() || media.song_id==old.song_id)
-                && (media.artist.trim().is_empty() || crate::lyrics::artist_set(&media.artist)==crate::lyrics::artist_set(&old.artist));
+                && (media.artist.trim().is_empty() || crate::music::lyrics::artist_set(&media.artist)==crate::music::lyrics::artist_set(&old.artist));
             if same && now.duration_since(*at)<=Duration::from_secs(2) {
                 if media.artist.trim().is_empty(){media.artist=old.artist.clone();}
                 if media.song_id.is_none(){media.song_id=old.song_id;}
@@ -790,7 +780,7 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
         let mut playback_clock=PlaybackClock::default();
         let mut memory=MediaMemory::default();
         let mut selected_source=String::new();
-        let mut volume=crate::smtc::volume::Reader::default();
+        let mut volume=volume::Reader::default();
         #[cfg(windows)]
         let mut netease=netease_playback::Reader::default();
         #[cfg(windows)]
@@ -1347,9 +1337,9 @@ mod tests {
                 fetched=None;
                 let (tx,rx)=std::sync::mpsc::channel();result=Some(rx);
                 let song=media.clone();
-                std::thread::spawn(move ||{let _=tx.send(crate::lyrics::fetch_for_source(&song.source,&song.title,&song.artist,song.duration,song.song_id));});
+                std::thread::spawn(move ||{let _=tx.send(crate::music::lyrics::fetch_for_source(&song.source,&song.title,&song.artist,song.duration,song.song_id));});
             }
-            let native=crate::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration);
+            let native=crate::music::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration);
             if let Some(outcome)=result.as_ref().and_then(|rx|rx.try_recv().ok()) {
                 match outcome {Ok(lyrics)=>fetched=Some(lyrics),Err(error)=>println!("取词结果：{error:?}")}
             }
@@ -1511,7 +1501,7 @@ mod tests {
                 let media=query(&mut cache).unwrap();
                 assert_eq!(media.title,first.title);
                 if (media.position-target).abs()<2.5 {
-                    let lyrics=crate::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration).unwrap();
+                    let lyrics=crate::music::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration).unwrap();
                     assert!(lyrics.synced);println!("跳转 {target:.0}s，实际 {:.2}s，歌词 {} 行",media.position,lyrics.lines.len());break;
                 }
                 assert!(start.elapsed()<Duration::from_secs(4),"酷狗未执行跳转：目标={target}，实际={}",media.position);
@@ -1526,7 +1516,7 @@ mod tests {
     fn live_kugou_repeat_retains_lyrics(){
         let _apartment=init_winrt();let mut cache=ArtworkCache::default();
         let first=query(&mut cache).unwrap();assert_eq!(first.source,"kugou");assert!(first.playing && first.duration>5.0);
-        assert!(crate::lyrics::read_native(&first.source,&first.title,&first.artist,first.duration).is_some());
+        assert!(crate::music::lyrics::read_native(&first.source,&first.title,&first.artist,first.duration).is_some());
         control(Transport::Seek(first.duration-3.0),&first.source);
         std::thread::sleep(Duration::from_millis(500));
         let mut previous=query(&mut cache).unwrap().position;
@@ -1538,7 +1528,7 @@ mod tests {
             let media=query(&mut cache).unwrap();
             assert_eq!((&media.title,&media.artist),(&first.title,&first.artist),"循环前后歌曲身份必须一致");
             assert_eq!(media.duration,first.duration);
-            let lyrics=crate::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration).expect("循环前后原生歌词不能消失");
+            let lyrics=crate::music::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration).expect("循环前后原生歌词不能消失");
             if media.position+1.0<previous {wrapped=Some(std::time::Instant::now());println!("已循环到开头：进度={}",media.position);}
             if wrapped.is_some_and(|at|at.elapsed()>Duration::from_secs(8)) {
                 println!("第二遍：进度={}，歌词={}行，当前={:?}",media.position,lyrics.lines.len(),lyrics.index_at(media.position as f32).map(|i|&lyrics.lines[i].text));break;
@@ -1562,7 +1552,7 @@ mod tests {
         };
         let position=|media:&NowPlaying|media.position+if media.playing{media.sampled_at.map_or(0.0,|at|at.elapsed().as_secs_f64())}else{0.0};
         let before=position(&first);
-        let lyrics=crate::lyrics::fetch_for_source(&first.source,&first.title,&first.artist,first.duration,first.song_id).expect("未取得歌词");
+        let lyrics=crate::music::lyrics::fetch_for_source(&first.source,&first.title,&first.artist,first.duration,first.song_id).expect("未取得歌词");
         assert!(lyrics.synced && !lyrics.lines.is_empty(),"未取得同步歌词");
         std::thread::sleep(Duration::from_secs(4));
         let next=state.lock().unwrap().clone();let after=position(&next);

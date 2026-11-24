@@ -8,14 +8,14 @@ use crate::visuals::anim::{self, lerp, smoothstep, Spring};
 use crate::island::bar_layout::{self as bar, Layout};
 use crate::calendar;
 use crate::visuals::glass;
-use crate::lyrics;
+use crate::music::lyrics;
 use crate::mail;
 use crate::model;
 pub use crate::model::{NotificationSound, BAR_H, CANVAS_W, PH, PW, WIN_H, WIN_W};
 pub use crate::visuals::glass_shape::{blur_pieces, BlurPiece, GlassShape};
 use crate::visuals::paint::{self, Card, H};
 use crate::visuals::shape;
-use crate::smtc::{NowPlaying, Transport};
+use crate::music::{NowPlaying, Transport};
 use crate::visuals::theme::{self, size, W};
 use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
 use std::collections::HashMap;
@@ -1680,9 +1680,9 @@ impl App {
 
     /// 外壳据此调整音乐采样频率：看着音乐页时最快，收起显示歌词次之，其余只需跟上歌名和播放状态。
     pub fn media_poll_interval(&self)->std::time::Duration {
-        if self.open && self.page==MUSIC_PAGE {crate::smtc::POLL_FAST}
-        else if self.island_lyrics_active() && !self.open {crate::smtc::POLL_LYRICS}
-        else {crate::smtc::POLL_BACKGROUND}
+        if self.open && self.page==MUSIC_PAGE {crate::music::POLL_FAST}
+        else if self.island_lyrics_active() && !self.open {crate::music::POLL_LYRICS}
+        else {crate::music::POLL_BACKGROUND}
     }
 
     pub(crate) fn island_lyrics_active(&self)->bool {

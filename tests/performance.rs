@@ -24,7 +24,7 @@ fn sample()->(f64,usize,usize){unsafe{
 fn background_service_sample(){
     let service=std::env::var("DAOZAI_PERF_SERVICE").unwrap_or_else(|_|"idle".into());
     let context=eframe::egui::Context::default();
-    let media=daozai::smtc::shared();
+    let media=daozai::music::shared();
     let(mut bluetooth,mut system,mut notifications)=(None,None,None);
     let mut mail=None;
     let mut mail_events=Vec::new();
@@ -32,7 +32,7 @@ fn background_service_sample(){
     let (mut quota_ok,mut quota_failed)=(0,0);
     let (mut calendar_events,mut quota_events)=(Vec::new(),Vec::new());
     match service.as_str(){
-        "media"=>{daozai::smtc::spawn_poller(media.clone(),context);},
+        "media"=>{daozai::music::spawn_poller(media.clone(),context);},
         "bluetooth"=>bluetooth=Some(daozai::os::bt::spawn()),
         "system"=>system=Some(daozai::os::system::observe(context,Default::default(),None)),
         "notifications"=>notifications=Some(daozai::os::system::connect(context,daozai::messenger::NotificationFilter::All).expect("已有通知权限")),

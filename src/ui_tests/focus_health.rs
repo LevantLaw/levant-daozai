@@ -225,8 +225,8 @@ fn browser_minimal_preserves_preferences_and_restores_after_leaving_the_browser(
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.hit.height()>20.0,"开关默认关闭时不应自动改变模式");
     h.app.settings.browser_minimal=true;h.app.settings.save();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词"));
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
+    h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]当前歌词"));
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.hit.height()<10.0,"浏览器顶部受遮挡时应收为细刘海，歌词和吉祥物不能撑大它");
     assert!(h.app.settings.pet,"自动避让不能修改吉祥物设置");
@@ -297,7 +297,7 @@ fn mascot_rest_and_focus_have_distinct_states(){
 #[test]
 fn singing_microphone_moves_relative_to_the_face_and_disappears_on_pause(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.pet=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
+    h.media=crate::music::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     for _ in 0..120 {h.frame(vec![]);}
     let head=|shapes:&[egui::epaint::ClippedShape]|shapes.iter().find_map(|s|match &s.shape {
         egui::Shape::Circle(circle) if (circle.radius-2.6).abs()<0.01=>Some(circle.center),_=>None,

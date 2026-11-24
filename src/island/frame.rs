@@ -167,7 +167,7 @@ impl App {
                 let mail_reading=inside && self.page==5 && self.mail.open_uid.is_some();
                 let mail_list=self.page==5 && !self.mail.accounts.is_empty() && self.mail.open_uid.is_none() && self.mail_list_bounds().contains(cursor);
                 let music_volume=self.page==0 && (Rect::from_min_max(Pos2::new(354.0,106.0),Pos2::new(380.0,130.0)).contains(cursor)
-                    || self.music_volume_open && crate::island::pages::MUSIC_VOLUME_RECT.contains(cursor));
+                    || self.music_volume_open && crate::music::page::MUSIC_VOLUME_RECT.contains(cursor));
                 if mail_reading || mail_list || music_volume {self.wheel_delta=0.0;}
                 else {
                     // 累积高精度滚轮的小幅输入；停顿或反向时丢弃上一段余量。

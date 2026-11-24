@@ -12,7 +12,7 @@ fn main()->eframe::Result<()> {
             let t=self.start.elapsed().as_secs_f64();self.frames+=1;
             self.app.settings.island_lyrics=t>=360.0 || (t*2.0) as u64%2==0;
             let env=Env{t,clock:"00:49:00".into(),today:"2026-11-04".into(),battery:Some(80),charging:true,
-                media:daozai::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"性能检查".into(),artist:"测试".into(),duration:450.0,position:t,playing:true,playback_type:daozai::smtc::MediaKind::Music,..Default::default()},..Default::default()};
+                media:daozai::music::NowPlaying{source:"QQMusic.exe".into(),title:"性能检查".into(),artist:"测试".into(),duration:450.0,position:t,playing:true,playback_type:daozai::music::MediaKind::Music,..Default::default()},..Default::default()};
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{
                 let out=self.app.frame(ui,egui::Rect::from_min_size(ui.max_rect().min,egui::vec2(WIN_W,WIN_H)),&env);
                 self.min_width=self.min_width.min(out.hit.width());self.max_width=self.max_width.max(out.hit.width());
@@ -20,7 +20,7 @@ fn main()->eframe::Result<()> {
                 self.native.update(r(out.region),r(out.hit),out.notice_hit.map(r),out.file_drop_zone.map(r),out.glass.as_deref(),ctx.pixels_per_point(),false,out.expanded);
             });
             // 首帧建立媒体来源后再注入歌词，避免被当成上一播放器的结果清空。
-            if self.frames==1 {self.app.set_lyrics("性能检查","测试",450.0,daozai::lyrics::parse_lrc("[00:00]灰色的夜\n[06:00]还在眼前"));}
+            if self.frames==1 {self.app.set_lyrics("性能检查","测试",450.0,daozai::music::lyrics::parse_lrc("[00:00]灰色的夜\n[06:00]还在眼前"));}
             let textures=ctx.tex_manager().read().num_allocated();
             if t>=10.0 && self.textures.is_none(){self.textures=Some(textures);}
             if t>=420.0 {

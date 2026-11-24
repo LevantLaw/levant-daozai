@@ -76,7 +76,7 @@ fn apple_value(range:&IUIAutomationRangeValuePattern,duration:f64)->Option<(f64,
             && value.is_finite() && (min..=max).contains(&value)).then_some((value,max))
     }
 }
-pub(super) fn seek(source:&str,position:f64,duration:f64)->bool{
+pub(crate) fn seek(source:&str,position:f64,duration:f64)->bool{
     let apple=super::apple_music::is_source(source);
     if !apple && !super::is_qqmusic(source){return false;}
     // 窗口按进程映像名核对：新版的会话身份名（Tencent.QQMusic）不是文件名，统一换成 QQMusic.exe。

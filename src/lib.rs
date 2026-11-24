@@ -2,7 +2,8 @@
 //!
 //! - `island`：与平台无关的界面与动效（外壳与录制器共用）
 //! - `visuals`：弹簧、矢量绘制、面板轮廓、配色字体
-//! - `model` / `lyrics` / `smtc`：数据、歌词、系统媒体
+//! - `music`：系统媒体会话、播放器适配、歌词、播放页与设置
+//! - `model`：数据与设置
 //! - `os`：仅 Windows 的窗口区域、命中穿透、托盘与系统数据
 //! - `support`：跨功能的进程、时钟、资源与测试辅助
 
@@ -13,12 +14,11 @@ pub mod island;
 pub mod agent;
 pub mod messenger;
 pub mod calendar;
-pub mod lyrics;
 pub mod mail;
 pub mod model;
+pub mod music;
 pub mod quota;
 pub mod weather;
-pub mod smtc;
 #[cfg(windows)]
 pub use island::updates::record_install_size;
 
