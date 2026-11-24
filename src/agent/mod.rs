@@ -234,7 +234,7 @@ pub fn prompt_text(payload: &serde_json::Value) -> String {
     text.lines().next().unwrap_or("").chars().take(240).collect()
 }
 
-/// `Stop` 可带最后一轮回复（Claude Code 的 `last_assistant_message`），详情页只展示摘要。
+/// `Stop` 可带最后一轮回复（Claude Code 的 `last_assistant_message`），列表卡片展示摘要。
 fn stop_message(payload: &serde_json::Value) -> Option<String> {
     let raw = string_field(payload, &["last_assistant_message", "lastMessage", "last_message"]);
     let text = markdown_text(&raw);

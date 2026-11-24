@@ -924,7 +924,7 @@ pub struct App {
     pub(crate) quota: crate::quota_ui::State,
     /// AI 会话：Agent 状态、Hook 与本地中继。
     pub(crate) agent: crate::agent::AgentState,
-    /// `auto_expand` 打开时，等当前 AI 横幅结束后再进详情或列表。
+    /// 输入、其他通知或详情占用时，等它们结束后再展开的 AI 事件。
     pub(crate) agent_open_after_notice: Option<crate::agent_ui::AgentAlert>,
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
@@ -1878,21 +1878,19 @@ impl App {
         content+STATUS_H
     }
 
-    /// AI 会话页按卡片数增高；详情页按待处理类型或最近回复行数增高。
+    /// AI 会话页按卡片数增高；详情页按待处理类型增高。
     fn agent_page_height(&self)->f32 {
+        let list = crate::agent_ui::agent_list_height(self.agent.store.visible().len(), self.agent.config.display.rows);
         if self.agent.detail {
-            let reply = 138.0 + (self.agent.config.display.recent_lines.clamp(1, 3) as f32 - 1.0) * 14.0;
             match self.agent.selected_session().and_then(|session|session.pending.as_ref().map(|pending|&pending.kind)) {
                 Some(crate::agent::store::PendingKind::Question(questions)) => {
                     let index = self.agent.question_index.min(questions.len().saturating_sub(1));
-                    questions.get(index).map(|question|crate::agent_ui::question_height(question.options.len())).unwrap_or(reply)
+                    questions.get(index).map(|question|crate::agent_ui::question_height(question.options.len())).unwrap_or(list)
                 }
                 Some(crate::agent::store::PendingKind::Approval(_)) => crate::agent_ui::approval_height(self.agent.approval_lines),
-                None => reply,
+                None => list,
             }
-        } else {
-            crate::agent_ui::agent_list_height(self.agent.store.visible().len(), self.agent.config.display.rows)
-        }
+        } else { list }
     }
 
     // ---------------------------------------------------------------

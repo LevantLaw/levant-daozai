@@ -8,7 +8,6 @@ use std::sync::mpsc;
 fn yes() -> bool { true }
 fn default_retention() -> u32 { 30 }
 fn default_rows() -> usize { 3 }
-fn default_recent_lines() -> usize { 1 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct AgentConfig {
@@ -20,11 +19,9 @@ pub struct AgentConfig {
 pub struct DisplayConfig {
     #[serde(default = "yes")] pub bar_indicator: bool,
     #[serde(default = "default_rows")] pub rows: usize,
-    /// 详情页「最近回复」显示的行数。
-    #[serde(default = "default_recent_lines")] pub recent_lines: usize,
 }
 impl Default for DisplayConfig {
-    fn default() -> Self { Self { bar_indicator: true, rows: 3, recent_lines: 1 } }
+    fn default() -> Self { Self { bar_indicator: true, rows: 3 } }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -36,8 +33,6 @@ pub struct NotifyConfig {
     #[serde(default = "yes")] pub done: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")] pub interrupted: Option<bool>,
     #[serde(default = "yes")] pub failed: bool,
-    #[serde(default = "yes")] pub stale: bool,
-    #[serde(default = "yes")] pub auto_expand: bool,
 }
 impl NotifyConfig {
     /// 旧配置没有单独的「中断」开关，沿用「完成」的旧值。
@@ -51,12 +46,13 @@ impl NotifyConfig {
             NoticeKind::Done => self.done,
             NoticeKind::Interrupted => self.interrupted(),
             NoticeKind::Failed => self.failed,
-            NoticeKind::Stale => self.stale,
+            // 可能中断只更新状态灯，不再提醒。
+            NoticeKind::Stale => false,
         }
     }
 }
 impl Default for NotifyConfig {
-    fn default() -> Self { Self { waiting: true, question: Some(true), approval: Some(true), done: true, interrupted: None, failed: true, stale: true, auto_expand: true } }
+    fn default() -> Self { Self { waiting: true, question: Some(true), approval: Some(true), done: true, interrupted: None, failed: true } }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -97,7 +93,6 @@ impl Config {
             .unwrap_or_default();
         config.retention_minutes = snap_retention(config.retention_minutes);
         config.display.rows = config.display.rows.clamp(3, 5);
-        config.display.recent_lines = config.display.recent_lines.clamp(1, 3);
         // 旧配置只有合并的「等待用户选择」开关，拆分后沿用旧值。
         config.notify.question.get_or_insert(config.notify.waiting);
         config.notify.approval.get_or_insert(config.notify.waiting);
@@ -179,7 +174,7 @@ pub struct Session {
     pub tool: Option<String>,
     pub detail: Option<String>,
     pub last_message: Option<String>,
-    /// 最近一次提问与最近一条回复，详情页只展示这一问一答的摘要。
+    /// 最近一次提问与最近一条回复，列表卡片展示回复摘要。
     pub prompt: Option<String>,
     pub reply: Option<String>,
     pub pending: Option<Pending>,
@@ -472,9 +467,11 @@ impl Store {
                 session.tool = None;
                 session.detail = None;
                 session.state = SessionState::Failed;
+                let body = if message.is_empty() { "运行失败".to_string() } else { message };
+                session.reply = Some(body.clone());
                 if was != SessionState::Failed {
                     updates.push(Update {
-                        notice: Some(Notice { kind: NoticeKind::Failed, agent, key: session.key.clone(), title: format!("{} · {}", agent.short(), session.title), body: if message.is_empty() { "运行失败".into() } else { message } }),
+                        notice: Some(Notice { kind: NoticeKind::Failed, agent, key: session.key.clone(), title: format!("{} · {}", agent.short(), session.title), body }),
                         sound: Some(SoundKind::Error),
                     });
                 }
@@ -747,7 +744,7 @@ mod tests {
     }
 
     #[test]
-    fn recent_exchange_is_kept_for_the_detail_page() {
+    fn recent_exchange_is_kept_for_the_list_card() {
         let mut store = Store::default();
         store.apply(event(AgentId::Claude, "UserPromptSubmit", serde_json::json!({"session_id":"q1","cwd":"C:\\p","prompt":"修复登录接口"})), 0.0, true);
         store.apply(event(AgentId::Claude, "Stop", serde_json::json!({"session_id":"q1","last_assistant_message":"已修复并通过测试"})), 1.0, true);
@@ -838,7 +835,7 @@ mod tests {
         assert_eq!(store.visible()[0].title, "fix login");
         let updates = store.apply(event(AgentId::Claude, "Stop", payload.clone()), 2.0, true);
         assert!(updates.iter().any(|update| update.notice.as_ref().is_some_and(|notice| notice.kind == NoticeKind::Done)));
-        assert_eq!(store.visible().len(), 1, "完成后卡片还在，用于自动展开时展示回复");
+        assert_eq!(store.visible().len(), 1, "完成后卡片还在，打开列表时可见回复");
         assert!(store.active().is_empty());
         store.tick(2.0 + 31.0 * 60.0, 30);
         assert!(store.sessions.is_empty());

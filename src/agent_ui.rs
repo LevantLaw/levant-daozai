@@ -117,52 +117,49 @@ impl App {
         }
     }
 
-    /// 处理本轮 AI 通知：等待类直接展开详情，其余进入横幅队列。
+    /// 处理本轮 AI 通知：等待类进详情，完成/失败/中断进列表；闲置只更新状态灯。
     fn agent_notices(&mut self, notices: Vec<Notice>) {
-        for notice in notices {
+        // 等待类优先，避免同批完成事件覆盖待处理详情。
+        let (waiting, finished): (Vec<_>, Vec<_>) = notices.into_iter()
+            .partition(|notice| matches!(notice.kind, NoticeKind::Approval | NoticeKind::Question));
+        for notice in waiting.into_iter().chain(finished) {
             if !self.agent.config.notify.enabled(notice.kind) { continue; }
-            let agent = AgentAlert { key: notice.key, kind: notice.kind };
-            if agent.waiting() {
-                // 提问和审批直接展开，不先出横幅；输入、编辑或已有待处理详情时排队。
-                let busy = self.agent.detail && self.agent.selected_session().is_some_and(|session| session.pending.is_some());
-                if self.is_editing() || busy {
-                    self.agent_open_after_notice = Some(agent);
-                } else {
-                    self.agent_open_event(agent);
-                }
-                continue;
+            let alert = AgentAlert { key: notice.key, kind: notice.kind };
+            let pending = self.agent.detail
+                && self.agent.selected_session().is_some_and(|session| session.pending.is_some());
+            // 输入、其他通知或已有待处理详情时排队。
+            let busy = self.is_editing() || self.notice.is_some() || pending;
+            if busy {
+                // 排队时等待类优先，完成类不覆盖排队中的等待事件。
+                let keep_waiting = self.agent_open_after_notice.as_ref()
+                    .is_some_and(|queued| queued.waiting() && !alert.waiting());
+                if !keep_waiting { self.agent_open_after_notice = Some(alert); }
+            } else {
+                self.agent_open_event(alert);
             }
-            let title = match notice.kind {
-                NoticeKind::Done => "会话完成",
-                NoticeKind::Failed => "会话失败",
-                NoticeKind::Stale => "可能已中断",
-                NoticeKind::Interrupted => "会话中断",
-                NoticeKind::Approval | NoticeKind::Question => continue,
-            };
-            self.agent_alert(title, format!("{} · {}", notice.title, notice.body), agent, self.t);
         }
     }
 
-    /// 横幅结束或输入结束后，打开排队中的 AI 事件；等待类进详情，其余进列表。
+    /// 输入、其他通知或待处理详情结束后，打开排队中的 AI 事件。
     pub(crate) fn agent_after_notice(&mut self) {
         if !self.settings.notifications || !self.module_on(AI_PAGE) {
             self.agent_open_after_notice = None;
             return;
         }
-        if self.notice.is_some() { return; }
-        if self.is_editing() { return; }
-        // 已有待处理的详情时不抢占，等用户答完或返回后再展开下一条。
-        if self.agent.detail && self.agent.selected_session().is_some_and(|session| session.pending.is_some()) { return; }
+        if self.notice.is_some() || self.is_editing() { return; }
         let Some(alert) = self.agent_open_after_notice.clone() else { return; };
+        let pending = self.agent.detail
+            && self.agent.selected_session().is_some_and(|session| session.pending.is_some());
+        // 待处理详情不抢占，等用户答完或返回后再展开下一条。
+        if pending { return; }
         self.agent_open_after_notice = None;
         if !crate::agent_ui::agent_alert_valid(&self.agent.store, &self.agent.config.notify, &alert) { return; }
         self.agent_open_event(alert);
     }
 
-    /// 从横幅按钮或 `auto_expand` 进入 AI 页；等待类事件直接打开详情。
+    /// 进入 AI 页：等待类打开处理详情，完成类打开会话列表。
     pub(crate) fn agent_open_event(&mut self, alert: AgentAlert) {
-        let detail = alert.waiting();
-        if detail {
+        if alert.waiting() {
             self.agent.answers = self.agent.selected_session_questions(&alert.key).into_iter().map(|_| Vec::new()).collect();
             self.agent.question_index = 0;
             self.agent.selected = Some(alert.key);
@@ -401,9 +398,6 @@ impl App {
         let agent = session.agent;
         let title = session.title.clone();
         let hosts = session.hosts.clone();
-        let state = state_text(session);
-        let reply = session.reply.clone();
-        let since = session.since;
         let approval = match session.pending.as_ref().map(|pending| &pending.kind) {
             Some(crate::agent::store::PendingKind::Approval(request)) => Some((request.tool.clone(), request.detail.clone())),
             _ => None,
@@ -412,6 +406,12 @@ impl App {
             crate::agent::store::PendingKind::Question(questions) => Some(questions.clone()),
             _ => None,
         }).unwrap_or_default();
+        // 待处理事件已消失（例如在终端处理完），详情没有可展示的内容，退回列表。
+        if approval.is_none() && questions.is_empty() {
+            self.agent.detail = false;
+            self.agent.selected = None;
+            return;
+        }
         if self.agent.answers.len() < questions.len() { self.agent.answers.resize(questions.len(), Vec::new()); }
 
         agent_icon(c, agent, 22.0, 45.0, 13.0);
@@ -447,21 +447,6 @@ impl App {
             return;
         }
 
-        if questions.is_empty() {
-            // 只展示最近回复，行数在设置里调整。
-            let lines = self.agent.config.display.recent_lines.clamp(1, 3);
-            let mut y = 64.0;
-            c.text(15.0, y, "最近回复", 9.0, W::Regular, theme::GRAY, H::Left);
-            y += 14.0;
-            let reply = reply.unwrap_or_default();
-            let reply = if reply.is_empty() { "等待回复…".to_owned() } else { reply };
-            for line in c.wrap(&reply, 10.0, W::Regular, 386.0, lines) {
-                c.text(15.0, y, &line, 10.0, W::Regular, theme::WHITE, H::Left);
-                y += 14.0;
-            }
-            c.text(15.0, self.expanded_height() - crate::app::STATUS_H - 30.0, &format!("{state} · {}", duration(self.t - since)), 9.5, W::Regular, theme::GRAY, H::Left);
-            return;
-        }
         let index = self.agent.question_index.min(questions.len() - 1);
         let question = &questions[index];
         c.text(15.0, 62.0, &format!("问题 {}/{}", index + 1, questions.len()), 10.0, W::Semibold, theme::BLUE, H::Left);
@@ -586,30 +571,22 @@ impl App {
                 let mut approval = self.agent.config.notify.approval();
                 setting_row_nested(ui, "审批", "等待审批时直接展开审批页", &mut approval);
                 if approval != self.agent.config.notify.approval() { self.agent.config.notify.approval = Some(approval); self.agent.config.save(); }
-            });
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(2.0);
-            notify_group(ui, "banner", "横幅提醒", |ui| {
+                ui.separator();
                 let mut done = self.agent.config.notify.done;
-                setting_row_nested(ui, "完成", "会话完成时在岛上提醒", &mut done);
+                setting_row_nested(ui, "完成", "会话完成时直接打开 AI 会话页", &mut done);
                 if done != self.agent.config.notify.done { self.agent.config.notify.done = done; self.agent.config.save(); }
                 ui.separator();
                 let mut interrupted = self.agent.config.notify.interrupted();
                 let before = interrupted;
-                setting_row_nested(ui, "中断", "会话中断时在岛上提醒", &mut interrupted);
+                setting_row_nested(ui, "中断", "会话中断时直接打开 AI 会话页", &mut interrupted);
                 if interrupted != before {
                     self.agent.config.notify.interrupted = Some(interrupted);
                     self.agent.config.save();
                 }
                 ui.separator();
                 let mut failed = self.agent.config.notify.failed;
-                setting_row_nested(ui, "失败", "会话失败时在岛上提醒", &mut failed);
+                setting_row_nested(ui, "失败", "会话失败时直接打开 AI 会话页", &mut failed);
                 if failed != self.agent.config.notify.failed { self.agent.config.notify.failed = failed; self.agent.config.save(); }
-                ui.separator();
-                let mut stale = self.agent.config.notify.stale;
-                setting_row_nested(ui, "闲置", "运行中超过 10 分钟没有事件时提醒", &mut stale);
-                if stale != self.agent.config.notify.stale { self.agent.config.notify.stale = stale; self.agent.config.save(); }
             });
         });
 
@@ -646,22 +623,10 @@ impl App {
 
     pub(crate) fn agent_reminder_settings(&mut self, ui: &mut egui::Ui) {
         settings_card(ui, |ui| {
-            let mut auto_expand = self.agent.config.notify.auto_expand;
-            setting_row(ui, "自动展开", "横幅结束后打开会话列表", &mut auto_expand);
-            if auto_expand != self.agent.config.notify.auto_expand { self.agent.config.notify.auto_expand = auto_expand; self.agent.config.save(); }
-            ui.separator();
             settings_control_row_right(ui, "会话数", |ui| {
                 let mut rows = self.agent.config.display.rows;
                 if settings_segmented(ui, &mut rows, &[(3, "3 个"), (4, "4 个"), (5, "5 个")], 52.0) {
                     self.agent.config.display.rows = rows;
-                    self.agent.config.save();
-                }
-            });
-            ui.separator();
-            settings_control_row_right(ui, "最近消息行数", |ui| {
-                let mut lines = self.agent.config.display.recent_lines;
-                if settings_segmented(ui, &mut lines, &[(1, "1 行"), (2, "2 行"), (3, "3 行")], 52.0) {
-                    self.agent.config.display.recent_lines = lines;
                     self.agent.config.save();
                 }
             });
@@ -712,19 +677,6 @@ fn button<'a>(c: &Card<'a>, x: f32, y: f32, w: f32, label: &str, color: Color32)
     response
 }
 
-fn state_text(session: &Session) -> &'static str {
-    if session.stale() { return "可能已中断"; }
-    match session.state {
-        SessionState::WaitingApproval => "等待确认",
-        SessionState::WaitingAnswer => "等你回答",
-        SessionState::Running => "运行中",
-        SessionState::Idle => "闲置",
-        SessionState::Completed => "已完成",
-        SessionState::Failed => "失败",
-        SessionState::Interrupted => "已中断",
-    }
-}
-
 fn state_color(session: &Session) -> Color32 {
     if session.stale() { return theme::YELLOW; }
     match session.state {
@@ -745,7 +697,7 @@ fn card_preview(session: &Session) -> String {
         SessionState::WaitingApproval => "等待你的确认".into(),
         SessionState::WaitingAnswer => "等你回答".into(),
         SessionState::Idle => "等待新任务…".into(),
-        SessionState::Failed => "运行失败".into(),
+        SessionState::Failed => session.reply.clone().unwrap_or_else(|| "运行失败".into()),
         SessionState::Interrupted => "已中断".into(),
         SessionState::Running => String::new(),
     };

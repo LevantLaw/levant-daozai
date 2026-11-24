@@ -6985,16 +6985,6 @@ fn hud_alerts_are_not_held_while_island_is_open(){
     assert!(h.app.notice.is_none(),"HUD 仍按自身时长过期");
 }
 
-#[test]
-fn stale_ai_alert_is_dropped_without_a_matching_session(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.t=10.0;
-    h.app.agent_alert("会话完成","预览",crate::agent_ui::AgentAlert{key:"missing".into(),kind:crate::agent::store::NoticeKind::Done},10.0);
-    assert_eq!(h.app.alerts.len(),1);
-    h.app.tick_alerts();
-    assert!(h.app.alerts.is_empty()&&h.app.notice.is_none(),"没有对应会话的 AI 横幅应立即失效");
-}
-
 fn post_agent_hook(port:u16,token:&str,session:&str){
     use std::io::{Read,Write};
     let body=serde_json::json!({
@@ -7020,6 +7010,51 @@ fn post_agent_permission_hook(port:u16,token:&str,session:&str){
     write!(stream,"POST /hook HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Daozai-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
     let mut response=Vec::new();
     let _=stream.read_to_end(&mut response);
+}
+
+fn post_agent_event(port:u16,token:&str,event:&str,payload:serde_json::Value){
+    use std::io::{Read,Write};
+    let body=serde_json::json!({"agent":"claude","event":event,"blocking":false,"payload":payload}).to_string();
+    let mut stream=std::net::TcpStream::connect(("127.0.0.1",port)).unwrap();
+    write!(stream,"POST /hook HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Daozai-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+    let mut response=Vec::new();
+    let _=stream.read_to_end(&mut response);
+}
+
+#[test]
+fn ai_done_opens_session_list_without_banner(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    post_agent_event(port,&token,"SessionStart",serde_json::json!({"session_id":"ui-done","cwd":"E:\\demo\\project"}));
+    post_agent_event(port,&token,"Stop",serde_json::json!({"session_id":"ui-done","last_assistant_message":"已修复"}));
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.page==crate::app::AI_PAGE{break;}}
+    assert!(h.app.open,"完成事件应直接打开 AI 会话页");
+    assert_eq!(h.app.page,crate::app::AI_PAGE);
+    assert!(!h.app.agent.detail,"完成事件不应展开会话详情");
+    assert!(h.app.agent.selected.is_none());
+    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"完成事件不应出横幅");
+}
+
+#[test]
+fn ai_stale_hides_without_expanding(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.settings.notifications=true;
+    h.app.agent.config.enabled=true;
+    h.app.settings.visible_pages[crate::app::AI_PAGE]=true;
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    post_agent_event(port,&token,"SessionStart",serde_json::json!({"session_id":"ui-stale","cwd":"E:\\demo\\project"}));
+    post_agent_event(port,&token,"UserPromptSubmit",serde_json::json!({"session_id":"ui-stale","prompt":"wait"}));
+    for _ in 0..60 {h.frame(vec![]);if !h.app.agent.store.visible().is_empty(){break;}}
+    assert!(!h.app.open&&!h.app.agent.detail);
+    h.app.t=700.0;
+    h.app.agent_tick(&h.ctx);
+    h.app.t=731.0;
+    h.app.agent_tick(&h.ctx);
+    assert!(!h.app.open&&!h.app.agent.detail,"可能中断不应展开");
+    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"可能中断不应出横幅");
+    assert!(h.app.agent.store.visible().is_empty(),"提醒后会话从列表隐藏");
 }
 
 #[test]
@@ -7072,6 +7107,22 @@ fn ai_question_inline_input_enter_keeps_text_and_does_not_submit(){
 }
 
 #[test]
+fn ai_detail_closes_when_pending_disappears(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.agent.config.notify.done=false;
+    h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
+    let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
+    post_agent_hook(port,&token,"ui-gone");
+    for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
+    assert!(h.app.agent.detail,"等待回答应展开详情");
+    post_agent_event(port,&token,"Stop",serde_json::json!({"session_id":"ui-gone","last_assistant_message":"已处理"}));
+    for _ in 0..600 {h.frame(vec![]);if !h.app.agent.detail{break;}}
+    assert!(!h.app.agent.detail,"待处理事件消失后应退回列表");
+    assert!(h.app.agent.selected.is_none());
+    assert_eq!(h.app.page,crate::app::AI_PAGE);
+}
+
+#[test]
 fn ai_approval_keeps_detail_open_until_decided(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
@@ -7094,14 +7145,13 @@ fn ai_approval_keeps_detail_open_until_decided(){
 }
 
 #[test]
-fn ai_waiting_expands_directly_even_without_auto_expand(){
+fn ai_waiting_expands_directly(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.agent.config.notify.auto_expand=false;
     h.app.agent.bridge=crate::agent::bridge::Bridge::start(h.ctx.clone()).ok();
     let (port,token)=h.app.agent.bridge.as_ref().map(|bridge|(bridge.port,bridge.token.clone())).unwrap();
     post_agent_hook(port,&token,"ui-q2");
     for _ in 0..600 {h.frame(vec![]);if h.app.open&&h.app.agent.detail{break;}}
-    assert!(h.app.open&&h.app.agent.detail,"等待回答不受自动展开开关影响");
+    assert!(h.app.open&&h.app.agent.detail,"等待回答直接展开详情");
     assert!(h.app.notice.is_none()&&h.app.alerts.is_empty(),"等待回答不排横幅");
     assert_eq!(h.app.page,crate::app::AI_PAGE);
     assert_eq!(h.app.agent.selected.as_deref(),Some("claude:ui-q2"));

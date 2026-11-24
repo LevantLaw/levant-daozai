@@ -43,8 +43,6 @@ pub(crate) struct Alert {
     pub unread: Option<crate::app::Unread>,
     /// 最早可显示横幅的时刻；展开期间到达的通知等岛体收起后再显示。
     pub banner_at: f64,
-    /// AI 会话事件身份，用于去重、失效判断和「处理」。
-    pub agent: Option<crate::agent_ui::AgentAlert>,
 }
 impl Alert {
     /// 只有非即时通讯的 Windows 通知点亮铃铛；邮件、即时通讯和 AI 各有自己的入口。
@@ -125,15 +123,6 @@ fn app_icon_badge(c:&Card,x:f32,y:f32,size:f32,name:&str,texture:Option<&egui::T
 }
 fn app_initial(name:&str)->String{name.chars().next().map(|ch|ch.to_uppercase().to_string()).unwrap_or_default()}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FallbackIcon { Agent(crate::agent::AgentId), Page(usize) }
-
-/// 内部提醒的默认图标：AI 用对应 Agent 的品牌图标，其余用来源功能页的图标。
-fn fallback_icon(a:&Alert)->FallbackIcon {
-    a.agent.as_ref().and_then(|alert|alert.key.split(':').next()).and_then(crate::agent::AgentId::from_key)
-        .map(FallbackIcon::Agent).unwrap_or(FallbackIcon::Page(a.page))
-}
-
 fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
     if a.source!=AlertSource::Internal{crate::paint::bell(c,x,y,theme::WHITE,0.0);return;}
     match a.title.as_str() {
@@ -189,10 +178,7 @@ fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
         },
         "专注计时"=>crate::paint::stopwatch(&c.scaled(x,y,0.65),x,y,8.0,0.0,theme::RED_TOP),
         "岛仔已暂停音乐功能"=>page_icon(c,crate::app::MUSIC_PAGE,x,y,24.0),
-        _=>match fallback_icon(a) {
-            FallbackIcon::Agent(agent)=>crate::agent_ui::agent_icon(c,agent,x,y,24.0),
-            FallbackIcon::Page(page)=>page_icon(c,page,x,y,24.0),
-        },
+        _=>page_icon(c,a.page,x,y,24.0),
     }
 }
 
@@ -301,7 +287,6 @@ impl App {
             meeting: None,
             unread: None,
             banner_at: self.t,
-            agent: None,
         };
         self.enqueue_alert(a, system);
     }
@@ -312,7 +297,7 @@ impl App {
             source: AlertSource::Internal,
             title: "会议提醒".into(), body: format!("{} · {} · {}", meeting.title, meeting.at, source),
             page, at: self.t, duration: 12.0, bluetooth: None, meeting: Some((meeting, source)), unread: None,
-            banner_at: self.t, agent: None,
+            banner_at: self.t,
         }, true);
     }
     pub(crate) fn bluetooth_alert(&mut self, device: &crate::bt::Device, connected: bool) {
@@ -330,25 +315,8 @@ impl App {
             meeting: None,
             unread: None,
             banner_at: self.t,
-            agent: None,
         };
         self.enqueue_alert(a, false);
-    }
-    /// AI 会话的岛内横幅：收起后显示 `notice_hold_secs`，不拦截操作。
-    pub(crate) fn agent_alert(&mut self, title: impl Into<String>, body: impl Into<String>, agent: crate::agent_ui::AgentAlert, banner_at: f64) {
-        self.enqueue_alert(Alert {
-            source: AlertSource::Internal,
-            title: title.into(),
-            body: body.into(),
-            page: crate::app::AI_PAGE,
-            at: self.t,
-            duration: self.settings.notice_hold_secs,
-            bluetooth: None,
-            meeting: None,
-            unread: None,
-            banner_at,
-            agent: Some(agent),
-        }, false);
     }
     fn enqueue_alert(&mut self, a: Alert, system: bool) {
         // 通知仅保存在本次运行的内存中。
@@ -356,7 +324,7 @@ impl App {
         self.history.truncate(50);
         if self.fullscreen_hidden && a.health().is_some(){return;}
         if self.settings.notifications {
-            if a.source==AlertSource::Internal && a.agent.is_none() {
+            if a.source==AlertSource::Internal {
                 let sound = if self.settings.sound { a.notification_sound() } else { NotificationSound::Silent };
                 if system {
                     if self.settings.system_notify {
@@ -367,22 +335,15 @@ impl App {
                     self.pending.push(Cmd::PlayNotificationSound(sound));
                 }
             }
-            let same_event=|old:&Alert| match (&a.agent,&old.agent) {
-                (Some(next),Some(previous))=>next==previous,
-                (None,None)=>match (&a.meeting,&old.meeting) {
-                    (Some((next,_)),Some((previous,_)))=>crate::calendar::dedupe_key(next)==crate::calendar::dedupe_key(previous),
-                    _=>old.source==a.source && old.title==a.title && old.unread==a.unread && (a.is_hud() || old.body==a.body),
-                },
-                _=>false,
+            let same_event=|old:&Alert| match (&a.meeting,&old.meeting) {
+                (Some((next,_)),Some((previous,_)))=>crate::calendar::dedupe_key(next)==crate::calendar::dedupe_key(previous),
+                _=>old.source==a.source && old.title==a.title && old.unread==a.unread && (a.is_hud() || old.body==a.body),
             };
             if a.source!=AlertSource::Internal || a.title != "蓝牙设备" { self.alerts.retain(|old| !same_event(old)); }
             if a.banner_at <= self.t && (a.source!=AlertSource::Internal || a.title != "蓝牙设备") && self.notice.as_ref().is_some_and(same_event) {
                 if a.lights_bell() {
                     self.notification_bell_at=self.t;
                     self.notification_bell_until=self.t+a.duration;
-                }
-                if let Some(agent)=a.agent.clone() {
-                    if self.agent.config.notify.auto_expand { self.agent_open_after_notice=Some(agent); }
                 }
                 self.notice = Some(a);
                 return;
@@ -459,7 +420,7 @@ impl App {
         self.mark_messenger(client,unread.pid,unread.window);
         if pending{return;}
         let hold=self.settings.notice_hold_secs;
-        self.enqueue_alert(Alert{source:AlertSource::Messenger(client),title:client.name().into(),body:format!("有新消息 · 请到{}查看",client.name()),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t,agent:None},false);
+        self.enqueue_alert(Alert{source:AlertSource::Messenger(client),title:client.name().into(),body:format!("有新消息 · 请到{}查看",client.name()),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t},false);
     }
     pub fn set_messenger_status(&mut self,client:crate::app::Messenger,status:String){self.messenger_statuses.insert(client,status);}
     pub fn messenger_status(&self,client:crate::app::Messenger)->&str{self.messenger_statuses.get(&client).map(String::as_str).unwrap_or("")}
@@ -491,7 +452,7 @@ impl App {
             self.notification_bell_at=self.t;
             self.notification_bell_until=self.t+hold;
         }
-        self.enqueue_alert(Alert{source:AlertSource::External(id.clone()),title:title.clone(),body:body.clone(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread,banner_at:self.t,agent:None},false);
+        self.enqueue_alert(Alert{source:AlertSource::External(id.clone()),title:title.clone(),body:body.clone(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread,banner_at:self.t},false);
         if known.is_none() {
             self.windows_notices.push(crate::app::WindowsNotice{app:title,id,body,time:chrono::Local::now().format("%H:%M").to_string()});
             if self.windows_notices.len()>30 {self.windows_notices.remove(0);}
@@ -504,7 +465,7 @@ impl App {
         let body=if unread.pid==0{"消息账号暂无法确认"}else{"暂时无法打开对应窗口"};
         let source=if unread.source.adapter().capture==crate::messenger::Capture::Taskbar{AlertSource::Messenger(unread.source)}else{AlertSource::External(unread.source.adapter().notification_id.into())};
         let hold=self.settings.notice_hold_secs;
-        self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t,agent:None});
+        self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:hold,bluetooth:None,meeting:None,unread:Some(unread),banner_at:self.t});
     }
     /// 应用图标纹理：首次用到时从开始菜单取，失败也缓存，避免每帧重试。
     fn app_icon(&mut self,ctx:&egui::Context,id:&str)->Option<egui::TextureHandle>{
@@ -567,11 +528,7 @@ impl App {
                 && !crate::messenger::suppresses_toast(&a.title,id,crate::messenger::toast_suppression(&self.settings)) && self.notification_apps.items.iter().any(|(key,_,on)|key==id && *on),
         };
         self.alerts.retain(&allowed);
-        let store=&self.agent.store;
-        let notify=&self.agent.config.notify;
-        let agent_valid=|a:&Alert| a.agent.as_ref().is_none_or(|agent| crate::agent_ui::agent_alert_valid(store,notify,agent));
-        self.alerts.retain(&agent_valid);
-        if self.notice.as_ref().is_some_and(|a|!allowed(a) || !agent_valid(a)){self.notice=None;}
+        if self.notice.as_ref().is_some_and(|a|!allowed(a)){self.notice=None;}
         if self.hud_notice.as_ref().is_some_and(|a|!allowed(a)){self.hud_notice=None;}
         if self.fullscreen_hidden {
             self.pending.retain(|cmd|!matches!(cmd,Cmd::Notify(title,..)if HealthReminder::ALL.into_iter().any(|kind|title==kind.title())));
@@ -596,9 +553,6 @@ impl App {
                     if a.lights_bell() {
                         self.notification_bell_at=self.t;
                         self.notification_bell_until=self.t+a.duration;
-                    }
-                    if let Some(agent)=a.agent.clone() {
-                        if self.agent.config.notify.auto_expand { self.agent_open_after_notice=Some(agent); }
                     }
                     self.notice = Some(a);
                 }
@@ -718,13 +672,6 @@ impl App {
             }else if is_water {
                 if notice_button(&nc,181.0,12.0,62.0,"知道了","water-confirm-read"){self.confirm_health_reminder(HealthReminder::Water);}
                 if notice_button(&nc,250.0,12.0,68.0,"喝一口","water-confirm"){self.notice=None;self.drink_water();}
-            }else if let Some(agent)=a.agent.clone() {
-                let label=if agent.waiting(){"处理"}else{"查看"};
-                if notice_button(&nc,257.0,12.0,60.0,label,"notice-action"){
-                    self.notice=None;
-                    self.agent_open_after_notice=None;
-                    self.agent_open_event(agent);
-                }
             }else{
                 let label=if is_focus{"开始"}else if is_power{"知道了"}else{"查看"};
                 if notice_button(&nc,257.0,12.0,60.0,label,"notice-action"){
@@ -880,18 +827,6 @@ mod tests {
         assert_eq!(app_initial("应用0"),"应");
         assert_eq!(app_initial(""),"");
     }
-    #[test]
-    fn internal_banner_fallback_uses_agent_or_page_icon(){
-        let alert=|title:&str,key:Option<&str>,page| Alert{
-            source:AlertSource::Internal,title:title.into(),body:String::new(),page,at:0.0,duration:0.0,
-            bluetooth:None,meeting:None,unread:None,banner_at:0.0,
-            agent:key.map(|key|crate::agent_ui::AgentAlert{key:key.into(),kind:crate::agent::store::NoticeKind::Done}),
-        };
-        assert_eq!(fallback_icon(&alert("会话完成",Some("claude:abc"),9)),FallbackIcon::Agent(crate::agent::AgentId::Claude));
-        assert_eq!(fallback_icon(&alert("会话中断",Some("codex:abc"),9)),FallbackIcon::Agent(crate::agent::AgentId::Codex));
-        assert_eq!(fallback_icon(&alert("未知系统提醒",None,4)),FallbackIcon::Page(4));
-    }
-
     #[test]
     fn number_stepper_clicks_follow_steps_and_limits() {
         for (initial,step,x,expected) in [(5u32,1,127.0,6),(5,1,13.0,4),(0,1,13.0,0),(10,1,127.0,10),(9,3,127.0,10),(1,3,13.0,0)] {
