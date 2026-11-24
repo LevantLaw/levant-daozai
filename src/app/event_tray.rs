@@ -236,12 +236,12 @@ impl App {
         match item {
             Item::Weather => bar_layout::WEATHER_WIDTH + self.weather_pill_extra(ctx).unwrap_or(0.0).max(0.0),
             Item::Quota => self.quota_tray_width(ctx),
-            Item::Focus => crate::focus_bar::WIDTH,
-            Item::Mail => crate::page_badges::badge_width(bar_layout::MAIL),
-            Item::Health => crate::page_badges::badge_width(bar_layout::HEALTH),
-            Item::Todo => crate::page_badges::badge_width(bar_layout::TODO),
-            Item::Shelf => crate::page_badges::badge_width(bar_layout::SHELF),
-            Item::Calendar => crate::page_badges::badge_width(bar_layout::CALENDAR),
+            Item::Focus => crate::app::focus_bar::WIDTH,
+            Item::Mail => crate::app::page_badges::badge_width(bar_layout::MAIL),
+            Item::Health => crate::app::page_badges::badge_width(bar_layout::HEALTH),
+            Item::Todo => crate::app::page_badges::badge_width(bar_layout::TODO),
+            Item::Shelf => crate::app::page_badges::badge_width(bar_layout::SHELF),
+            Item::Calendar => crate::app::page_badges::badge_width(bar_layout::CALENDAR),
             Item::Music => bar_layout::slot_width(bar_layout::MUSIC),
             Item::Battery => bar_layout::slot_width(bar_layout::BATTERY),
         }
@@ -288,7 +288,7 @@ impl App {
                     Item::Focus => {
                         let faded = c.faded(alpha);
                         let faded = if alpha < 0.8 { faded.ghost() } else { faded };
-                        crate::focus_bar::draw(&faded, item_x, 15.0, self.t, &self.pomo, self.phase_secs(self.pomo.phase), false);
+                        crate::app::focus_bar::draw(&faded, item_x, 15.0, self.t, &self.pomo, self.phase_secs(self.pomo.phase), false);
                         if crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-focus"), "专注 · 点击打开".into()).clicked() {
                             self.show_page(crate::app::FOCUS_PAGE);
                         }
@@ -323,7 +323,7 @@ impl App {
             _ => return,
         };
         self.paint_badge(&c.faded(alpha), slot, x, theme::WHITE);
-        let width = crate::page_badges::badge_width(slot);
+        let width = crate::app::page_badges::badge_width(slot);
         let response = crate::quota::ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, ("page-badge", slot)), self.badge_label(slot));
         if response.clicked() {
             let page = match item {

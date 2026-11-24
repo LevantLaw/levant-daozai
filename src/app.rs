@@ -3,7 +3,7 @@
 //!
 //! 时间一律来自 `Env::t`（秒），不直接读系统时钟，所以录屏可逐帧复现。
 
-use crate::extras::{Alert, HealthReminder, PetState};
+use crate::app::extras::{Alert, HealthReminder, PetState};
 use crate::render::anim::{self, lerp, smoothstep, Spring};
 use crate::bar_layout::{self as bar, Layout};
 use crate::calendar;
@@ -24,6 +24,17 @@ use std::path::PathBuf;
 
 mod frame;
 pub(crate) mod settings;
+pub(crate) mod pages;
+pub(crate) mod extras;
+pub(crate) mod event_tray;
+pub(crate) mod focus_bar;
+mod resident_settings;
+pub(crate) mod avoidance;
+pub mod side_dock;
+pub(crate) mod task_picker;
+pub(crate) mod dnd;
+pub(crate) mod page_badges;
+pub(crate) mod settings_window;
 
 // ---------- 几何（逻辑点；原版 125% 截图 ÷ 1.25） ----------
 /// 展开后保留的常驻状态行高度；收起时它就是整颗药丸。
@@ -693,7 +704,7 @@ pub struct App {
     pub(crate) shelf_x: HashMap<PathBuf, Spring>,
     pub(crate) shelf_born: HashMap<PathBuf, f64>,
     pub(crate) icons: crate::platform::icons::Cache,
-    pub(crate) avoidance: crate::avoidance::Picker,
+    pub(crate) avoidance: crate::app::avoidance::Picker,
     pub(crate) confirm_clear: Option<f64>,
     pub clipboard: crate::clipboard::Shared,
     pub(crate) clip_first: usize,
@@ -743,7 +754,7 @@ pub struct App {
 
     pub(crate) forced_open_until:f64,
     pub settings_open:bool,
-    settings_window:std::sync::Arc<std::sync::Mutex<crate::settings_window::State>>,
+    settings_window:std::sync::Arc<std::sync::Mutex<crate::app::settings_window::State>>,
     pub displays:Vec<crate::platform::display_layout::Display>,
     browser_at_top:bool,
     pub(crate) browser_minimal_active:bool,
@@ -762,7 +773,7 @@ pub struct App {
     pub messenger_statuses:std::collections::HashMap<Messenger,String>,
     pub(crate) notification_apps:model::NotificationApps,
     pub(crate) subpage:Option<usize>,
-    pub(crate) task_dialog:Option<crate::extras::TaskDraft>,
+    pub(crate) task_dialog:Option<crate::app::extras::TaskDraft>,
     pub listener_status: String,
     pub(crate) notification_bell_until: f64,
     pub(crate) notification_bell_at: f64,
@@ -834,8 +845,8 @@ pub struct App {
     pub(crate) weather_source: crate::weather::source_ui::State,
     pub(crate) updates: crate::updates::State,
     pub(crate) resident: bar::Motion,
-    pub(crate) event_tray: crate::event_tray::EventTray,
-    pub(crate) dnd: crate::dnd::Dnd,
+    pub(crate) event_tray: crate::app::event_tray::EventTray,
+    pub(crate) dnd: crate::app::dnd::Dnd,
     /// 置物架刚拖入文件 / 日程刚提醒时的短暂徽标。
     pub(crate) shelf_badge_until: f64,
     pub(crate) calendar_badge_until: f64,
@@ -943,7 +954,7 @@ impl App {
             media_anchor: (String::new(), 0.0, 0.0, false),
             media: NowPlaying::default(),
             music_artwork: None,
-            forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, settings_focus_requested:false, settings_tab:0, settings_category:0, pending_page_order:None, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
+            forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::app::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, settings_focus_requested:false, settings_tab:0, settings_category:0, pending_page_order:None, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
             listener_status: "尚未连接".into(),
             notification_bell_until: 0.0, notification_bell_at: -10.0, notice: None, hud_notice: None, hud_alpha: 0.0, notice_width:Spring::new(0.0,NOTICE_CLOSE.0,NOTICE_CLOSE.1), notice_details:false, pending_messengers:Vec::new(), windows_notices:Vec::new(), windows_unread:false, windows_first:0, app_icons:Default::default(), messenger_scroll:0.0, alerts: Default::default(), history: Default::default(), pending: vec![],
             todo_first: 0, todo_choosing: false, pet: Default::default(), last_drink: None,
@@ -1246,7 +1257,7 @@ impl App {
         let old = self.calendar.config.take();
         if let Some(config)=&old {
             self.calendar.feeds.retain(|feed|feed.config!=*config);
-            let is_old=|alert:&crate::extras::Alert|alert.meeting.as_ref().is_some_and(|(_,source)|source==config.provider.label());
+            let is_old=|alert:&crate::app::extras::Alert|alert.meeting.as_ref().is_some_and(|(_,source)|source==config.provider.label());
             self.alerts.retain(|alert|!is_old(alert));
             if self.notice.as_ref().is_some_and(is_old){self.notice=None;}
         }
@@ -1449,8 +1460,8 @@ impl App {
         if !self.settings.bluetooth_notifications {
             self.bt_shown.clear();
             self.bt_initialized=false;
-            self.alerts.retain(|a|a.source!=crate::extras::AlertSource::Internal || a.title!="蓝牙设备");
-            if self.notice.as_ref().is_some_and(|a|a.source==crate::extras::AlertSource::Internal && a.title=="蓝牙设备") {self.notice=None;}
+            self.alerts.retain(|a|a.source!=crate::app::extras::AlertSource::Internal || a.title!="蓝牙设备");
+            if self.notice.as_ref().is_some_and(|a|a.source==crate::app::extras::AlertSource::Internal && a.title=="蓝牙设备") {self.notice=None;}
             return;
         }
         if !env.bt_ready { return; }
@@ -1489,7 +1500,7 @@ impl App {
     }
     #[cfg(test)]
     pub(crate) fn forced_open_until_for_tests(&self)->f64{self.forced_open_until}
-    pub(crate) fn window_layout(&self)->std::sync::MutexGuard<'_,crate::settings_window::State>{
+    pub(crate) fn window_layout(&self)->std::sync::MutexGuard<'_,crate::app::settings_window::State>{
         self.settings_window.lock().unwrap_or_else(|e|e.into_inner())
     }
 
@@ -1675,7 +1686,7 @@ impl App {
         self.settings.island_lyrics && self.settings.visible_pages[0] && self.media.is_music() && self.media.playing
             && !self.browser_minimal_active
     }
-    pub(crate) fn compact_notices(&self)->bool {self.island_lyrics_active()&&!self.open&&!self.notice.as_ref().is_some_and(|a|a.meeting.is_some()||self.settings.notification_preview&&matches!(a.source,crate::extras::AlertSource::External(_)))}
+    pub(crate) fn compact_notices(&self)->bool {self.island_lyrics_active()&&!self.open&&!self.notice.as_ref().is_some_and(|a|a.meeting.is_some()||self.settings.notification_preview&&matches!(a.source,crate::app::extras::AlertSource::External(_)))}
 
     /// 换句、分段和展开高亮共用时间调整；正数延后，负数提前。
     pub(crate) fn lyric_position(&self)->f32 {(self.media.position-self.settings.lyric_delay_ms as f64/1000.0)as f32}
@@ -1729,10 +1740,10 @@ impl App {
 
     pub(crate) fn pet_enabled(&self)->bool {self.settings.pet && !self.browser_minimal_active && !self.side()}
     pub(crate) fn pet_space(&self)->f32 {if self.pet_enabled(){44.0}else{0.0}}
-    fn lyric_focus_space(&self)->f32 {if self.pomo.running && self.settings.show_focus{crate::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
+    fn lyric_focus_space(&self)->f32 {if self.pomo.running && self.settings.show_focus{crate::app::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
     fn lyric_bar_width(&self)->f32 {LYRIC_BAR_W+if self.pet_enabled(){48.0}else{0.0}+self.lyric_focus_space()}
     fn notice_size(&self,a:&Alert)->(f32,f32) {
-        let (width,height)=if a.meeting.is_some(){(360.0,136.0)}else if a.source==crate::extras::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
+        let (width,height)=if a.meeting.is_some(){(360.0,136.0)}else if a.source==crate::app::extras::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
         (width,height)
     }
     pub fn set_pet(&mut self,enabled:bool) {
@@ -1919,7 +1930,7 @@ impl App {
             let cy=2.0+slot*(i as f32+0.5)-self.messenger_scroll;
             if cy< -slot || cy>height+slot {continue;}
             let scale=u.source.adapter().icon_scale;
-            crate::extras::messenger_icon(&inner.scaled(x,cy,scale),x,cy,u.source);
+            crate::app::extras::messenger_icon(&inner.scaled(x,cy,scale),x,cy,u.source);
             inner.circle(x+10.0,cy-9.0,2.6,Color32::from_rgb(255,72,72));
             let tag=self.unread_tag(i).map(|tag|tag.to_string()).or_else(||(u.unidentified()).then(||"?".to_string()));
             if let Some(tag)=tag{
@@ -1949,7 +1960,7 @@ impl App {
         for k in 0..sources.len() {
             let (x,y)=at(k);
             let scale=sources[k].adapter().collapsed_icon_scale;
-            crate::extras::messenger_icon(&c.scaled(x,y,scale),x,y,sources[k]);
+            crate::app::extras::messenger_icon(&c.scaled(x,y,scale),x,y,sources[k]);
         }
         // 每个来源图标右上角一个小红点，不显示数字。
         for k in 0..icons {let (x,y)=at(k);c.circle(x+8.0,y-7.0,2.6,Color32::from_rgb(255,59,48));}
@@ -2127,7 +2138,7 @@ impl App {
                 }
                 let switch=target.is_some();
                 if let Some(dock)=target {self.settings.dock=dock;}
-                let (position,length,extent,start)=if self.side() {(cursor.y,screen.height(),crate::side_dock::SIDE_HALF_EXTENT,drag.start.y)}
+                let (position,length,extent,start)=if self.side() {(cursor.y,screen.height(),crate::app::side_dock::SIDE_HALF_EXTENT,drag.start.y)}
                     else {(cursor.x,screen.width(),crate::platform::display_layout::ISLAND_HALF_EXTENT,drag.start.x)};
                 let travel=(length/2.0-extent).max(0.0);
                 let raw=if travel<=0.0 {0.0}else if switch {(position-length/2.0)/travel*limit}
@@ -2221,7 +2232,7 @@ impl App {
         // 中轴细线：屏幕中轴一条向外渐隐的细线，岛体中心一截短刻度，两者重合即居中；吸住后细线同样转绿。
         // 细线画在桌面上，底色未知：彩芯加淡黑描边，深浅壁纸都看得清。
         if let Some(screen)=screen.filter(|_|vis>0.004) {
-            let travel=if side {screen.height()/2.0-crate::side_dock::SIDE_HALF_EXTENT}else{screen.width()/2.0-crate::platform::display_layout::ISLAND_HALF_EXTENT}.max(0.0);
+            let travel=if side {screen.height()/2.0-crate::app::side_dock::SIDE_HALF_EXTENT}else{screen.width()/2.0-crate::platform::display_layout::ISLAND_HALF_EXTENT}.max(0.0);
             // 屏幕中轴相对岛体中心的位置（与窗口跟随同源，不会差一帧）。
             let off=self.placement_offset()*travel;
             let (out,edge)=match dock {
@@ -2440,7 +2451,7 @@ impl App {
             paint::playback_bars(&c,left+content_width-21.0,center_y,self.t,self.media.playing,theme::WHITE);
             if self.pomo.running && self.settings.show_focus {
                 let alpha=smoothstep(0.88,1.0,(width-content_width)/self.lyric_focus_space());
-                crate::focus_bar::draw(&c.faded(alpha),left+width-14.0-crate::focus_bar::LYRIC_WIDTH/2.0,center_y,self.t,&self.pomo,self.phase_secs(self.pomo.phase),true);
+                crate::app::focus_bar::draw(&c.faded(alpha),left+width-14.0-crate::app::focus_bar::LYRIC_WIDTH/2.0,center_y,self.t,&self.pomo,self.phase_secs(self.pomo.phase),true);
             }
         }
         if lyric_alpha>=0.997 {return;}
@@ -2494,7 +2505,7 @@ impl App {
             if crate::quota::ui::bar_tooltip(pill,hint).clicked(){self.show_page(AI_PAGE);}
         }
         if let Some(x)=layout.x[bar::FOCUS] {
-            crate::focus_bar::draw(base,row_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
+            crate::app::focus_bar::draw(base,row_cx+x,15.0,self.t,&self.pomo,self.phase_secs(self.pomo.phase),false);
         }
         if tail>0.003 {
             let c=status.faded(tail);
@@ -3058,7 +3069,7 @@ impl App {
         };
         self.say(message);
         if added>0 {
-            self.shelf_badge_until=self.t+crate::page_badges::HOLD;
+            self.shelf_badge_until=self.t+crate::app::page_badges::HOLD;
             self.pet.react(PetState::Happy);
             self.shelf_first = self.shelf.items.len().saturating_sub(5);
         }

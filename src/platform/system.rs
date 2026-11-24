@@ -528,7 +528,7 @@ unsafe fn avoidance_for_window(foreground:HWND,island:HWND,pid:u32,settings:&cra
     if settings.avoid_apps.is_empty(){return Some(false);}
 
     // 所有者关系可以跨进程，嵌套对话框也沿这条链找到实际遮挡岛的名单窗口。
-    let listed=|p:&str|crate::avoidance::contains_app(&settings.avoid_apps,p);
+    let listed=|p:&str|crate::model::contains_app(&settings.avoid_apps,p);
     let mut parent=owner;
     while let Some(hwnd)=parent {
         if IsIconic(hwnd).as_bool(){return Some(false);}
@@ -1079,11 +1079,11 @@ mod tests {
 }
 
 fn avoidance_matches(path:&str,settings:&crate::model::Settings)->bool {
-    settings.browser_minimal && (crate::avoidance::contains_app(&settings.avoid_apps,path)
+    settings.browser_minimal && (crate::model::contains_app(&settings.avoid_apps,path)
         || settings.avoid_browsers && std::path::Path::new(path).file_name().and_then(|name|name.to_str()).is_some_and(is_browser_process))
 }
 
-pub(crate) fn avoidance_windows()->std::result::Result<Vec<crate::avoidance::Candidate>,String> {
+pub(crate) fn avoidance_windows()->std::result::Result<Vec<crate::model::Candidate>,String> {
     use windows::Win32::Foundation::{BOOL,LPARAM};
     unsafe extern "system" fn visit(hwnd:HWND,param:LPARAM)->BOOL {
         if !IsWindowVisible(hwnd).as_bool() || GetWindowLongPtrW(hwnd,GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0!=0 {return BOOL(1);}
@@ -1095,14 +1095,14 @@ pub(crate) fn avoidance_windows()->std::result::Result<Vec<crate::avoidance::Can
         let mut pid=0;GetWindowThreadProcessId(hwnd,Some(&mut pid));
         if pid==GetCurrentProcessId(){return BOOL(1);}
         let Some(path)=process_image_path(pid) else{return BOOL(1)};
-        let items=&mut *(param.0 as *mut Vec<crate::avoidance::Candidate>);
-        if items.iter().any(|a|crate::avoidance::same_app(&a.path,&path)){return BOOL(1);}
+        let items=&mut *(param.0 as *mut Vec<crate::model::Candidate>);
+        if items.iter().any(|a|crate::model::same_app(&a.path,&path)){return BOOL(1);}
         let filename=std::path::Path::new(&path).file_name().and_then(|s|s.to_str()).unwrap_or("");
         let name=executable_description(&path).unwrap_or_else(||filename.trim_end_matches(".exe").to_string());
-        items.push(crate::avoidance::Candidate{browser:is_browser_process(filename),path,name,title:String::from_utf16_lossy(&title[..len as usize])});
+        items.push(crate::model::Candidate{browser:is_browser_process(filename),path,name,title:String::from_utf16_lossy(&title[..len as usize])});
         BOOL(1)
     }
-    let mut items:Vec<crate::avoidance::Candidate>=Vec::new();
+    let mut items:Vec<crate::model::Candidate>=Vec::new();
     unsafe{EnumWindows(Some(visit),LPARAM(&mut items as *mut _ as isize))}.map_err(|_|"无法读取应用列表，请刷新重试".to_string())?;
     items.sort_by_key(|a|a.name.to_lowercase());
     Ok(items)
@@ -1207,9 +1207,9 @@ mod avoidance_tests {
         let entries=avoidance_windows().unwrap();
         let current=std::env::current_exe().unwrap().to_string_lossy().into_owned();
         for (index,app) in entries.iter().enumerate() {
-            assert!(!crate::avoidance::same_app(&app.path,&current));
+            assert!(!crate::model::same_app(&app.path,&current));
             assert!(!app.name.is_empty() && !app.title.is_empty());
-            assert!(!entries[..index].iter().any(|previous|crate::avoidance::same_app(&previous.path,&app.path)));
+            assert!(!entries[..index].iter().any(|previous|crate::model::same_app(&previous.path,&app.path)));
         }
         let notepad=std::path::Path::new(r"C:\Windows\System32\notepad.exe");
         if notepad.exists(){assert!(executable_description(notepad.to_str().unwrap()).is_some());}

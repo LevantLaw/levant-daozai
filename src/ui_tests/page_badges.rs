@@ -43,32 +43,32 @@ fn mail_and_todo_badges_open_their_pages(){
 fn shelf_and_calendar_badges_are_brief(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.frame(vec![]);
-    h.app.shelf_badge_until=h.app.t+crate::page_badges::HOLD;
-    h.app.calendar_badge_until=h.app.t+crate::page_badges::HOLD;
+    h.app.shelf_badge_until=h.app.t+crate::app::page_badges::HOLD;
+    h.app.calendar_badge_until=h.app.t+crate::app::page_badges::HOLD;
     h.frame(vec![]);
     assert!(slots(&h).contains(&crate::bar_layout::SHELF) && slots(&h).contains(&crate::bar_layout::CALENDAR),"拖入文件和会议提醒后短暂出现");
     h.click(badge_rect(&h,crate::bar_layout::CALENDAR).center());
     assert_eq!(h.app.page(),crate::app::CALENDAR_PAGE);
 
     let mut h=H::new();h.frame(vec![]);
-    h.app.shelf_badge_until=h.app.t+crate::page_badges::HOLD;
+    h.app.shelf_badge_until=h.app.t+crate::app::page_badges::HOLD;
     h.frame(vec![]);
     assert!(slots(&h).contains(&crate::bar_layout::SHELF));
-    h.t+=crate::page_badges::HOLD+1.0;h.frame(vec![]);
+    h.t+=crate::app::page_badges::HOLD+1.0;h.frame(vec![]);
     assert!(!slots(&h).contains(&crate::bar_layout::SHELF),"置物架徽标只显示十秒");
 }
 
 #[test]
 fn dnd_badge_and_button_follow_the_system_focus_state(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.dnd=crate::dnd::Dnd::fake(true);h.frame(vec![]);
+    let mut h=H::new();h.app.dnd=crate::app::dnd::Dnd::fake(true);h.frame(vec![]);
     assert_eq!(slots(&h),[crate::bar_layout::DND],"勿扰开启时月亮常驻");
     h.click(badge_rect(&h,crate::bar_layout::DND).center());
     assert!(!h.app.dnd.active);
     h.frame(vec![]);
     assert!(!slots(&h).contains(&crate::bar_layout::DND),"关闭后月亮消失");
 
-    let mut h=H::new();h.app.dnd=crate::dnd::Dnd::fake(true);h.app.show_page(0);
+    let mut h=H::new();h.app.dnd=crate::app::dnd::Dnd::fake(true);h.app.show_page(0);
     // 等展开动画落定后再取按钮位置。
     h.hover(H::local(200.0,60.0),1.0);
     let dnd=h.ctx.read_response(egui::Id::new(("card",true,"page-dnd"))).expect("展开后应有勿扰按钮");
@@ -100,7 +100,7 @@ fn expanded_status_row_compresses_gaps_before_shrinking_icons(){
     h.app.pomo.running=true;h.app.pomo.remaining=600.0;
     h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:-12.0,..Default::default()});
     add_unread_mail(&mut h);
-    h.app.calendar_badge_until=h.app.t+crate::page_badges::HOLD;
+    h.app.calendar_badge_until=h.app.t+crate::app::page_badges::HOLD;
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     let available=crate::app::PW-16.0-crate::bar_layout::TAIL_W;
     let layout=&h.app.resident.target;
@@ -121,7 +121,7 @@ fn tray_mail_shows_on_new_mail_and_opens_the_mail_page(){
     assert!(h.app.resident.current().x[TRAY].is_none(),"没有邮件事件时容器不占位");
     add_unread_mail(&mut h);
     for _ in 0..5{h.frame(vec![]);}
-    assert_eq!(h.app.tray_active(),Some(crate::event_tray::Item::Mail));
+    assert_eq!(h.app.tray_active(),Some(crate::app::event_tray::Item::Mail));
     assert!(h.app.resident.current().x[TRAY].is_some(),"新邮件时容器占位");
     assert!(!slots(&h).contains(&MAIL),"邮箱进容器后行内不再显示徽标");
     h.click(badge_rect(&h,MAIL).center());
@@ -183,7 +183,7 @@ fn tray_members_can_be_reordered_by_dragging(){
 
 #[test]
 fn tray_mail_stays_until_the_mail_is_read(){
-    use crate::event_tray::{Item,HOLD};
+    use crate::app::event_tray::{Item,HOLD};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_mail=true;
     add_unread_mail(&mut h);
@@ -201,7 +201,7 @@ fn tray_mail_stays_until_the_mail_is_read(){
 
 #[test]
 fn tray_event_starts_counting_after_the_banner(){
-    use crate::event_tray::{Item,HOLD};
+    use crate::app::event_tray::{Item,HOLD};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_shelf=true;
     for _ in 0..20{h.frame(vec![]);}
@@ -255,9 +255,9 @@ fn tray_calendar_shows_on_calendar_reminder_and_opens_the_calendar_page(){
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_calendar=true;
     for _ in 0..20{h.frame(vec![]);}
     assert!(h.app.resident.current().x[TRAY].is_none(),"没有日程事件时容器不占位");
-    h.app.calendar_badge_until=h.app.t+crate::page_badges::HOLD;
+    h.app.calendar_badge_until=h.app.t+crate::app::page_badges::HOLD;
     for _ in 0..5{h.frame(vec![]);}
-    assert_eq!(h.app.tray_active(),Some(crate::event_tray::Item::Calendar));
+    assert_eq!(h.app.tray_active(),Some(crate::app::event_tray::Item::Calendar));
     assert!(h.app.resident.current().x[TRAY].is_some(),"日程提醒时容器占位");
     assert!(!slots(&h).contains(&CALENDAR),"日程进容器后行内不再显示徽标");
     h.click(badge_rect(&h,CALENDAR).center());
@@ -317,7 +317,7 @@ fn island_preview_keeps_page_icons_out_of_the_row(){
         (moon,mail)
     }
     let button=|pos,pressed|egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()};
-    let mut h=H::new();h.app.dnd=crate::dnd::Dnd::fake(false);
+    let mut h=H::new();h.app.dnd=crate::app::dnd::Dnd::fake(false);
     draw(&mut h,vec![]);
     let (moon,mail)=draw(&mut h,vec![]);
     assert!(mail.is_none(),"页面徽标不在常驻行里重复画");

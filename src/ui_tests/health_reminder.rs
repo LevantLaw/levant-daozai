@@ -159,7 +159,7 @@ fn health_entering_fullscreen_clears_active_and_queued_popups_only(){
     h.app.alert(crate::app::SIT_TITLE,"起来走走",2,true);
     h.app.alert("待办到时间了","检查周报",4,true);
     h.fullscreen=true;h.cmds.clear();h.frame(vec![]);
-    let health=|alert:&crate::extras::Alert|alert.health().is_some();
+    let health=|alert:&crate::app::extras::Alert|alert.health().is_some();
     assert!(!h.app.notice.as_ref().is_some_and(health) && !h.app.hud_notice.as_ref().is_some_and(health),"全屏隐藏时清除正在显示的健康横幅");
     assert!(!h.app.alerts.iter().any(health),"健康提醒不能留在弹窗队列里等退出后重播");
     assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Notify(title,..)if title=="喝水时间到了" || title==crate::app::SIT_TITLE)),"尚未发出的健康系统通知也要抑制");
@@ -239,7 +239,7 @@ fn health_reminder_gallery(){
     for dock in [crate::model::Dock::Top,crate::model::Dock::Left,crate::model::Dock::Right]{
         let mut h=due();h.app.settings.dock=dock;h.app.settings.pet=false;
         let side=dock.is_side();
-        let (w,height)=if side{(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)}else{(crate::app::CANVAS_W,WIN_H)};
+        let (w,height)=if side{(crate::app::side_dock::SIDE_W,crate::app::side_dock::SIDE_H)}else{(crate::app::CANVAS_W,WIN_H)};
         let mut raster=feature_raster_sized(w,height);
         let away=Some(Pos2::new(if side{w/2.0}else{WIN_W/2.0},height-6.0));
         let near=if dock==crate::model::Dock::Left{Pos2::new(8.0,height/2.0)}else if dock==crate::model::Dock::Right{Pos2::new(w-8.0,height/2.0)}else{Pos2::new(WIN_W/2.0,12.0)};
@@ -285,7 +285,7 @@ fn health_sound_follows_delivery_mode_and_only_rings_when_first_due() {
         h.app.settings.notifications=enabled;
         h.app.settings.system_notify=system;
         h.app.settings.sound=sound;
-        for kind in crate::extras::HealthReminder::ALL {
+        for kind in crate::app::extras::HealthReminder::ALL {
             h.app.pending.clear();
             h.app.alert(kind.title(),"到时间了",2,true);
             h.app.alert(kind.title(),"到时间了",2,true);

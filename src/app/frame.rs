@@ -167,7 +167,7 @@ impl App {
                 let mail_reading=inside && self.page==5 && self.mail.open_uid.is_some();
                 let mail_list=self.page==5 && !self.mail.accounts.is_empty() && self.mail.open_uid.is_none() && self.mail_list_bounds().contains(cursor);
                 let music_volume=self.page==0 && (Rect::from_min_max(Pos2::new(354.0,106.0),Pos2::new(380.0,130.0)).contains(cursor)
-                    || self.music_volume_open && crate::pages::MUSIC_VOLUME_RECT.contains(cursor));
+                    || self.music_volume_open && crate::app::pages::MUSIC_VOLUME_RECT.contains(cursor));
                 if mail_reading || mail_list || music_volume {self.wheel_delta=0.0;}
                 else {
                     // 累积高精度滚轮的小幅输入；停顿或反向时丢弃上一段余量。
@@ -193,7 +193,7 @@ impl App {
                             4 if Rect::from_min_max(Pos2::new(196.0,31.0),Pos2::new(377.0,124.0)).contains(cursor)
                                 =>Some((&mut self.todo_first,self.todos.items.len().saturating_sub(3))),
                             CLIPBOARD_PAGE if clipboard_body
-                                =>Some((&mut self.clip_first,self.clipboard.lock().items.len().saturating_sub(crate::pages::CLIP_ROWS))),
+                                =>Some((&mut self.clip_first,self.clipboard.lock().items.len().saturating_sub(crate::app::pages::CLIP_ROWS))),
                             SHELF_PAGE if Rect::from_min_max(Pos2::new(36.0,28.0),Pos2::new(383.0,128.0)).contains(cursor)
                                 =>Some((&mut self.shelf_first,self.shelf.items.len().saturating_sub(5))),
                             WINDOWS_PAGE if Rect::from_min_max(Pos2::new(40.0,52.0),Pos2::new(378.0,160.0)).contains(cursor)
@@ -234,7 +234,7 @@ impl App {
         // ---------- 绘制 ----------
         let (sx, sy) = self.drag_scale();
         // 拿起放大不能超出透明画布，否则两端会被切掉。
-        let (max_w, max_h) = if side {(crate::side_dock::SIDE_W, crate::side_dock::SIDE_H)} else {(WIN_W, WIN_H)};
+        let (max_w, max_h) = if side {(crate::app::side_dock::SIDE_W, crate::app::side_dock::SIDE_H)} else {(WIN_W, WIN_H)};
         let (w, h) = ((self.w.pos * sx).min((max_w - 24.0).max(self.w.pos)), (self.h.pos * sy).min((max_h - 24.0).max(self.h.pos)));
         let panel = self.island_rect(win, w, h);
         let messenger_rect=self.messenger_badge_rect(win,panel);
@@ -251,7 +251,7 @@ impl App {
         let minimal_pill = minimal_strip && pc < 0.02;
         let flare = if minimal_pill || pill { 0.0 } else { lerp(5.0, FLARE, pc) };
         let k = (w / PW).clamp(0.3, 1.1);
-        let thickness = if side { crate::side_dock::SIDE_BAR_W } else { BAR_H };
+        let thickness = if side { crate::app::side_dock::SIDE_BAR_W } else { BAR_H };
         let radius = if minimal_pill { BAR_H_MIN / 2.0 } else if pill { (w.min(h) * 0.5).min(lerp(thickness * 0.5, 26.0, pc)) } else { lerp(12.5, RAD * k.min(1.0), pc) };
         let flare_h = lerp(8.0, FLARE_H, pc);
         let thick = glass::thickness(PH);
@@ -302,7 +302,7 @@ impl App {
         self.cursor_local = env.cursor.map(|p| base.to_local(p));
 
         let banner=!self.compact_notices()&&self.notice.is_some()&&!self.open;
-        let restoring_lyrics=!self.open&&self.notice.is_none()&&self.island_lyrics_active()&&self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()||a.source!=crate::extras::AlertSource::Internal);
+        let restoring_lyrics=!self.open&&self.notice.is_none()&&self.island_lyrics_active()&&self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()||a.source!=crate::app::extras::AlertSource::Internal);
         let fading_hud=!self.compact_notices()&&!self.open&&self.hud_notice.as_ref().is_some_and(|a|a.is_hud())&&(banner||self.hud_alpha>0.003);
         if fading_hud {
             let from=self.resident.target.width;let to=HUD_W+self.pet_space();
@@ -325,10 +325,10 @@ impl App {
             if let Some(a)=self.hud_notice.clone() {
                 let opacity=self.hud_alpha*smoothstep(0.45,0.95,self.notice_width.pos/44.0);
                 let c=c.faded(opacity);let c=if self.notice.is_none()||opacity<0.85 {c.ghost()}else{c};
-                if a.source!=crate::extras::AlertSource::Internal {
+                if a.source!=crate::app::extras::AlertSource::Internal {
                     paint::bell(&c.scaled(18.0,15.0,0.85),18.0,15.0,theme::WHITE,paint::bell_swing(self.t-a.at));
                     c.circle(22.0,10.5,2.0,Color32::from_rgb(255,72,72));
-                }else{crate::extras::notice_badge(&c,18.0,15.0,&a);}
+                }else{crate::app::extras::notice_badge(&c,18.0,15.0,&a);}
                 let button=crate::quota::ui::bar_tooltip(c.hit(0.0,0.0,36.0,BAR_H,"notice-badge"),format!("{}\n{}",a.title,a.body));
                 if button.clicked(){if let Some(kind)=a.health(){self.confirm_health_reminder(kind);}else{self.notice_details=!self.notice_details;}}
             }else if self.t<self.notification_bell_until || self.windows_unread {
@@ -475,7 +475,7 @@ impl App {
             || self.open && self.page==2 && (!self.water_ring.settled(1.0) || !self.sit_view_t.settled(1.0) || !self.sit_t.settled(1.0))
             || self.toast.is_some()
             || self.t < self.notification_bell_until && self.t-self.notification_bell_at < 0.95
-            || self.notice.as_ref().is_some_and(|a|a.source!=crate::extras::AlertSource::Internal&&self.t-a.at<0.95)
+            || self.notice.as_ref().is_some_and(|a|a.source!=crate::app::extras::AlertSource::Internal&&self.t-a.at<0.95)
             || self.hud_alpha > 0.003 && self.hud_alpha < 0.997
             || self.t-self.open_at < 0.40
             || self.t-self.close_at < 0.14

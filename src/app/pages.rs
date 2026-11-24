@@ -297,7 +297,7 @@ impl App {
         let hand = if self.pomo.running { (self.t as f32 * 1.2) % TAU } else { 0.0 };
         if resting {
             let t=if self.pomo.running && crate::bar_layout::animations_enabled(){self.t as f32}else{0.0};
-            crate::focus_bar::tea(&c.scaled(rx,ry,2.2),rx,ry,frac,t);
+            crate::app::focus_bar::tea(&c.scaled(rx,ry,2.2),rx,ry,frac,t);
         }else{paint::stopwatch(c, rx, ry + 0.5, 15.5, hand * run, theme::WHITE);}
 
         let secs = self.pomo.remaining.max(0.0).ceil() as u32;
@@ -379,12 +379,12 @@ impl App {
             if sit {
                 self.settings.sit_remind = !self.settings.sit_remind;
                 self.settings.save();
-                self.confirm_health_reminder(crate::extras::HealthReminder::Sit);
+                self.confirm_health_reminder(crate::app::extras::HealthReminder::Sit);
                 self.say(if self.settings.sit_remind { "久坐提醒已打开" } else { "久坐提醒已关闭" });
             } else {
                 self.water.remind = !self.water.remind;
                 self.water.save();
-                self.confirm_health_reminder(crate::extras::HealthReminder::Water);
+                self.confirm_health_reminder(crate::app::extras::HealthReminder::Water);
                 self.say(if self.water.remind { "喝水提醒已打开" } else { "喝水提醒已关闭" });
             }
         }
@@ -438,7 +438,7 @@ impl App {
     fn water_body(&mut self, c: &Card, env: &Env) {
         let pct = self.water.percent();
         let liters = self.water_ml / 1000.0;
-        let pending=self.health_pending[crate::extras::HealthReminder::Water as usize];
+        let pending=self.health_pending[crate::app::extras::HealthReminder::Water as usize];
         if pending {
             c.text(44.0,59.0,"待喝水",24.0,W::Bold,theme::BLUE,H::Left);
         }else{
@@ -519,7 +519,7 @@ impl App {
         let lunch = self.lunch_now(env);
         let in_hours = self.remind_window(env);
         let left = ((self.sit_due() - self.t).max(0.0) / 60.0).ceil() as u32;
-        let pending = on && self.health_pending[crate::extras::HealthReminder::Sit as usize];
+        let pending = on && self.health_pending[crate::app::extras::HealthReminder::Sit as usize];
         let counting = on && !pending && left > 0;
         // 待处理时进度停在满环，确认后从零开始。
         let frac = if on { (1.0 - (self.sit_due() - self.t) / (goal as f64 * 60.0)).clamp(0.0, 1.0) as f32 }
@@ -982,7 +982,7 @@ impl App {
                     self.todos.save();
                     if !now {
                         self.todo_pop.vel += 5.0;
-                        self.pet.react(crate::extras::PetState::Happy);
+                        self.pet.react(crate::app::extras::PetState::Happy);
                     }
                 }
                 row += 1;

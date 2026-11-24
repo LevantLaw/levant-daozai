@@ -1,13 +1,7 @@
 //! 自动避让设置与正在运行的应用选择。
 use eframe::egui::{self,Color32,Rect,Vec2};
-use crate::{extras::setting_row,model::Settings};
+use crate::{app::extras::setting_row,model::{Candidate,Settings,contains_app,same_app}};
 use std::sync::mpsc::{self,Receiver};
-
-#[derive(Clone,Debug)]
-pub(crate) struct Candidate {pub path:String,pub name:String,pub title:String,pub browser:bool}
-
-pub(crate) fn same_app(a:&str,b:&str)->bool {a.replace('/',"\\").to_lowercase()==b.replace('/',"\\").to_lowercase()}
-pub(crate) fn contains_app(apps:&[(String,String)],path:&str)->bool {apps.iter().any(|(p,_)|same_app(p,path))}
 
 #[derive(Default)]
 pub(crate) struct Picker {
@@ -47,7 +41,7 @@ impl Picker {
                 ui.separator();
                 setting_row(ui,"常用浏览器","前台浏览器窗口遮住岛时避让",&mut settings.avoid_browsers);
                 ui.separator();
-                crate::extras::settings_control_row(ui,"自定义应用",100.0,|ui|{
+                crate::app::extras::settings_control_row(ui,"自定义应用",100.0,|ui|{
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
                         if ui.button("＋ 添加应用").clicked(){self.open=true;self.query.clear();self.refresh(ui.ctx());}
                     }).response
@@ -96,10 +90,10 @@ impl Picker {
         }
         let mut close=false;
         let response=egui::Modal::new(egui::Id::new("avoidance-picker"))
-            .frame(crate::extras::settings_modal_frame(ctx)).backdrop_color(Color32::from_black_alpha(110)).show(ctx,|ui|{
+            .frame(crate::app::extras::settings_modal_frame(ctx)).backdrop_color(Color32::from_black_alpha(110)).show(ctx,|ui|{
             ui.visuals_mut().override_text_color=Some(crate::settings_theme::color(ctx,Color32::from_gray(235),Color32::from_gray(30)));
             ui.set_width(410.0);
-            if crate::extras::settings_modal_title(ui,"添加应用"){close=true;}
+            if crate::app::extras::settings_modal_title(ui,"添加应用"){close=true;}
             ui.label(egui::RichText::new("选择正在运行的应用，添加后自动记住。").size(12.0).weak());
             ui.add_space(12.0);
             ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("搜索应用或窗口标题").desired_width(f32::INFINITY));

@@ -692,7 +692,7 @@ impl App {
     }
 
     pub(crate) fn weather_city_picker(&mut self, ui: &mut egui::Ui) -> bool {
-        use crate::extras::{settings_control_row,settings_hint};
+        use crate::app::extras::{settings_control_row,settings_hint};
         let popup=egui::Id::new("weather-city-options");
         let mut enter=false;
         let response=settings_control_row(ui,"城市名称",80.0,|ui|{
@@ -1087,7 +1087,7 @@ impl App {
     }
 
     pub(crate) fn weather_settings(&mut self, ui: &mut egui::Ui) {
-        use crate::extras::{settings_card, settings_hint, settings_label};
+        use crate::app::extras::{settings_card, settings_hint, settings_label};
         use crate::settings_theme::color;
         let ctx=ui.ctx().clone();
         let accent=color(&ctx,Color32::from_rgb(96,164,255),Color32::from_rgb(34,108,220));

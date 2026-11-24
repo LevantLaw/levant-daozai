@@ -251,6 +251,19 @@ impl MotionSpeed {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotificationSound { Silent, Complete, Reminder, Email, Sonar }
 
+/// 自动避让：正在运行的应用候选。
+#[derive(Clone, Debug)]
+pub(crate) struct Candidate { pub path: String, pub name: String, pub title: String, pub browser: bool }
+
+/// 比较两个应用路径是否指向同一程序（统一分隔符与大小写）。
+pub(crate) fn same_app(a: &str, b: &str) -> bool {
+    a.replace('/', "\\").to_lowercase() == b.replace('/', "\\").to_lowercase()
+}
+
+pub(crate) fn contains_app(apps: &[(String, String)], path: &str) -> bool {
+    apps.iter().any(|(p, _)| same_app(p, path))
+}
+
 #[derive(Clone, Debug)]
 pub struct Settings {
     pub display_id: String,

@@ -1,7 +1,7 @@
 //! 设置页与设置控件。
 use super::*;
 use crate::settings_theme::color as settings_color;
-use crate::extras::HealthReminder;
+use crate::app::extras::HealthReminder;
 
 fn switch(ui:&mut egui::Ui,value:&mut bool)->bool {
     let (rect,response)=ui.allocate_exact_size(egui::vec2(34.0,20.0),egui::Sense::click());

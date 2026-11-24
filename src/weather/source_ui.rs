@@ -1,5 +1,5 @@
 //! 天气来源草稿、连接验证与安全启用。
-use crate::{app::{App,WEATHER_PAGE},extras::{settings_card,settings_hint,settings_label},settings_theme::color,weather::qweather::{self,Client,Config,Error,Location}};
+use crate::{app::{App,WEATHER_PAGE},app::extras::{settings_card,settings_hint,settings_label},settings_theme::color,weather::qweather::{self,Client,Config,Error,Location}};
 use eframe::egui::{self,Color32,RichText};
 use std::sync::{Arc,atomic::{AtomicBool,Ordering},mpsc::Receiver};
 pub(crate) use super::qweather::{Provider,normalize_host};

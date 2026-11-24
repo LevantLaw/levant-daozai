@@ -1,5 +1,5 @@
 //! 同心额度环、账号选择及账号设置。
-use crate::{app::{App,Cmd},extras::{settings_control_row},render,render::paint::{Card,H},quota::{self,Accent,Account,Amount,Config,Provider,Snapshot},render::theme::{self,W}};
+use crate::{app::{App,Cmd},app::extras::{settings_control_row},render,render::paint::{Card,H},quota::{self,Accent,Account,Amount,Config,Provider,Snapshot},render::theme::{self,W}};
 use eframe::egui::{self,Color32};
 use std::collections::{HashMap,HashSet};
 use chrono::Datelike;
@@ -705,10 +705,10 @@ impl App {
         if !self.quota.connect_open{return;}let mut open=true;
         let title=if self.quota.connect_target.is_some(){"重新连接账号"}else{"添加账号"};
         // 与设置页其他弹窗同一套外观：卡片底色、大圆角、标题栏右侧关闭。
-        egui::Window::new(title).id(egui::Id::new("quota-connect-window")).title_bar(false).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER,egui::Vec2::ZERO).default_width(440.0).frame(crate::extras::settings_modal_frame(ctx)).show(ctx,|ui|{
+        egui::Window::new(title).id(egui::Id::new("quota-connect-window")).title_bar(false).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER,egui::Vec2::ZERO).default_width(440.0).frame(crate::app::extras::settings_modal_frame(ctx)).show(ctx,|ui|{
             // 套用设置页的按钮、输入框和分隔线样式，和其他弹窗一致。
-            crate::extras::settings_apply_style(ui);
-            if crate::extras::settings_modal_title(ui,title){open=false;}
+            crate::app::extras::settings_apply_style(ui);
+            if crate::app::extras::settings_modal_title(ui,title){open=false;}
             ui.set_max_width(440.0);ui.style_mut().wrap_mode=Some(egui::TextWrapMode::Wrap);ui.spacing_mut().item_spacing.y=9.0;ui.visuals_mut().override_text_color=Some(crate::settings_theme::color(ctx,Color32::from_gray(225),Color32::from_gray(35)));
             if self.quota.provider==Provider::RelayCustom{ui.set_min_height((ctx.screen_rect().height()-160.0).clamp(260.0,560.0));}
             egui::ScrollArea::vertical().max_height(if self.quota.provider==Provider::RelayCustom{(ctx.screen_rect().height()-140.0).clamp(260.0,640.0)}else{460.0}).show(ui,|ui|{

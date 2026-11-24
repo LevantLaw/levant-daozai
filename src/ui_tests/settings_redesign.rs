@@ -51,14 +51,14 @@ fn merged_mail_switch_keeps_last_page_behavior(){
 /// 外观、功能页面并入岛体；专注/健康、待办/置物架拆开；旧序号仍能打开对应页面。
 #[test]
 fn settings_tab_titles_follow_new_structure(){
-    use crate::extras::settings_tab_group_for_tests as group;
+    use crate::app::extras::settings_tab_group_for_tests as group;
     assert_eq!(group(2),"专注");assert_eq!(group(3),"健康");
     assert_eq!(group(4),"待办");assert_eq!(group(5),"置物架");
     assert_eq!(group(6),"提醒");assert_eq!(group(7),"邮箱");assert_eq!(group(8),"日程");
     assert_eq!(group(0),"通用");assert_eq!(group(13),"岛体","外观并入岛体");
     assert_eq!(group(14),"行为");assert_eq!(group(10),"岛体","功能页面并入岛体");
     assert_eq!(group(9),"关于");assert_eq!(group(15),"AI 会话");
-    assert_eq!(group(16),"岛体");assert_eq!(group(crate::extras::SETTINGS_TAB_CLIPBOARD),"剪贴板");
+    assert_eq!(group(16),"岛体");assert_eq!(group(crate::app::extras::SETTINGS_TAB_CLIPBOARD),"剪贴板");
 }
 
 /// 每个分页都能正常绘制（含功能关闭时的提示），不会因为挪动布局而崩溃。
@@ -68,7 +68,7 @@ fn settings_every_tab_renders_with_modules_on_and_off(){
     for on in [true,false] {
         let mut h=H::new();h.app.open_settings();h.ctx.set_embed_viewports(true);
         if !on {for page in 0..12 {if page!=crate::app::MUSIC_PAGE {h.app.settings.visible_pages[page]=false;}}}
-        for tab in 0..=crate::extras::SETTINGS_TAB_WINDOWS {
+        for tab in 0..=crate::app::extras::SETTINGS_TAB_WINDOWS {
             h.app.settings_tab=tab;
             for _ in 0..2 {let _=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));}
             assert_eq!(h.app.settings_tab,tab,"绘制分页 {tab} 不应自行跳转");
@@ -80,7 +80,7 @@ fn settings_every_tab_renders_with_modules_on_and_off(){
 #[test]
 fn reminder_windows_section_has_system_switch_and_listener_chip(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let texts=settings_text(crate::extras::SETTINGS_TAB_REMINDERS);
+    let texts=settings_text(crate::app::extras::SETTINGS_TAB_REMINDERS);
     for label in ["Windows 通知","系统通知","关闭后所有应用的横幅都会被 Windows 拦截；开启后岛仔自动监听。"] {
         assert!(texts.iter().any(|text|text==label),"提醒页缺少「{label}」");
     }
@@ -138,7 +138,7 @@ fn settings_frame_with(tab:usize,prepare:impl FnOnce(&H))->egui::FullOutput{
 #[test]
 fn body_page_has_appearance_residents_and_feature_pages(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let body=settings_text(crate::extras::SETTINGS_TAB_BODY);
+    let body=settings_text(crate::app::extras::SETTINGS_TAB_BODY);
     for label in ["岛体外观","岛上显示","常驻显示","事件显示","功能页面","皮肤","形状","大小","显示屏","停靠","恢复居中","岛体预览","恢复默认","AI 会话状态灯","岛仔吉祥物","电量","时间","勿扰模式","天气","音乐","专注","邮箱","健康","待办","置物架","日程","剪贴板"] {
         assert!(body.iter().any(|text|text==label),"岛体页缺少「{label}」");
     }
@@ -148,7 +148,7 @@ fn body_page_has_appearance_residents_and_feature_pages(){
     for label in ["展开与收起","自动避让","极简刘海","全屏时隐藏"] {
         assert!(!body.iter().any(|text|text==label),"岛体页不应显示行为项「{label}」");
     }
-    let behavior=settings_text(crate::extras::SETTINGS_TAB_BEHAVIOR);
+    let behavior=settings_text(crate::app::extras::SETTINGS_TAB_BEHAVIOR);
     for label in ["岛体组件","横幅提醒","系统提醒","展开与收起","避让","动画速度","展开后停留","提醒总开关","横幅停留","全屏时隐藏","顶栏适配","自动避让","常用浏览器"] {
         assert!(behavior.iter().any(|text|text==label),"行为页缺少「{label}」");
     }
@@ -169,7 +169,7 @@ fn body_page_has_appearance_residents_and_feature_pages(){
 #[test]
 fn resident_groups_show_persistent_and_event_components(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let frame=settings_frame_with(crate::extras::SETTINGS_TAB_BODY,|_|{});
+    let frame=settings_frame_with(crate::app::extras::SETTINGS_TAB_BODY,|_|{});
     let body:Vec<&str>=frame.shapes.iter().filter_map(|s|match &s.shape{
         egui::Shape::Text(t) if t.pos.x>200.0=>Some(t.galley.text()),
         _=>None,
@@ -188,7 +188,7 @@ fn resident_groups_show_persistent_and_event_components(){
 #[test]
 fn resident_group_rows_are_nested_under_the_group_label(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let frame=settings_frame_with(crate::extras::SETTINGS_TAB_BODY,|_|{});
+    let frame=settings_frame_with(crate::app::extras::SETTINGS_TAB_BODY,|_|{});
     let text=|label:&str|frame.shapes.iter().find_map(|s|match &s.shape{
         egui::Shape::Text(t) if t.galley.text()==label && t.pos.x>200.0=>Some(t),
         _=>None,
@@ -219,7 +219,7 @@ fn agent_notify_groups_use_nested_rows_like_island_groups(){
 fn resident_groups_default_expanded_and_collapse_independently(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.app.settings_tab=crate::extras::SETTINGS_TAB_BODY;h.app.open_settings();h.ctx.set_embed_viewports(false);
+    h.app.settings_tab=crate::app::extras::SETTINGS_TAB_BODY;h.app.open_settings();h.ctx.set_embed_viewports(false);
     let mut frame=settings_frame_mut(&mut h,vec![]);
     for _ in 0..2 {frame=settings_frame_mut(&mut h,vec![]);}
     let has=|frame:&egui::FullOutput,label:&str|frame.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==label && t.pos.x>200.0));
@@ -243,7 +243,7 @@ fn resident_groups_default_expanded_and_collapse_independently(){
 #[test]
 fn reminder_page_keeps_policy_and_ai_page_owns_event_hooks(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let reminders=settings_text(crate::extras::SETTINGS_TAB_REMINDERS);
+    let reminders=settings_text(crate::app::extras::SETTINGS_TAB_REMINDERS);
     for label in ["系统状态","即时通讯","AI 会话消息","Windows 通知","会话数","会话记录保留"] {
         assert!(reminders.iter().any(|text|text==label),"提醒页缺少「{label}」");
     }
@@ -282,7 +282,7 @@ fn feature_pages_split_into_separate_settings_pages(){
     let shelf=settings_text(5);
     assert!(shelf.iter().any(|text|text.contains("当前")),"置物架页应显示条目数");
     assert!(!shelf.iter().any(|text|text=="记录剪贴板"),"置物架页不应包含剪贴板设置");
-    let clipboard=settings_text(crate::extras::SETTINGS_TAB_CLIPBOARD);
+    let clipboard=settings_text(crate::app::extras::SETTINGS_TAB_CLIPBOARD);
     for label in ["记录剪贴板","打开剪贴板"] {
         assert!(clipboard.iter().any(|text|text==label),"剪贴板页缺少「{label}」");
     }
@@ -291,10 +291,10 @@ fn feature_pages_split_into_separate_settings_pages(){
 
 #[test]
 fn island_body_tab_is_not_a_feature_page(){
-    let pages:Vec<_>=(0..=crate::extras::SETTINGS_TAB_WINDOWS).filter_map(crate::extras::settings_tab_module).collect();
-    assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_BODY),None);
-    assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_BEHAVIOR),None);
-    assert_eq!(crate::extras::settings_tab_module(crate::extras::SETTINGS_TAB_CLIPBOARD),Some(crate::app::CLIPBOARD_PAGE));
+    let pages:Vec<_>=(0..=crate::app::extras::SETTINGS_TAB_WINDOWS).filter_map(crate::app::extras::settings_tab_module).collect();
+    assert_eq!(crate::app::extras::settings_tab_module(crate::app::extras::SETTINGS_TAB_BODY),None);
+    assert_eq!(crate::app::extras::settings_tab_module(crate::app::extras::SETTINGS_TAB_BEHAVIOR),None);
+    assert_eq!(crate::app::extras::settings_tab_module(crate::app::extras::SETTINGS_TAB_CLIPBOARD),Some(crate::app::CLIPBOARD_PAGE));
     assert_eq!(pages.len(),crate::app::PAGE_NAMES.len(),"每个功能页各有一个设置分页");
 }
 

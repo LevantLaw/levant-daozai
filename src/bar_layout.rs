@@ -47,7 +47,7 @@ pub(crate) const TAIL_W: f32 = TAIL_SLOT * 2.0 + GAP * 2.0;
 /// AI 状态灯是 9 点圆点，闲置圆环外径约 10 点，等待光晕 16 点；槽宽取 14 点，避免圆点两侧留下过大空白。
 pub(crate) const AGENT_SLOT: f32 = 14.0;
 /// 简单图标的统一外框 20 点，内部图形约 14 点；徽标含数量时用 30，宠物也用 20 点槽宽，带数据的组件保持各自宽度。
-const WIDTHS: [f32; 18] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,20.0,crate::focus_bar::WIDTH,20.0,20.0,AGENT_SLOT,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+const WIDTHS: [f32; 18] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,20.0,crate::app::focus_bar::WIDTH,20.0,20.0,AGENT_SLOT,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
 
 /// 固定槽位的基础宽度；额度溢出槽不在此列。
 pub(crate) fn slot_width(slot:usize)->f32 {WIDTHS.get(slot).copied().unwrap_or(0.0)}

@@ -4,7 +4,7 @@ use crate::agent::hooks::Health;
 use crate::agent::store::{Decision, Notice, NoticeKind, NotifyConfig, PendingKind, SessionState, Store};
 use crate::agent::{AgentId, Session};
 use crate::app::{App, AI_PAGE};
-use crate::extras::{setting_row, setting_row_nested, settings_card, settings_control_row_right, settings_group_fold, settings_hint, settings_label, settings_segmented};
+use crate::app::extras::{setting_row, setting_row_nested, settings_card, settings_control_row_right, settings_group_fold, settings_hint, settings_label, settings_segmented};
 use crate::render::paint::{Card, H};
 use crate::render::theme::{self, W};
 use eframe::egui::{self, Color32};
@@ -550,9 +550,9 @@ impl App {
                 });
             }
             ui.separator();
-            crate::extras::settings_action_row(ui,|ui|{
-                if ui.add(crate::extras::settings_primary_button("重新扫描")).clicked() { self.agent.rescan(); }
-                if ui.add(crate::extras::settings_danger_button("清理旧 Hook")).clicked() {
+            crate::app::extras::settings_action_row(ui,|ui|{
+                if ui.add(crate::app::extras::settings_primary_button("重新扫描")).clicked() { self.agent.rescan(); }
+                if ui.add(crate::app::extras::settings_danger_button("清理旧 Hook")).clicked() {
                     let changed = crate::agent::hooks::cleanup_legacy();
                     self.agent.rescan();
                     self.say(if changed { "已清理 Fly Island / 提示音 Hook，备份已保留" } else { "没有发现需要清理的旧 Hook" });

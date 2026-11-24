@@ -97,13 +97,13 @@ fn bluetooth_notice_content(body:&str)->(&str,&str,Option<u8>){
 
 pub(crate) fn device_icon(c: &Card, kind: crate::bt::DeviceKind, x: f32, y: f32, size: f32) {
     let icon=match kind {
-        crate::bt::DeviceKind::Bone | crate::bt::DeviceKind::Earbuds | crate::bt::DeviceKind::Headphones=>egui::include_image!("../assets/device-icons/headphones-round-bold.svg"),
-        crate::bt::DeviceKind::Speaker=>egui::include_image!("../assets/device-icons/speaker-bold.svg"),
-        crate::bt::DeviceKind::Keyboard=>egui::include_image!("../assets/device-icons/keyboard-bold.svg"),
-        crate::bt::DeviceKind::Mouse=>egui::include_image!("../assets/device-icons/mouse-bold.svg"),
-        crate::bt::DeviceKind::Gamepad=>egui::include_image!("../assets/device-icons/gamepad-bold.svg"),
-        crate::bt::DeviceKind::Phone=>egui::include_image!("../assets/device-icons/smartphone-bold.svg"),
-        crate::bt::DeviceKind::Other=>egui::include_image!("../assets/device-icons/bluetooth-linear.svg"),
+        crate::bt::DeviceKind::Bone | crate::bt::DeviceKind::Earbuds | crate::bt::DeviceKind::Headphones=>egui::include_image!("../../assets/device-icons/headphones-round-bold.svg"),
+        crate::bt::DeviceKind::Speaker=>egui::include_image!("../../assets/device-icons/speaker-bold.svg"),
+        crate::bt::DeviceKind::Keyboard=>egui::include_image!("../../assets/device-icons/keyboard-bold.svg"),
+        crate::bt::DeviceKind::Mouse=>egui::include_image!("../../assets/device-icons/mouse-bold.svg"),
+        crate::bt::DeviceKind::Gamepad=>egui::include_image!("../../assets/device-icons/gamepad-bold.svg"),
+        crate::bt::DeviceKind::Phone=>egui::include_image!("../../assets/device-icons/smartphone-bold.svg"),
+        crate::bt::DeviceKind::Other=>egui::include_image!("../../assets/device-icons/bluetooth-linear.svg"),
     };
     let rect=c.rect(x,y,size,size);
     let egui::ImageSource::Bytes{uri,bytes}=icon else{return};
@@ -305,7 +305,7 @@ impl App {
     }
     pub(crate) fn meeting_alert(&mut self, meeting: crate::mail::Meeting, source: String, page: usize) {
         let left=meeting.start-chrono::Local::now().timestamp();
-        self.calendar_badge_until=self.t+if left>0 {left as f64}else{crate::page_badges::HOLD};
+        self.calendar_badge_until=self.t+if left>0 {left as f64}else{crate::app::page_badges::HOLD};
         self.enqueue_alert(Alert {
             source: AlertSource::Internal,
             title: "会议提醒".into(), body: format!("{} · {} · {}", meeting.title, meeting.at, source),
@@ -878,7 +878,7 @@ mod tests {
 
     #[test]
     fn settings_groups_keep_every_page_reachable() {
-        use crate::extras::settings_tab_group_for_tests as group;
+        use crate::app::extras::settings_tab_group_for_tests as group;
         let names:Vec<_>=SETTINGS_GROUPS.iter().map(|group|group.0).collect();
         assert_eq!(names,["通用","岛体","行为","提醒","音乐","专注","健康","待办","置物架","剪贴板","邮箱","日程","AI 额度","AI 会话","天气","Windows 通知","关于"]);
         let sections:Vec<_>=SETTINGS_SECTIONS.iter().map(|section|section.0).collect();
@@ -909,7 +909,7 @@ mod tests {
 
     #[test]
     fn settings_body_icon_renders() {
-        let image=egui_extras::image::load_svg_bytes(include_bytes!("../assets/settings-icons/system/body.svg")).unwrap();
+        let image=egui_extras::image::load_svg_bytes(include_bytes!("../../assets/settings-icons/system/body.svg")).unwrap();
         assert!(image.pixels.iter().any(|pixel|pixel.a()>0));
     }
 
@@ -925,13 +925,13 @@ mod tests {
     #[test]
     fn device_icons_render_as_visible_svg() {
         let icons: &[&[u8]] = &[
-            include_bytes!("../assets/device-icons/headphones-round-bold.svg"),
-            include_bytes!("../assets/device-icons/speaker-bold.svg"),
-            include_bytes!("../assets/device-icons/keyboard-bold.svg"),
-            include_bytes!("../assets/device-icons/mouse-bold.svg"),
-            include_bytes!("../assets/device-icons/gamepad-bold.svg"),
-            include_bytes!("../assets/device-icons/smartphone-bold.svg"),
-            include_bytes!("../assets/device-icons/bluetooth-linear.svg"),
+            include_bytes!("../../assets/device-icons/headphones-round-bold.svg"),
+            include_bytes!("../../assets/device-icons/speaker-bold.svg"),
+            include_bytes!("../../assets/device-icons/keyboard-bold.svg"),
+            include_bytes!("../../assets/device-icons/mouse-bold.svg"),
+            include_bytes!("../../assets/device-icons/gamepad-bold.svg"),
+            include_bytes!("../../assets/device-icons/smartphone-bold.svg"),
+            include_bytes!("../../assets/device-icons/bluetooth-linear.svg"),
         ];
         for bytes in icons {
             let image=egui_extras::image::load_svg_bytes(bytes).unwrap();
@@ -959,12 +959,12 @@ mod tests {
     }
 }
 
-pub(crate) struct TaskDraft {index:usize,original:String,text:String,due:String,error:String,focused:bool,reminder_only:bool,pub(crate) repeat:u8,pub(crate) picker:crate::task_picker::ReminderPicker}
+pub(crate) struct TaskDraft {index:usize,original:String,text:String,due:String,error:String,focused:bool,reminder_only:bool,pub(crate) repeat:u8,pub(crate) picker:crate::app::task_picker::ReminderPicker}
 impl App {
     pub(crate) fn open_task_dialog(&mut self,index:usize){
         self.todo_choosing=false;
         if let Some(task)=self.todos.items.get(index){
-            let draft=TaskDraft{index,original:task.text.clone(),text:task.text.clone(),due:task.due.clone().unwrap_or_default(),error:String::new(),focused:false,reminder_only:false,repeat:task.repeat,picker:crate::task_picker::ReminderPicker::new(task.due.as_deref())};
+            let draft=TaskDraft{index,original:task.text.clone(),text:task.text.clone(),due:task.due.clone().unwrap_or_default(),error:String::new(),focused:false,reminder_only:false,repeat:task.repeat,picker:crate::app::task_picker::ReminderPicker::new(task.due.as_deref())};
             self.show_page(4);self.task_dialog=Some(draft);
         }
     }
@@ -1033,7 +1033,7 @@ impl App {
         }
     }
     fn draw_task_reminder(&mut self,c:&Card){
-        use crate::task_picker::PickerAction;
+        use crate::app::task_picker::PickerAction;
         let Some(d)=self.task_dialog.as_mut().filter(|d|d.picker.open) else{return};
         let has_reminder=self.todos.items.get(d.index).is_some_and(|task|task.due.is_some());
         c.text(15.0,25.0,"待办",size::TITLE,W::Bold,theme::WHITE,H::Left);
