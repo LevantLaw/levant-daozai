@@ -557,7 +557,6 @@ pub enum Incoming {
     Status(String),
     Message(String, String, String, Option<crate::messenger::Target>),
 }
-#[path="toast_source.rs"]
 mod toast_source;
 
 fn notification_identity(n:&UserNotification,number:u32,created:i64,known:Option<crate::messenger::Messenger>)->(String,String){

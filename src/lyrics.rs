@@ -165,9 +165,7 @@ pub fn from_plain(raw: &str) -> Lyrics {
     Lyrics { lines, synced: false }
 }
 
-#[path="soda_cache.rs"]
 mod soda_cache;
-#[path="kugou_cache.rs"]
 pub(crate) mod kugou_cache;
 
 pub fn is_soda(source:&str)->bool {source=="汽水音乐" || source.to_ascii_lowercase().contains("sodamusic")}

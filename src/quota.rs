@@ -2,29 +2,17 @@
 use serde_json::{json, Value};
 use std::{collections::HashMap, fs, io::Read, path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}};
 use base64::Engine;
-#[path="grok_quota.rs"]
 pub(crate) mod grok;
-#[path="gemini_quota.rs"]
 pub(crate) mod gemini;
-#[path="doubao_quota.rs"]
 pub(crate) mod doubao;
-#[path="claude_quota.rs"]
 mod claude;
-#[path="workbuddy_quota.rs"]
 pub(crate) mod workbuddy;
-#[path="deepseek_quota.rs"]
 pub(crate) mod deepseek;
-#[path="zcode_quota.rs"]
 pub(crate) mod zcode;
-#[path="plan_quota.rs"]
 pub(crate) mod plans;
-#[path="relay_quota.rs"]
 pub(crate) mod relay;
-#[path="api_quota.rs"]
 pub(crate) mod api;
-#[path="kiro_quota.rs"]
 pub(crate) mod kiro;
-#[path="native_auth.rs"]
 mod native_auth;
 
 pub struct Discovery {pub added:usize,pub notes:Vec<String>}

@@ -4,7 +4,6 @@ use ring::digest;
 use serde_json::{json,Value};
 use std::{fs,path::{Path,PathBuf}};
 
-#[path="claude_usage_cache.rs"]
 mod desktop_cache;
 
 const HISTORY:&str="plan-usage-history.json";
@@ -123,7 +122,7 @@ pub(super) fn install_code_collector(path:&Path)->Result<(),String>{
         return Err("Claude Code 已有状态栏配置，已保留；可选择现有脚本导出的本地用量 JSON".into());
     }
     let needs_status_line=settings["statusLine"].is_null();
-    let script_content=format!("\u{feff}{}",include_str!("../scripts/claude-statusline.ps1"));
+    let script_content=format!("\u{feff}{}",include_str!("../../scripts/claude-statusline.ps1"));
     crate::model::atomic_write(&script,script_content.as_bytes()).map_err(|_|"无法保存 Claude 本地采集脚本".to_string())?;
     if !needs_status_line{return Ok(());}
     settings["statusLine"]=json!({"type":"command","command":command});

@@ -9,7 +9,6 @@
 
 use std::collections::HashMap;
 #[cfg(windows)]
-#[path="mail_fetch.rs"]
 pub(crate) mod fetch;
 
 pub const SERVICE: &str = "Daozai.Mail";

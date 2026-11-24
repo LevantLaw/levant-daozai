@@ -1,20 +1,12 @@
 //! 无窗口交互测试：直接向 egui 注入输入事件，验证悬停展开、切页、按钮。
 use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
-#[path="messenger/ui_tests.rs"]
 mod enterprise_messenger;
-#[path="calendar/ui_compatibility_tests.rs"]
 mod calendar_compatibility;
-#[path="doubao_ui_tests.rs"]
 mod doubao;
-#[path="weather_source_ui_tests.rs"]
 mod weather_source;
-#[path="lyrics_switch_ui_tests.rs"]
 mod lyrics_switch;
-#[path="health_reminder_ui_tests.rs"]
 mod health_reminder;
-#[path="settings_redesign_ui_tests.rs"]
 mod settings_redesign;
-#[path="page_badges_ui_tests.rs"]
 mod page_badges;
 use eframe::egui::{self, Pos2, Rect, Vec2};
 use std::sync::Mutex;

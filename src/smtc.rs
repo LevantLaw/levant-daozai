@@ -1,42 +1,30 @@
 //! 系统媒体会话（SMTC）读取：Windows 10/11 的“正在播放”。
 //! 与原工具使用同一套 API（GlobalSystemMediaTransportControlsSessionManager）。
 
-#[path="apple_music.rs"]
 mod apple_music;
 #[cfg(windows)]
-#[path="netease_timeline.rs"]
 mod netease_timeline;
 #[cfg(windows)]
-#[path="netease_playback.rs"]
 mod netease_playback;
 #[cfg(windows)]
-#[path="bodian.rs"]
 pub(crate) mod bodian;
 #[cfg(windows)]
-#[path="kuwo.rs"]
 pub(crate) mod kuwo;
 #[cfg(windows)]
-#[path="kugou_metadata.rs"]
 mod kugou_metadata;
 #[cfg(windows)]
-#[path="kugou_control.rs"]
 mod kugou_control;
 #[cfg(windows)]
-#[path="player_seek.rs"]
 mod player_seek;
 #[cfg(windows)]
-#[path="player_process.rs"]
 pub(crate) mod player_process;
 #[cfg(windows)]
-#[path="music_log.rs"]
 mod music_log;
 
 #[cfg(windows)]
-#[path="music_gaps.rs"]
 mod music_gaps;
 
 #[cfg(windows)]
-#[path="cover_search.rs"]
 mod cover_search;
 
 use std::sync::{Arc, Mutex};

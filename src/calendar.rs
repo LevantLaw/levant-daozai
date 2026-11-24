@@ -9,7 +9,6 @@
 
 mod exchange;
 #[cfg(test)]
-#[path="calendar/compatibility_tests.rs"]
 mod compatibility_tests;
 #[cfg(test)]
 mod transport_tests;

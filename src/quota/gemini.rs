@@ -5,7 +5,6 @@ use serde_json::{json,Value};
 use std::{fs,io::Read,path::PathBuf,sync::{mpsc,Arc,atomic::{AtomicBool,Ordering}}};
 
 #[cfg(windows)]
-#[path="gemini_browser.rs"]
 mod browser;
 
 const ENDPOINT:&str="https://gemini.google.com/_/BardChatUi/graphql/schemas/GEMINI_WEB_GRAPHQL/executeQuery";

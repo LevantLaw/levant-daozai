@@ -7,7 +7,6 @@ use super::{Snapshot, Window};
 use serde_json::Value;
 use std::io::Read;
 use std::time::{Duration,Instant};
-#[path="relay_script.rs"]
 pub mod script;
 
 pub const AUTO_TIMEOUT:Duration=Duration::from_secs(15);

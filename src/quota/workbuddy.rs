@@ -179,7 +179,6 @@ pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>
     Err(("WorkBuddy 登录已过期或尚未连接，请点击重新连接".into(),60))
 }
 #[cfg(windows)]
-#[path="workbuddy_login.rs"]
 mod login;
 
 pub struct Connected {pub slot:String,pub label:String,pub snapshot:Snapshot}

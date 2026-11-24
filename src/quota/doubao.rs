@@ -4,7 +4,6 @@ use serde_json::{json, Value};
 use std::{fs, io::Read, path::PathBuf, sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}}};
 
 #[cfg(windows)]
-#[path = "doubao_login.rs"]
 mod login;
 
 pub enum LoginSource { Browser, Local, Cookie(String) }
@@ -272,5 +271,4 @@ impl Connect {
 }
 
 #[cfg(test)]
-#[path = "doubao_quota_tests.rs"]
 mod tests;

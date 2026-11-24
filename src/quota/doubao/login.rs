@@ -205,5 +205,4 @@ pub(super) fn local() -> Result<String, String> {
 }
 
 #[cfg(test)]
-#[path = "doubao_login_tests.rs"]
 mod tests;
