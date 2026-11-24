@@ -51,7 +51,7 @@ fn track(value:&serde_json::Value)->Option<(NowPlaying,String)>{
     let artist=t.get("artists").and_then(|a|a.as_array()).map(|a|a.iter().filter_map(|a|a.get("name")?.as_str()).collect::<Vec<_>>().join("/")).unwrap_or_default();
     let album=t.pointer("/album/name").and_then(|v|v.as_str()).unwrap_or_default();
     if title.is_empty(){return None;}
-    if [title.len(),artist.len(),album.len()].into_iter().any(|size|size>4096){crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
+    if [title.len(),artist.len(),album.len()].into_iter().any(|size|size>4096){crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
     let duration=t.get("duration").and_then(|v|v.as_f64()).unwrap_or_default()/1000.0;
     if !duration.is_finite() || !(0.0..86400.0).contains(&duration){return None;}
     let cover=t.pointer("/album/picUrl").and_then(|v|v.as_str()).and_then(cover_url).unwrap_or_default();
@@ -136,7 +136,7 @@ impl CoverCache {
             let (sender,receiver)=mpsc::channel();let url=self.url.clone();
             self.pending=Some(receiver);self.retry_at=Some(Instant::now()+Duration::from_secs(3));
             // 网络与解码不占用媒体轮询线程，歌词时间轴继续正常推进。
-            self.worker=crate::resources::COVER.spawn(move||{let _=sender.send(load(&url));});
+            self.worker=crate::support::resources::COVER.spawn(move||{let _=sender.send(load(&url));});
             if self.worker.is_none(){self.pending=None;}
         }
         self.image.clone()
@@ -172,7 +172,7 @@ impl DetailCache {
         let due=self.failures==0 || self.retry_at.is_some_and(|at|Instant::now()>=at);
         if self.value.is_none() && self.pending.is_none() && due && self.worker.as_ref().is_none_or(|worker|worker.is_finished()){
             let (sender,receiver)=mpsc::channel();
-            self.worker=crate::resources::COVER.spawn(move||{let _=sender.send(load(id));});
+            self.worker=crate::support::resources::COVER.spawn(move||{let _=sender.send(load(id));});
             if self.worker.is_some(){self.pending=Some(receiver);self.retry_at=None;}
         }
         self.value.clone()
@@ -186,7 +186,7 @@ fn fetch_detail(id:u64)->Option<(NowPlaying,String)>{
         .set("Referer","https://music.163.com").set("Accept","application/json").call().ok()?;
     let limit=256*1024;let mut bytes=Vec::new();
     response.into_reader().take(limit+1).read_to_end(&mut bytes).ok()?;
-    if bytes.len()>limit as usize{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
+    if bytes.len()>limit as usize{crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
     detail_from(&serde_json::from_slice(&bytes).ok()?,id)
 }
 
@@ -209,7 +209,7 @@ fn detail_response_fills_metadata_only_for_the_same_song(){
 
 #[test]
 fn detail_lookup_runs_in_background_retries_then_stops(){
-    let _serial=crate::test_support::serial();
+    let _serial=crate::support::test_support::serial();
     use std::sync::{Arc as A,atomic::{AtomicUsize,Ordering}};
     let calls=A::new(AtomicUsize::new(0));
     let mut cache=DetailCache::default();
@@ -222,7 +222,7 @@ fn detail_lookup_runs_in_background_retries_then_stops(){
         assert_eq!(calls.load(Ordering::SeqCst),round+1,"未到重试时间不重复请求");
         if round<2 {cache.retry_at=Some(Instant::now());}
         if round==0 {
-            let busy=crate::test_support::acquire_pair(&crate::resources::COVER);
+            let busy=crate::support::test_support::acquire_pair(&crate::support::resources::COVER);
             cache.get_with(7,|_|panic!("已有两个后台请求"));
             drop(busy);
         }
@@ -406,7 +406,7 @@ fn queue_lookup(root:&Path,id:u64)->QueueLookup{
                 Err(_)=>return Err(()),
             };
             // 超过上限的文件不变就一直超限，按「没有」处理，不反复尝试。
-            if file.metadata().map_err(|_|())?.len()>QUEUE_LIMIT{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return Ok(None);}
+            if file.metadata().map_err(|_|())?.len()>QUEUE_LIMIT{crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return Ok(None);}
             search_queue(std::io::BufReader::new(file),key,id)
         })();
         let found=match found {Ok(Some(found))=>found,Ok(None)=>continue,Err(())=>{unreadable=true;continue;}};

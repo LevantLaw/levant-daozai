@@ -296,7 +296,7 @@ impl App {
         }
         let hand = if self.pomo.running { (self.t as f32 * 1.2) % TAU } else { 0.0 };
         if resting {
-            let t=if self.pomo.running && crate::bar_layout::animations_enabled(){self.t as f32}else{0.0};
+            let t=if self.pomo.running && crate::app::bar_layout::animations_enabled(){self.t as f32}else{0.0};
             crate::app::focus_bar::tea(&c.scaled(rx,ry,2.2),rx,ry,frac,t);
         }else{paint::stopwatch(c, rx, ry + 0.5, 15.5, hand * run, theme::WHITE);}
 
@@ -812,7 +812,7 @@ impl App {
             } else {
                 c.circle(58.0, y, 2.2, Color32::from_gray(110));
             }
-            let text = c.fit(&crate::clipboard::preview(&clip.text), size::BODY, W::Regular, 210.0);
+            let text = c.fit(&crate::platform::clipboard::preview(&clip.text), size::BODY, W::Regular, 210.0);
             c.text(68.0, y + 3.8, &text, size::BODY, W::Regular, Color32::from_gray(235), H::Left);
             c.text(318.0, y + 3.5, &clip.at, size::TINY, W::Regular, theme::DIM, H::Right);
             let tip: String = clip.text.chars().take(400).collect();
@@ -828,12 +828,12 @@ impl App {
         match action {
             Some((index, 0)) => {
                 #[cfg(windows)]
-                self.say(if crate::clipboard::copy_history(&items[index].text) { "已复制" } else { "复制失败，请重试" });
+                self.say(if crate::platform::clipboard::copy_history(&items[index].text) { "已复制" } else { "复制失败，请重试" });
                 #[cfg(not(windows))]
                 _cmds.push(Cmd::Copy(items[index].text.clone()));
             }
             Some((index, 1)) => {
-                if !self.clipboard.lock().toggle_pin(index) { self.say(format!("最多固定 {} 条", crate::clipboard::MAX_PINNED)); }
+                if !self.clipboard.lock().toggle_pin(index) { self.say(format!("最多固定 {} 条", crate::platform::clipboard::MAX_PINNED)); }
             }
             Some((index, _)) => { self.clipboard.lock().remove(index); }
             None => {}

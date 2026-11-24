@@ -85,7 +85,7 @@ mod tls {
             assert!(String::from_utf8_lossy(&request).starts_with("PROPFIND / "));
             let xml = "<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\"><d:response><d:href>/calendar/</d:href><d:resourcetype><c:calendar/></d:resourcetype></d:response></d:multistatus>";
             write!(stream, "HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{xml}", xml.len()).unwrap();
-            crate::test_support::settle_sleep(&mut stream);
+            crate::support::test_support::settle_sleep(&mut stream);
             1
         });
         (base, worker)

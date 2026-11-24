@@ -2,7 +2,7 @@
 use crate::render::anim::{approach, lerp, smoothstep};
 use crate::render::paint::{Card, H};
 use crate::render::theme::{self, W};
-use crate::pet_expressions::Expression;
+use crate::app::pet_expressions::Expression;
 use eframe::egui::Color32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +44,7 @@ mod tests {
             assert_eq!(pet.expressions.current(),Some(expression),"恢复听歌应从暂停处继续");
         }
         pet.react(PetState::Satisfied);pet.step(PetState::Satisfied,43.0,0.1,[0.0;2],true);
-        assert_eq!(pet.expressions.current(),Some(crate::pet_expressions::Expression::Heart),"喝水反馈应保留优先级");
+        assert_eq!(pet.expressions.current(),Some(crate::app::pet_expressions::Expression::Heart),"喝水反馈应保留优先级");
     }
     #[test]
     fn singing_keeps_each_expression_for_fifteen_seconds_after_the_transition() {
@@ -170,7 +170,7 @@ fn microphone_pose(age:f32)->([f32;2],f32) {
 }
 
 fn microphone(c:&Card,cx:f32,y:f32,age:f32){
-    let age=if crate::bar_layout::animations_enabled(){age}else{0.0};
+    let age=if crate::app::bar_layout::animations_enabled(){age}else{0.0};
     let (head,angle)=microphone_pose(age);
     let point=|s:f32,v:f32|(cx+head[0]+s*angle.cos()-v*angle.sin(),y+head[1]+s*angle.sin()+v*angle.cos());
     let capsule=|start:f32,end:f32,width:f32,color:Color32|{
@@ -217,7 +217,7 @@ pub(crate) struct Pet {
     pub last_idle: f64,
     pub hovered: bool,
     pub worried: bool,
-    pub expressions: crate::pet_expressions::Expressions,
+    pub expressions: crate::app::pet_expressions::Expressions,
     /// 吉祥物自己的动画时钟：只在悬停或事件动画期间前进，空闲时冻结。
     pub clock: f64,
     /// 事件动画的截止时间，使用 App 时间。

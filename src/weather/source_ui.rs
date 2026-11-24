@@ -1,5 +1,5 @@
 //! 天气来源草稿、连接验证与安全启用。
-use crate::{app::{App,WEATHER_PAGE},app::extras::{settings_card,settings_hint,settings_label},settings_theme::color,weather::qweather::{self,Client,Config,Error,Location}};
+use crate::{app::{App,WEATHER_PAGE},app::extras::{settings_card,settings_hint,settings_label},app::settings_theme::color,weather::qweather::{self,Client,Config,Error,Location}};
 use eframe::egui::{self,Color32,RichText};
 use std::sync::{Arc,atomic::{AtomicBool,Ordering},mpsc::Receiver};
 pub(crate) use super::qweather::{Provider,normalize_host};
@@ -444,7 +444,7 @@ impl App {
             .with_icon(crate::render::theme::app_icon()).with_inner_size([820.0,680.0]).with_min_inner_size([520.0,420.0]),|ctx,_|{
             if ctx.input(|i|i.viewport().close_requested()){self.weather_source.tutorial_open=false;}
             let original=ctx.style();let mut style=(*original).clone();
-            style.visuals=if self.settings.settings_theme.dark(crate::settings_theme::system_dark(ctx)){egui::Visuals::dark()}else{egui::Visuals::light()};
+            style.visuals=if self.settings.settings_theme.dark(crate::app::settings_theme::system_dark(ctx)){egui::Visuals::dark()}else{egui::Visuals::light()};
             ctx.set_style(style);
             egui::CentralPanel::default().frame(egui::Frame::new().fill(ctx.style().visuals.panel_fill).inner_margin(16)).show(ctx,|ui|{
                 ui.horizontal_wrapped(|ui|{

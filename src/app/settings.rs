@@ -1,6 +1,6 @@
 //! 设置页与设置控件。
 use super::*;
-use crate::settings_theme::color as settings_color;
+use crate::app::settings_theme::color as settings_color;
 use crate::app::extras::HealthReminder;
 
 fn switch(ui:&mut egui::Ui,value:&mut bool)->bool {
@@ -516,7 +516,7 @@ impl App {
         ctx.show_viewport_immediate(id,egui::ViewportBuilder::default().with_title("岛仔设置").with_icon(theme::app_icon()).with_inner_size([690.0,560.0]).with_min_inner_size([600.0,450.0]).with_visible(false).with_active(false).with_window_level(egui::WindowLevel::Normal),|ctx,_|{
             let restored=opening && self.window_layout().restore(ctx);
             if !restored{self.window_layout().observe(ctx);}
-            let dark=self.settings.settings_theme.dark(crate::settings_theme::system_dark(ctx));
+            let dark=self.settings.settings_theme.dark(crate::app::settings_theme::system_dark(ctx));
             let original_style=ctx.style();
             let mut style=(*original_style).clone();
             style.visuals=if dark{egui::Visuals::dark()}else{egui::Visuals::light()};
@@ -525,7 +525,7 @@ impl App {
             style.visuals.widgets.noninteractive.bg_stroke=if dark{egui::Stroke::NONE}else{egui::Stroke::new(1.0,Color32::from_rgb(226,229,234))};
             ctx.set_style(style);
             ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(if dark{egui::SystemTheme::Dark}else{egui::SystemTheme::Light}));
-            if self.settings.settings_theme==crate::settings_theme::SettingsTheme::System {
+            if self.settings.settings_theme==crate::app::settings_theme::SettingsTheme::System {
                 ctx.request_repaint_after(std::time::Duration::from_secs(1));
             }
             if focus_requested {
@@ -629,7 +629,7 @@ impl App {
                     0=>{
                         settings_label(ui,"设置页外观");
                         settings_card(ui,|ui|{
-                            use crate::settings_theme::SettingsTheme;
+                            use crate::app::settings_theme::SettingsTheme;
                             settings_control_row_right(ui,"主题",|ui|{
                                 if settings_segmented(ui,&mut self.settings.settings_theme,&[(SettingsTheme::System,"跟随系统"),(SettingsTheme::Light,"浅色"),(SettingsTheme::Dark,"深色")],52.0) {ctx.request_repaint();}
                             });
@@ -951,7 +951,7 @@ impl App {
                         ui.add_enabled_ui(on,|ui|{
                             settings_card(ui,|ui|{
                                 setting_row(ui,"记录剪贴板","在剪贴板页查看，点一下再次复制",&mut self.settings.clipboard_history);
-                                settings_hint(ui,&format!("本机保存最近 {} 条；密码管理器标记为敏感的内容不会记录。",crate::clipboard::MAX_RECENT));
+                                settings_hint(ui,&format!("本机保存最近 {} 条；密码管理器标记为敏感的内容不会记录。",crate::platform::clipboard::MAX_RECENT));
                                 if ui.button("打开剪贴板").clicked(){self.settings_open=false;self.show_page(crate::app::CLIPBOARD_PAGE);}
                             });
                         });
@@ -1053,7 +1053,7 @@ impl App {
                             ui.add_space(4.0);
                             settings_action_row(ui,|ui|{
                                 if ui.button("打开 Windows 通知设置").clicked(){
-                                    #[cfg(windows)] {let _=crate::child_process::spawn(std::process::Command::new("explorer.exe").arg("ms-settings:notifications"));}
+                                    #[cfg(windows)] {let _=crate::support::child_process::spawn(std::process::Command::new("explorer.exe").arg("ms-settings:notifications"));}
                                 }
                             });
                         });

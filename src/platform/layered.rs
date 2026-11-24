@@ -421,9 +421,9 @@ mod tests {
             };
             present(300, &mut layered);
             let gdi = |kind| GetGuiResources(GetCurrentProcess(), kind);
-            let (mem0, gdi0, user0) = (crate::resources::snapshot().unwrap().private_bytes, gdi(GR_GDIOBJECTS), gdi(GR_USEROBJECTS));
+            let (mem0, gdi0, user0) = (crate::support::resources::snapshot().unwrap().private_bytes, gdi(GR_GDIOBJECTS), gdi(GR_USEROBJECTS));
             present(3000, &mut layered);
-            let (mem1, gdi1, user1) = (crate::resources::snapshot().unwrap().private_bytes, gdi(GR_GDIOBJECTS), gdi(GR_USEROBJECTS));
+            let (mem1, gdi1, user1) = (crate::support::resources::snapshot().unwrap().private_bytes, gdi(GR_GDIOBJECTS), gdi(GR_USEROBJECTS));
             eprintln!("3000 帧：私有内存 {:+.1} MB，GDI {gdi0}→{gdi1}，USER {user0}→{user1}", (mem1 as f64 - mem0 as f64) / 1048576.0);
             assert!(mem1 < mem0 + 8 * 1024 * 1024, "3000 帧后私有内存增长超过 8MB");
             assert!(gdi1 <= gdi0 + 2 && user1 <= user0 + 2, "GDI/USER 对象随帧数增长");

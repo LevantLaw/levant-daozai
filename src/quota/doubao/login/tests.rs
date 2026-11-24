@@ -102,7 +102,7 @@ fn cdp_handles_events_and_fragmented_responses_without_exposing_remote_errors() 
                 socket.send(Message::Frame(Frame::message(b"{\"id\":1,".to_vec(), OpCode::Data(Data::Text), false))).unwrap();
                 socket.send(Message::Frame(Frame::message(b"\"result\":{\"cookies\":[]}}".to_vec(), OpCode::Data(Data::Continue), true))).unwrap();
             }
-            crate::test_support::settle(&mut settle_stream);
+            crate::support::test_support::settle(&mut settle_stream);
         });
         let result = cdp(port, &format!("ws://127.0.0.1:{port}/devtools/browser/test"), "Storage.getCookies");
         if failure { assert!(!result.unwrap_err().contains("private-secret")); }

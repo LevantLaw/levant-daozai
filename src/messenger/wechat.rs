@@ -593,7 +593,7 @@ mod tests {
     use super::*;
     #[test]
     fn all_taskbar_clients_first_flash_after_minimizing_a_viewed_account_is_not_swallowed(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use crate::messenger::Messenger;
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
@@ -617,7 +617,7 @@ mod tests {
     }}
     #[test]
     fn office_shell_events_preserve_unknown_instances_until_a_new_unambiguous_event(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use crate::messenger::Messenger;
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}

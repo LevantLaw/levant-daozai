@@ -75,7 +75,7 @@ struct H {
     animating:bool,
     page_transition:bool,
     shapes:Vec<egui::epaint::ClippedShape>,
-    bt: Vec<crate::bt::Device>,
+    bt: Vec<crate::platform::bt::Device>,
     media: crate::smtc::NowPlaying,
     power: (Option<u8>, bool),
     network: Option<bool>,
@@ -435,6 +435,6 @@ fn raised(h:&H,title:&str)->bool{
 }
 
 /// 设置页的 AI 额度账号默认收起成一行；需要检查明细的测试先把所有账号展开。
-pub(crate) fn open_quota_details(h:&H){
+fn open_quota_details(h:&H){
     for account in &h.app.quota.config.accounts {h.ctx.data_mut(|d|d.insert_temp(egui::Id::new(("quota-account-open",account.id.clone())),true));}
 }

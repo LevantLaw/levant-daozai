@@ -369,7 +369,7 @@ mod tests {
         assert!((layout.widths[WEATHER]-56.0).abs()<0.01);
         for (slot,x) in layout.x.iter().enumerate() {
             match (slot,x) {
-                (crate::bar_layout::WEATHER,Some(_))=>{},
+                (crate::app::bar_layout::WEATHER,Some(_))=>{},
                 (_,Some(x))=>assert!((*x-before[slot].unwrap()).abs()>8.0,"其余槽位应被推开：{slot}"),
                 (_,None)=>{},
             }

@@ -233,7 +233,7 @@ mod tests{
     }
     #[test]
     fn synthetic_native_windows_keep_original_handles_and_reject_ambiguity(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
         let instance=GetModuleHandleW(None).unwrap().into();let pid=std::process::id();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
@@ -292,7 +292,7 @@ mod tests{
     }}
     #[test]
     fn hidden_helpers_are_never_shown(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,-10000,-10000,400,500,None,None,None,None).unwrap();
         for source in Messenger::OFFICE{

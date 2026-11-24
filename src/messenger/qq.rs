@@ -105,7 +105,7 @@ mod tests{
     use super::*;
     #[test]
     fn qq_wake_records_why_neither_window_nor_tray_could_be_used(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         let window=CreateWindowExW(WINDOW_EX_STYLE(0),w!("STATIC"),w!(""),WS_POPUP,0,0,10,10,None,None,None,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
         take_wake_steps();
@@ -120,7 +120,7 @@ mod tests{
     }}
     #[test]
     fn qq_single_tray_account_ignores_its_auxiliary_main_windows(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use windows::Win32::{Foundation::LRESULT,System::LibraryLoader::GetModuleHandleW,UI::Shell::*};
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
         struct Fixture{windows:Vec<HWND>,icon:NOTIFYICONDATAW}
@@ -148,7 +148,7 @@ mod tests{
     }}
     #[test]
     fn qq_multiple_main_windows_in_one_process_are_not_a_unique_account(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use windows::{core::w,Win32::{Foundation::LRESULT,System::LibraryLoader::GetModuleHandleW}};
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
         let instance=GetModuleHandleW(None).unwrap().into();let class=w!("TXGuiFoundation");

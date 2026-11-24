@@ -30,7 +30,7 @@ pub(crate) fn frame_style(class:&str,style:u32,extended:u32)->bool{
         && extended&(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE).0==0
 }
 pub fn describe_foreground()->String{unsafe{let window=GetForegroundWindow();format!("{:#x} {} 进程 {}",window.0 as usize,class_name(window),window_pid(window))}}
-pub fn trace(line:impl AsRef<str>){crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"messenger-events",line.as_ref());}
+pub fn trace(line:impl AsRef<str>){crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"messenger-events",line.as_ref());}
 
 // 点岛上的提醒唤起客户端：各客户端把走过的步骤记在当前线程，结束时与结果合成一行写入
 // messenger-events.log。只记窗口句柄、类名、可见状态和进程号，不记窗口标题或消息内容。
@@ -384,7 +384,7 @@ fn check_target(target:Target)->Result<windows::core::Owned<windows::Win32::Foun
 
 #[derive(Clone,Copy)]
 pub struct OpenRequest {unread:Unread,target:Option<Target>,allow_tray:bool}
-static OPEN:crate::resources::Lane=crate::resources::Lane::new("daozai-messenger-open",1);
+static OPEN:crate::support::resources::Lane=crate::support::resources::Lane::new("daozai-messenger-open",1);
 impl OpenRequest {
     pub fn start(self,ctx:eframe::egui::Context)->Result<mpsc::Receiver<Result<(),OpenError>>,OpenError>{
         let lease=OPEN.acquire().ok_or(OpenError::Busy)?;
@@ -515,7 +515,7 @@ mod tests {
     }
     #[test]
     fn cached_targets_keep_client_namespaces_and_reject_mismatched_open_requests(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use windows::Win32::System::Threading::GetCurrentProcess;
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,-10000,-10000,10,10,None,None,None,None).unwrap();
         let target=|source|Target{unread:Unread{source,pid:std::process::id(),window:window.0 as isize},started:process_started(GetCurrentProcess()).unwrap()};
@@ -603,7 +603,7 @@ mod tests {
     }
     #[test]
     fn qq_account_observation_tracks_the_original_native_window(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
         let instance=GetModuleHandleW(None).unwrap().into();
@@ -644,7 +644,7 @@ mod tests {
     }
     #[test]
     fn qq_unreads_never_show_hidden_helpers(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use crate::app::{Messenger,Unread};
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!(""),WS_POPUP,0,0,10,10,None,None,None,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
@@ -654,7 +654,7 @@ mod tests {
     }}
     #[test]
     fn wake_attempts_record_the_target_route_and_result_without_titles(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use crate::app::{Messenger,Unread};
         let window=CreateWindowExW(WS_EX_TOOLWINDOW,w!("STATIC"),w!("聊天对象的名字"),WS_POPUP,0,0,10,10,None,None,None,None).unwrap();
         let paths=[normalized(&std::env::current_exe().unwrap().to_string_lossy())];
@@ -716,7 +716,7 @@ mod tests {
     }
     #[test]
     fn messenger_reminders_survive_hidden_or_destroyed_windows(){unsafe{
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         use crate::app::{Messenger,Unread};
         let mut monitor=Runtime::default();
         for source in Messenger::ALL{

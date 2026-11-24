@@ -1,6 +1,6 @@
 //! 和风设置的原生交互与截图；只使用占位凭据和合成天气。
 use super::*;
-use crate::{weather::source_ui::Provider,settings_theme::SettingsTheme};
+use crate::{weather::source_ui::Provider,app::settings_theme::SettingsTheme};
 
 fn fixture(theme:SettingsTheme)->H {
     let mut h=H::new();h.app.settings.settings_theme=theme;h.app.settings_tab=12;h.app.open_settings();h.ctx.set_embed_viewports(false);
@@ -19,7 +19,7 @@ fn weather_badge_only_dims_after_repeated_failures_and_old_data(){
             let snapshot=crate::weather::Snapshot{place:"广州".into(),temp:23.0,code:2,day:true,at:chrono::Utc::now().timestamp()-age,..Default::default()};
             let output=h.ctx.run(Default::default(),|ctx|{egui::CentralPanel::default().show(ctx,|ui|{
                 let c=crate::render::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
-                let layout=crate::bar_layout::Layout::new(false,0,false,false,false,false,true,false);
+                let layout=crate::app::bar_layout::Layout::new(false,0,false,false,false,false,true,false);
                 h.app.paint_pill_weather(&c,100.0,&layout,&snapshot);
                 h.app.paint_side_weather(&c,220.0,30.0,&snapshot);
             });});

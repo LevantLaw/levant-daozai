@@ -1,6 +1,6 @@
 //! 岛仔表情：按场景播放，隐藏时暂停，日常动作之间留出安静时间。
 //! 每个表情单独一张 144×1440 的序列图（16 帧 × 3 倍密度），只解码、上传正在播放的那一张，播完即释放。
-use crate::pet::PetState;
+use crate::app::pet::PetState;
 use crate::render::paint::Card;
 use crate::render::skin_paint::Palette;
 use eframe::egui::{self, Color32, Rect, TextureHandle};
@@ -22,12 +22,12 @@ impl Expression {
     /// 由 `assets/pet/expressions.png` 按列拆出，顺序与 `ALL` 一致。
     fn sheet(self)->&'static [u8] {
         const SHEETS:[&[u8];12]=[
-            include_bytes!("../assets/pet/expressions/00-wink.png"),include_bytes!("../assets/pet/expressions/01-smug.png"),
-            include_bytes!("../assets/pet/expressions/02-blush.png"),include_bytes!("../assets/pet/expressions/03-delighted.png"),
-            include_bytes!("../assets/pet/expressions/04-side-glance.png"),include_bytes!("../assets/pet/expressions/05-praised.png"),
-            include_bytes!("../assets/pet/expressions/06-heart.png"),include_bytes!("../assets/pet/expressions/07-giggle.png"),
-            include_bytes!("../assets/pet/expressions/08-shy-peek.png"),include_bytes!("../assets/pet/expressions/09-scan.png"),
-            include_bytes!("../assets/pet/expressions/10-peek.png"),include_bytes!("../assets/pet/expressions/11-search.png"),
+            include_bytes!("../../assets/pet/expressions/00-wink.png"),include_bytes!("../../assets/pet/expressions/01-smug.png"),
+            include_bytes!("../../assets/pet/expressions/02-blush.png"),include_bytes!("../../assets/pet/expressions/03-delighted.png"),
+            include_bytes!("../../assets/pet/expressions/04-side-glance.png"),include_bytes!("../../assets/pet/expressions/05-praised.png"),
+            include_bytes!("../../assets/pet/expressions/06-heart.png"),include_bytes!("../../assets/pet/expressions/07-giggle.png"),
+            include_bytes!("../../assets/pet/expressions/08-shy-peek.png"),include_bytes!("../../assets/pet/expressions/09-scan.png"),
+            include_bytes!("../../assets/pet/expressions/10-peek.png"),include_bytes!("../../assets/pet/expressions/11-search.png"),
         ];
         SHEETS[self as usize]
     }
@@ -83,7 +83,7 @@ impl Expressions {
             let expression=self.choose(1,&[Wink,Blush,SideGlance,ShyPeek]);self.play(expression);self.cooldown=18.0;
         }
         self.hovered=hovered;
-        if state==PetState::Awake && self.clip.is_none() && crate::bar_layout::animations_enabled() {
+        if state==PetState::Awake && self.clip.is_none() && crate::app::bar_layout::animations_enabled() {
             self.wait-=dt;
             if self.wait<=0.0 {
                 let expression=self.choose(0,&[Scan,Delighted,Peek,Smug,Search,Giggle,Praised,ShyPeek]);self.play(expression);
@@ -103,7 +103,7 @@ impl Expressions {
                 crate::render::skin_paint::mark_colored(texture.id());self.sheet=Some((expression,palette,texture));
             }
         }
-        let frame=if crate::bar_layout::animations_enabled(){expression.frame(time)}else{7};
+        let frame=if crate::app::bar_layout::animations_enabled(){expression.frame(time)}else{7};
         let uv=Rect::from_min_max(egui::pos2(0.0,frame as f32/16.0),egui::pos2(1.0,(frame+1) as f32/16.0));
         c.painter.image(self.sheet.as_ref().unwrap().2.id(),c.rect(cx-24.0,0.0,48.0,30.0),uv,Color32::WHITE);
         true
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn expressions_follow_real_scenarios_and_system_animation_setting(){
         let mut expressions=Expressions::default();let mut seen=std::collections::HashSet::new();
-        let idle_animations=crate::bar_layout::animations_enabled();
+        let idle_animations=crate::app::bar_layout::animations_enabled();
         if idle_animations {
             for _ in 0..8 {
                 for _ in 0..400 {
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn split_sheets_match_the_packed_atlas_pixel_for_pixel(){
-        let atlas=image::load_from_memory(include_bytes!("../assets/pet/expressions.png")).unwrap().into_rgba8();
+        let atlas=image::load_from_memory(include_bytes!("../../assets/pet/expressions.png")).unwrap().into_rgba8();
         for expression in Expression::ALL {
             let sheet=image::load_from_memory(expression.sheet()).unwrap().into_rgba8();
             let column=image::imageops::crop_imm(&atlas,expression as u32*144,0,144,1440).to_image();

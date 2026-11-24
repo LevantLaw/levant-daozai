@@ -20,7 +20,7 @@ mod tests {
         }
         let path=std::env::temp_dir().join(format!("daozai-stdio-{}.json",std::process::id()));
         let make=||{let mut command=Command::new(std::env::current_exe().unwrap());
-            command.args(["--exact","child_process::tests::lightweight_child_stdio_does_not_keep_parent_pipes_open","--test-threads=1"])
+            command.args(["--exact","support::child_process::tests::lightweight_child_stdio_does_not_keep_parent_pipes_open","--test-threads=1"])
                 .env("DAOZAI_STDIO_PROBE",&path).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
             command};
         let control=make().output().unwrap();assert!(control.status.success());

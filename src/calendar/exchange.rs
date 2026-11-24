@@ -450,7 +450,7 @@ mod tests {
                 };
                 let body = encode(&response);
                 write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap(); stream.write_all(&body).unwrap();
-                crate::test_support::settle(&mut stream);
+                crate::support::test_support::settle(&mut stream);
             }
         });
         let cfg = Config { provider: Provider::WeCom, username: "demo".into(), href: Some("https://caldav.wecom.work/obsolete".into()), server: Some(base) };
@@ -479,7 +479,7 @@ mod tests {
                 let (status, response) = reply(&request);
                 let body = response.map(|n| encode(&n)).unwrap_or_default();
                 write!(stream, "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap(); stream.write_all(&body).unwrap();
-                crate::test_support::settle(&mut stream);
+                crate::support::test_support::settle(&mut stream);
                 seen.push((cmd, key, request));
             }
             seen

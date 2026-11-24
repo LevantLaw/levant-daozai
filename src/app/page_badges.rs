@@ -1,6 +1,6 @@
 //! 页面徽标：邮箱未读、健康提醒、待办到期、置物架拖入、日程提醒、勿扰模式。
 use crate::app::{App, CALENDAR_PAGE, MAIL_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE};
-use crate::bar_layout::{self, Layout};
+use crate::app::bar_layout::{self, Layout};
 use crate::render::paint::{self, Card};
 use crate::render::theme;
 use eframe::egui::Color32;

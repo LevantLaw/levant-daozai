@@ -91,7 +91,7 @@ impl Picker {
         let mut close=false;
         let response=egui::Modal::new(egui::Id::new("avoidance-picker"))
             .frame(crate::app::extras::settings_modal_frame(ctx)).backdrop_color(Color32::from_black_alpha(110)).show(ctx,|ui|{
-            ui.visuals_mut().override_text_color=Some(crate::settings_theme::color(ctx,Color32::from_gray(235),Color32::from_gray(30)));
+            ui.visuals_mut().override_text_color=Some(crate::app::settings_theme::color(ctx,Color32::from_gray(235),Color32::from_gray(30)));
             ui.set_width(410.0);
             if crate::app::extras::settings_modal_title(ui,"添加应用"){close=true;}
             ui.label(egui::RichText::new("选择正在运行的应用，添加后自动记住。").size(12.0).weak());
@@ -131,7 +131,7 @@ impl Picker {
             if self.confirm_all {
                 let addable=entries.iter().filter(|app|Self::reason(app,settings).is_none()).count();
                 ui.add_space(8.0);
-                egui::Frame::new().fill(crate::settings_theme::color(ctx,Color32::from_rgb(51,41,26),Color32::from_rgb(255,246,230))).corner_radius(8.0).inner_margin(egui::Margin::symmetric(12,10)).show(ui,|ui|{
+                egui::Frame::new().fill(crate::app::settings_theme::color(ctx,Color32::from_rgb(51,41,26),Color32::from_rgb(255,246,230))).corner_radius(8.0).inner_margin(egui::Margin::symmetric(12,10)).show(ui,|ui|{
                     ui.set_width(ui.available_width());
                     ui.label(egui::RichText::new(format!("将把当前列表中 {addable} 个应用全部加入自动避让，确定吗？")).size(12.5));
                     ui.add_space(6.0);

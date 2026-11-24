@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn native_chrome_handshake_does_not_follow_redirects(){
         let server=TcpListener::bind((Ipv4Addr::LOCALHOST,0)).unwrap();let ep=endpoint(server.local_addr().unwrap().port());
-        let task=std::thread::spawn(move||{let(mut stream,_)=server.accept().unwrap();let mut buffer=[0u8;4096];let _=stream.read(&mut buffer).unwrap();stream.write_all(b"HTTP/1.1 302 Found\r\nLocation: https://evil.invalid/\r\nContent-Length: 0\r\n\r\n").unwrap();crate::test_support::settle(&mut stream);});
+        let task=std::thread::spawn(move||{let(mut stream,_)=server.accept().unwrap();let mut buffer=[0u8;4096];let _=stream.read(&mut buffer).unwrap();stream.write_all(b"HTTP/1.1 302 Found\r\nLocation: https://evil.invalid/\r\nContent-Length: 0\r\n\r\n").unwrap();crate::support::test_support::settle(&mut stream);});
         assert!(Socket::open(&ep,&AtomicBool::new(false),Duration::from_secs(2)).is_err());task.join().unwrap();
     }
 }

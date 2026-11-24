@@ -92,7 +92,7 @@ impl ArtworkWorker {
     fn start()->Option<Self>{
         let (requests,rx)=std::sync::mpsc::channel::<ArtworkRequest>();
         let (tx,results)=std::sync::mpsc::channel();
-        crate::resources::ARTWORK.spawn(move||{
+        crate::support::resources::ARTWORK.spawn(move||{
             let _apartment=init_winrt();
             while let Ok((key,load))=rx.recv(){if tx.send((key,load())).is_err(){break;}}
         })?;
@@ -181,39 +181,39 @@ fn decode_artwork(bytes:&[u8])->Option<eframe::egui::ColorImage> {
         let mut limits=image::Limits::default();limits.max_image_width=Some(4096);limits.max_image_height=Some(4096);limits.max_alloc=Some(64*1024*1024);
         reader.limits(limits);reader.decode().ok()
     })();
-    let Some(decoded)=decoded else{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;};
+    let Some(decoded)=decoded else{crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;};
     let image=decoded.thumbnail(256,256).to_rgba8();
     Some(eframe::egui::ColorImage::from_rgba_unmultiplied([image.width() as usize,image.height() as usize],image.as_raw()))
 }
 
 #[cfg(windows)]
 fn media_result<T:windows::core::RuntimeType+'static>(start:impl FnOnce()->windows::core::Result<windows::Foundation::IAsyncOperation<T>>)->Option<T>{
-    media_result_in(&crate::resources::ASYNC,start)
+    media_result_in(&crate::support::resources::ASYNC,start)
 }
 
 /// 封面请求单独计数：播放器的封面接口卡住时，最多占满封面自己的名额，不影响歌名、进度和播放控制。
 #[cfg(windows)]
 fn artwork_result<T:windows::core::RuntimeType+'static>(start:impl FnOnce()->windows::core::Result<windows::Foundation::IAsyncOperation<T>>)->Option<T>{
-    media_result_in(&crate::resources::ASYNC_ARTWORK,start)
+    media_result_in(&crate::support::resources::ASYNC_ARTWORK,start)
 }
 
 #[cfg(windows)]
-fn media_result_in<T:windows::core::RuntimeType+'static>(lane:&'static crate::resources::Lane,start:impl FnOnce()->windows::core::Result<windows::Foundation::IAsyncOperation<T>>)->Option<T>{
+fn media_result_in<T:windows::core::RuntimeType+'static>(lane:&'static crate::support::resources::Lane,start:impl FnOnce()->windows::core::Result<windows::Foundation::IAsyncOperation<T>>)->Option<T>{
     // 必须在创建 WinRT 请求之前占用名额；超时请求保留到确认终止。
     thread_local!{static RETRY_AT:std::cell::Cell<Option<std::time::Instant>>=const{std::cell::Cell::new(None)};}
     let now=std::time::Instant::now();
     if RETRY_AT.with(|at|at.get().is_some_and(|at|now<at)){return None;}
-    crate::resources::PENDING.reap(now);
+    crate::support::resources::PENDING.reap(now);
     let lease=lane.acquire()?;
     let operation=match start(){Ok(operation)=>operation,Err(_)=>{RETRY_AT.with(|at|at.set(Some(now+Duration::from_secs(2))));return None;}};
     let start=std::time::Instant::now();
     while !operation.Status().is_ok_and(|status|status!=windows::Foundation::AsyncStatus::Started){
         if start.elapsed()>=Duration::from_millis(500){
             let _=operation.Cancel();
-            crate::resources::TIMEOUTS.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+            crate::support::resources::TIMEOUTS.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
             let after=std::time::Instant::now()+Duration::from_secs(30);
             RETRY_AT.with(|at|at.set(Some(after)));
-            crate::resources::PENDING.retain(lease,move||operation.Status().is_ok_and(|status|status!=windows::Foundation::AsyncStatus::Started) && operation.Close().is_ok(),after);
+            crate::support::resources::PENDING.retain(lease,move||operation.Status().is_ok_and(|status|status!=windows::Foundation::AsyncStatus::Started) && operation.Close().is_ok(),after);
             return None;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -328,7 +328,7 @@ fn query_system(artwork:&mut ArtworkCache) -> Result<Option<NowPlaying>,()> {
 #[cfg(windows)]
 fn media_text(value:windows::core::Result<windows::core::HSTRING>)->Option<String>{
     let value=value.unwrap_or_default();
-    if value.len()>4096{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
+    if value.len()>4096{crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
     Some(value.to_string())
 }
 
@@ -429,7 +429,7 @@ impl ControlWorker {
     }
     fn start_with(ctx:eframe::egui::Context,handle:impl Fn(Transport,&str)->bool+Send+'static)->Option<Self>{
         let (requests,rx)=std::sync::mpsc::sync_channel::<ControlRequest>(8);
-        crate::resources::CONTROL.spawn(move||{
+        crate::support::resources::CONTROL.spawn(move||{
             let _apartment=init_winrt();
             while let Ok(first)=rx.recv(){
                 // 拖动进度条会连续排入多次跳转；QQ 音乐的跳转要遍历播放器界面并等待回读，只执行同一播放器的最后一次。
@@ -440,7 +440,7 @@ impl ControlWorker {
                     let superseded=batch.peek().is_some_and(|next|next.1==source && matches!((command,next.0),
                         (Transport::Seek(_),Transport::Seek(_)) | (Transport::SetVolume(_),Transport::SetVolume(_))));
                     let success=if superseded {false}
-                        else if created.elapsed()>Duration::from_secs(5){crate::resources::CONTROL_DROPPED.fetch_add(1,std::sync::atomic::Ordering::Relaxed);false}
+                        else if created.elapsed()>Duration::from_secs(5){crate::support::resources::CONTROL_DROPPED.fetch_add(1,std::sync::atomic::Ordering::Relaxed);false}
                         else{handle(command,&source)};
                     if let Some(tx)=result{let _=tx.try_send(success);ctx.request_repaint();}
                 }
@@ -450,7 +450,7 @@ impl ControlWorker {
     }
     pub fn submit(&self,command:Transport,source:String)->Result<Option<std::sync::mpsc::Receiver<bool>>,()>{
         let (result,receiver)=if matches!(command,Transport::Seek(_)|Transport::SetVolume(_)|Transport::SetMute(_)){let (tx,rx)=std::sync::mpsc::sync_channel(1);(Some(tx),Some(rx))}else{(None,None)};
-        self.requests.try_send((command,source,std::time::Instant::now(),result)).map_err(|_|{crate::resources::CONTROL_DROPPED.fetch_add(1,std::sync::atomic::Ordering::Relaxed);})?;
+        self.requests.try_send((command,source,std::time::Instant::now(),result)).map_err(|_|{crate::support::resources::CONTROL_DROPPED.fetch_add(1,std::sync::atomic::Ordering::Relaxed);})?;
         Ok(receiver)
     }
 }
@@ -784,7 +784,7 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
     let active=enabled.clone();
     let stop=Arc::new(std::sync::atomic::AtomicBool::new(false));let stopped=stop.clone();
     let interval_ms=Arc::new(std::sync::atomic::AtomicU32::new(POLL_FAST.as_millis() as u32));let requested=interval_ms.clone();
-    let worker=crate::resources::POLLER.spawn(move || {
+    let worker=crate::support::resources::POLLER.spawn(move || {
         let _apartment=init_winrt();
         let mut artwork=ArtworkCache::default();
         let mut playback_clock=PlaybackClock::default();
@@ -873,7 +873,7 @@ mod tests {
     /// 封面线程全进程最多两个，其中一项测试会故意把它们占满；用到封面线程的测试需要串行，否则并行时会互相抢名额而误报。
     static ARTWORK_TESTS:Mutex<()>=Mutex::new(());
     /// 上一个测试释放工作对象后，后台线程要稍后才退出并交还名额；开始前先等名额空出来。
-    fn wait_lane_idle(lane:&'static crate::resources::Lane){
+    fn wait_lane_idle(lane:&'static crate::support::resources::Lane){
         let until=std::time::Instant::now()+Duration::from_secs(5);
         while lane.active()>0 && std::time::Instant::now()<until{std::thread::sleep(Duration::from_millis(5));}
         assert_eq!(lane.active(),0,"{} 名额被其他测试长期占用",lane.name);
@@ -881,7 +881,7 @@ mod tests {
 
     #[test]
     fn queued_seeks_for_the_same_player_run_only_the_latest(){
-        let _serial=CONTROL_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::CONTROL);
+        let _serial=CONTROL_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::CONTROL);
         let (entered,started)=std::sync::mpsc::channel();let (release,wait)=std::sync::mpsc::channel::<()>();
         let handled=Arc::new(Mutex::new(Vec::new()));let log=handled.clone();
         let worker=ControlWorker::start_with(eframe::egui::Context::default(),move|command,source|{
@@ -905,7 +905,7 @@ mod tests {
 
     #[test]
     fn music_volume_queue_coalesces_only_the_same_players_volume_changes(){
-        let _serial=CONTROL_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::CONTROL);
+        let _serial=CONTROL_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::CONTROL);
         let (entered,started)=std::sync::mpsc::channel();let (release,wait)=std::sync::mpsc::channel::<()>();
         let handled=Arc::new(Mutex::new(Vec::new()));let log=handled.clone();
         let worker=ControlWorker::start_with(eframe::egui::Context::default(),move|command,source|{
@@ -925,7 +925,7 @@ mod tests {
 
     #[test]
     fn resource_control_queue_stays_bounded_when_the_player_is_stuck(){
-        let _serial=CONTROL_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::CONTROL);
+        let _serial=CONTROL_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::CONTROL);
         let (entered,started)=std::sync::mpsc::channel();let (release,wait)=std::sync::mpsc::channel::<()>();
         let worker=ControlWorker::start_with(eframe::egui::Context::default(),move|_,_|{let _=entered.send(());let _=wait.recv();true}).unwrap();
         worker.submit(Transport::Next,"player".into()).unwrap();started.recv_timeout(Duration::from_secs(2)).unwrap();
@@ -933,28 +933,28 @@ mod tests {
         for _ in 0..10_000 {if worker.submit(Transport::Next,"player".into()).is_ok(){admitted+=1;}}
         drop(worker);drop(release);
         let until=std::time::Instant::now()+Duration::from_secs(2);
-        while crate::resources::CONTROL.active()>0 && std::time::Instant::now()<until{std::thread::sleep(Duration::from_millis(5));}
-        assert_eq!(admitted,8,"播放器卡住时只允许有限的排队操作");assert_eq!(crate::resources::CONTROL.active(),0);
+        while crate::support::resources::CONTROL.active()>0 && std::time::Instant::now()<until{std::thread::sleep(Duration::from_millis(5));}
+        assert_eq!(admitted,8,"播放器卡住时只允许有限的排队操作");assert_eq!(crate::support::resources::CONTROL.active(),0);
     }
     #[test]
     fn resource_poller_stops_even_when_shared_state_is_still_owned(){
         // 采样线程会建自己的封面缓存并占用封面名额。
-        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
+        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::ARTWORK);
         let state=shared();let poller=spawn_poller(state.clone(),eframe::egui::Context::default());
         poller.store(false,std::sync::atomic::Ordering::Relaxed);drop(poller);
         let until=std::time::Instant::now()+Duration::from_secs(5);
-        while crate::resources::POLLER.active()>0 && std::time::Instant::now()<until{std::thread::sleep(Duration::from_millis(10));}
-        assert_eq!(crate::resources::POLLER.active(),0);assert!(state.lock().is_ok());
+        while crate::support::resources::POLLER.active()>0 && std::time::Instant::now()<until{std::thread::sleep(Duration::from_millis(10));}
+        assert_eq!(crate::support::resources::POLLER.active(),0);assert!(state.lock().is_ok());
     }
     #[test]
     #[cfg(windows)]
     fn resource_full_async_budget_prevents_starting_another_operation(){
-        let permits:Vec<_>=(0..4).map(|_|crate::resources::ASYNC.acquire().unwrap()).collect();
+        let permits:Vec<_>=(0..4).map(|_|crate::support::resources::ASYNC.acquire().unwrap()).collect();
         assert!(media_result::<bool>(||panic!("配额耗尽时不能创建 WinRT 请求")).is_none());drop(permits);
     }
     #[test]
     fn resource_reconnections_cannot_accumulate_blocked_artwork_workers(){
-        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
+        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::ARTWORK);
         use std::sync::{Condvar,atomic::{AtomicUsize,Ordering}};
         let gate=Arc::new((Mutex::new(false),Condvar::new()));
         let started=Arc::new(AtomicUsize::new(0));
@@ -991,7 +991,7 @@ mod tests {
 
     #[test]
     fn unchanged_cover_does_not_start_a_worker_on_every_poll(){
-        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
+        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::ARTWORK);
         let mut cache=ArtworkCache::default();
         let now=std::time::Instant::now();
         let calls=Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -1006,7 +1006,7 @@ mod tests {
 
     #[test]
     fn stable_cover_is_rechecked_rarely_but_a_new_song_starts_fast(){
-        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
+        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::ARTWORK);
         let mut cache=ArtworkCache::default();
         let now=std::time::Instant::now();
         for _ in 0..3 {cache.get("song".into(),||Some(cover_bytes(eframe::egui::Color32::RED)));}
@@ -1022,7 +1022,7 @@ mod tests {
 
     #[test]
     fn changing_tracks_reuses_the_cover_worker_without_waiting_for_old_backoff(){
-        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
+        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::ARTWORK);
         let mut cache=ArtworkCache::default();let mut threads=std::collections::HashSet::new();
         for song in ["first","second","third"] {
             let (tx,rx)=std::sync::mpsc::channel();
@@ -1079,7 +1079,7 @@ mod tests {
 
     #[test]
     fn slow_cover_does_not_block_metadata_or_replace_a_new_song(){
-        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
+        let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::support::resources::ARTWORK);
         let mut cache=ArtworkCache::default();
         let (release,wait)=std::sync::mpsc::channel();
         let start=std::time::Instant::now();

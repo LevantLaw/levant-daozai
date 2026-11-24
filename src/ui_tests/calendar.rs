@@ -431,8 +431,8 @@ fn kugou_missing_lyrics_rechecks_late_cache_without_flashing_loading() {
     assert!((retry-h.t-5.0).abs()<0.001);
     // 歌词通道全进程只有 1 个名额，前面测试的歌词线程可能还在查网络；占着时这一帧会直接跳过。
     let until=std::time::Instant::now()+std::time::Duration::from_secs(20);
-    while crate::resources::LYRICS.active()>0 && std::time::Instant::now()<until{std::thread::sleep(std::time::Duration::from_millis(10));}
-    assert_eq!(crate::resources::LYRICS.active(),0,"歌词名额被其他测试长期占用");
+    while crate::support::resources::LYRICS.active()>0 && std::time::Instant::now()<until{std::thread::sleep(std::time::Duration::from_millis(10));}
+    assert_eq!(crate::support::resources::LYRICS.active(),0,"歌词名额被其他测试长期占用");
     h.t=retry+0.1;h.frame(vec![]);
     assert!(!h.app.ly.loading,"检查本机缓存不能反复闪出加载提示");
     assert_eq!(h.app.ly.error,Some(crate::lyrics::FetchError::NotFound));
@@ -1261,7 +1261,7 @@ fn calendar_add_button_does_not_overlap_the_battery_ring(){
     let text=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text) if text.galley.text()=="＋ 添加日程"=>Some(text.visual_bounding_rect()),_=>None}).unwrap();
     let button=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Rect(rect) if rect.rect.contains(text.center()) && (rect.rect.width()-54.0).abs()<0.1 && (rect.rect.height()-18.0).abs()<0.1=>Some(rect.rect),_=>None}).unwrap();
     if battery.is_some(){
-        let ring=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Circle(circle) if (circle.radius-8.2*crate::bar_layout::BATTERY_SCALE).abs()<0.1 && circle.center.y<crate::app::STATUS_H=>Some(Rect::from_center_size(circle.center,Vec2::splat(circle.radius*2.0+circle.stroke.width))),_=>None}).unwrap();
+        let ring=shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Circle(circle) if (circle.radius-8.2*crate::app::bar_layout::BATTERY_SCALE).abs()<0.1 && circle.center.y<crate::app::STATUS_H=>Some(Rect::from_center_size(circle.center,Vec2::splat(circle.radius*2.0+circle.stroke.width))),_=>None}).unwrap();
         assert!(!button.expand(3.0).intersects(ring),"日程添加按钮与电量圆环应留有间距：按钮 {button:?}，圆环 {ring:?}");
     }
     let clock=h.app.settings.clock_text("17:43:00");

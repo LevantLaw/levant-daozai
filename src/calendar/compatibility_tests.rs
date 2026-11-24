@@ -31,7 +31,7 @@ fn mock_fetch(provider:Provider,nested:bool,broken:bool)->Result<Fetched,Failure
             }else{(404,String::new())};
             let body=format!("<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">{body}</d:multistatus>");
             write!(socket,"HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-            crate::test_support::settle(&mut socket);
+            crate::support::test_support::settle(&mut socket);
         }
     });
     let cfg=Config{provider,username:"mock".into(),href:None,server:Some(base)};
@@ -101,7 +101,7 @@ fn mixed_caldav_response_preserves_readable_events_and_reports_resource_errors()
         let (mut socket,_)=listener.accept().unwrap();let _=read_request(&mut socket);
         let xml="<d:multistatus><d:response><d:href>/good.ics</d:href><c:calendar-data>BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:good\nDTSTART:20261112T020000Z\nEND:VEVENT\nBEGIN:VEVENT\nUID:bad\nDTSTART;TZID=Unsupported/Zone:20261112T100000\nEND:VEVENT\nEND:VCALENDAR</c:calendar-data></d:response><d:response><d:href>/private.ics</d:href><d:status>HTTP/1.1 403 Forbidden</d:status></d:response></d:multistatus>";
         write!(socket,"HTTP/1.1 207 Result\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{xml}",xml.len()).unwrap();
-        crate::test_support::settle(&mut socket);
+        crate::support::test_support::settle(&mut socket);
     });
     let config=Config{provider:Provider::DingTalk,username:"mock".into(),href:None,server:Some(base.clone())};
     let result=fetch_collection(&agent().unwrap(),&config,"mock",&base,"2026-11-01T00:00:00Z".parse().unwrap(),"2026-12-01T00:00:00Z".parse().unwrap());worker.join().unwrap();
@@ -141,7 +141,7 @@ fn inaccessible_home_does_not_block_other_homes_or_hide_the_warning(){
                 _=>(207,"<response><href>/work/one.ics</href><calendar-data>BEGIN:VEVENT\nUID:work\nDTSTART:20261112T020000Z\nEND:VEVENT</calendar-data></response>"),
             };
             let body=format!("<multistatus>{body}</multistatus>");write!(socket,"HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-            crate::test_support::settle(&mut socket);
+            crate::support::test_support::settle(&mut socket);
         }
     });
     let cfg=Config{provider:Provider::Custom,username:"mock".into(),href:None,server:Some(base)};

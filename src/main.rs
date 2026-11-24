@@ -6,11 +6,10 @@ use daozai::app::{self, App, Cmd, Env, Options};
 use daozai::smtc;
 #[cfg(windows)]
 use daozai::messenger::{self,OpenError,TaskbarEvent};
-use daozai::poll_clock::PollClock;
+use daozai::support::poll_clock::PollClock;
 use std::time::{Duration, Instant};
 
-mod diagnostics;
-mod graphics;
+mod shell;
 
 struct Shell {
     app: App,
@@ -24,7 +23,7 @@ struct Shell {
     seek_rx: Option<(&'static str,std::sync::mpsc::Receiver<bool>)>,
     media_control:Option<smtc::ControlWorker>,
     music_volume_rx:Option<(String,std::sync::mpsc::Receiver<bool>)>,
-    _resource_monitor:Option<daozai::resources::Monitor>,
+    _resource_monitor:Option<daozai::support::resources::Monitor>,
     resource_at:PollClock,
     guard_notified:bool,
     media_enabled: smtc::Poller,
@@ -74,8 +73,8 @@ struct Shell {
     autostart: bool,
     /// v0.5.4：蓝牙音频设备（后台线程推送）与音量回声的静默窗口。
     #[cfg(windows)]
-    bt_rx: Option<daozai::bt::Service>,
-    bt: Vec<daozai::bt::Device>,
+    bt_rx: Option<daozai::platform::bt::Service>,
+    bt: Vec<daozai::platform::bt::Device>,
     bt_ready: bool,
     volume_quiet: PollClock,
     /// v0.5.5：邮件收信服务（工作线程），以及上次同步给它的账号/开关快照。
@@ -87,7 +86,7 @@ struct Shell {
     cal: Option<daozai::calendar::Service>,
     cal_sig: Option<(Vec<daozai::calendar::Config>, bool)>,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
-    clipboard_watch: Option<daozai::clipboard::Watcher>,
+    clipboard_watch: Option<daozai::platform::clipboard::Watcher>,
     quota: daozai::quota::Service,
     quota_sig: Option<(bool,Vec<daozai::quota::Account>)>,
     quota_at: PollClock,
@@ -104,7 +103,7 @@ impl Shell {
         if cal_on!=self.cal.is_some() {self.cal=cal_on.then(daozai::calendar::Service::start);self.cal_sig=None;}
         let clipboard_on=self.app.clipboard_active();
         if clipboard_on!=self.clipboard_watch.is_some() {
-            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
+            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::platform::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
         }
         self.app.reconcile_agent_monitor(ctx);
     }
@@ -136,16 +135,16 @@ impl Shell {
     }
 
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        diagnostics::graphics(cc);
+        shell::diagnostics::graphics(cc);
         let running_compat=cc.wgpu_render_state.is_some();
-        diagnostics::startup("加载本地配置");
+        shell::diagnostics::startup("加载本地配置");
         let mut app = App::new(&cc.egui_ctx, Options::default());
         app.render_compat_running=running_compat;
         #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
-        diagnostics::startup("初始化额度配置");
+        shell::diagnostics::startup("初始化额度配置");
         if !quota_demo{app.quota_initialize();app.migrate_merged_switches();}
-        diagnostics::startup("启动剪贴板记录");
+        shell::diagnostics::startup("启动剪贴板记录");
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
         if std::env::args().any(|arg|arg=="--calendar"){app.open_calendar(None);}
         #[cfg(feature="record")]
@@ -154,7 +153,7 @@ impl Shell {
         if std::env::var("DAOZAI_CAL_DEMO").is_ok(){app.calendar_demo();}
         #[cfg(feature="record")]
         if let Ok(mode)=std::env::var("DAOZAI_QUOTA_DEMO"){app.quota_demo(&mode);}
-        diagnostics::startup("初始化媒体和托盘");
+        shell::diagnostics::startup("初始化媒体和托盘");
         let media = smtc::shared();
         let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
         media_enabled.store(app.settings.visible_pages[0],std::sync::atomic::Ordering::Relaxed);
@@ -165,11 +164,11 @@ impl Shell {
             pet: app.settings.pet,
             autostart,
         });
-        diagnostics::startup("初始化通知监听");
+        shell::diagnostics::startup("初始化通知监听");
         #[cfg(windows)]
         let incoming=if app.settings.read_notifications {match daozai::platform::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
-        diagnostics::startup("创建后台采样与窗口");
+        shell::diagnostics::startup("创建后台采样与窗口");
         let initial_input=None;
         #[cfg(windows)] let system_state=daozai::platform::system::Snapshot::default();
         #[cfg(windows)] let system_rx=daozai::platform::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
@@ -186,7 +185,7 @@ impl Shell {
             seek_rx: None,
             media_control:None,
             music_volume_rx:None,
-            _resource_monitor:daozai::resources::Monitor::start(daozai::model::config_dir().join("diagnostics")),
+            _resource_monitor:daozai::support::resources::Monitor::start(daozai::model::config_dir().join("diagnostics")),
             resource_at:PollClock::default(),
             guard_notified:false,
             media_enabled,
@@ -349,16 +348,16 @@ impl eframe::App for Shell {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        daozai::resources::FRAMES.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+        daozai::support::resources::FRAMES.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
         let frame_start=Instant::now();
         if self.resource_at.ready(Duration::from_secs(30)){
             let (count,bytes)={let textures=ctx.tex_manager();let textures=textures.read();(textures.num_allocated(),textures.allocated().map(|(_,info)|info.bytes_used()).sum())};
-            daozai::resources::TEXTURES.store(count,std::sync::atomic::Ordering::Relaxed);
-            daozai::resources::TEXTURE_BYTES.store(bytes,std::sync::atomic::Ordering::Relaxed);
-            daozai::resources::GALLEYS.store(ctx.fonts(|fonts|fonts.num_galleys_in_cache()),std::sync::atomic::Ordering::Relaxed);
+            daozai::support::resources::TEXTURES.store(count,std::sync::atomic::Ordering::Relaxed);
+            daozai::support::resources::TEXTURE_BYTES.store(bytes,std::sync::atomic::Ordering::Relaxed);
+            daozai::support::resources::GALLEYS.store(ctx.fonts(|fonts|fonts.num_galleys_in_cache()),std::sync::atomic::Ordering::Relaxed);
             self.resource_at=PollClock::now();
         }
-        let guarded=daozai::resources::GUARD.tripped();
+        let guarded=daozai::support::resources::GUARD.tripped();
         if guarded && !self.guard_notified {
             // 资源保护熔断：停止音乐会话轮询（含封面、网易云日志）与歌词查询，保住用户电脑，重启后恢复。
             self.guard_notified=true;self.app.opts.fetch_lyrics=false;
@@ -407,7 +406,7 @@ impl eframe::App for Shell {
             self.placement_key=placement_key;
             let display=daozai::platform::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
             if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(self.placement_scale,daozai::platform::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),offset,self.app.settings.dock,shift))) {
-                if !self.placed {diagnostics::startup("目标屏幕物理坐标定位完成，已请求显示");}
+                if !self.placed {shell::diagnostics::startup("目标屏幕物理坐标定位完成，已请求显示");}
                 self.placed=true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             } else if self.t0.elapsed()>=Duration::from_secs(2) {
@@ -466,7 +465,7 @@ impl eframe::App for Shell {
                 self.backdrop=None;
             }
             if self.app.settings.bluetooth_notifications {
-                if self.bt_rx.is_none() {self.bt_rx=Some(daozai::bt::spawn());}
+                if self.bt_rx.is_none() {self.bt_rx=Some(daozai::platform::bt::spawn());}
             } else {
                 self.bt_rx=None;
                 self.bt.clear();
@@ -715,7 +714,7 @@ impl eframe::App for Shell {
                 }
                 Cmd::RestartApp=>{
                     // 先拉起新进程（它会等本进程退出），再像托盘「退出」一样摘图标后结束。
-                    if diagnostics::spawn_replacement(){
+                    if shell::diagnostics::spawn_replacement(){
                         self.app.save_window_before_exit();
                         #[cfg(windows)] if let Some(tray)=&self.tray {tray.exit_process();}
                         std::process::exit(0);
@@ -748,7 +747,7 @@ impl eframe::App for Shell {
                     ctx.input_mut(|i| i.pointer=Default::default());
                 },
                 Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
-                Cmd::Reveal(p)=>{let _=daozai::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
+                Cmd::Reveal(p)=>{let _=daozai::support::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
                 Cmd::QuotaChooseFile=>{
                     #[cfg(windows)] match daozai::platform::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
                 },
@@ -823,7 +822,7 @@ impl eframe::App for Shell {
         let elapsed=frame_start.elapsed();
         if elapsed>=Duration::from_millis(60) {
             let (page,open)=self.app.debug_state();
-            daozai::resources::append_log(&daozai::model::config_dir().join("diagnostics"),"frames",
+            daozai::support::resources::append_log(&daozai::model::config_dir().join("diagnostics"),"frames",
                 &format!("帧 {:.0} ms｜页面 {}｜展开 {}",elapsed.as_secs_f64()*1000.0,page,open));
         }
     }
@@ -1049,19 +1048,19 @@ fn main() -> std::process::ExitCode {
     if let Some((agent, event)) = daozai::agent::bridge::requested(std::env::args()) {
         return std::process::ExitCode::from(daozai::agent::bridge::run_relay(agent, &event) as u8);
     }
-    diagnostics::install();
+    shell::diagnostics::install();
     // 收集诊断：在单实例检查、创建窗口和初始化显卡之前处理，岛仔启动即崩溃、卡死时也能用。
     #[cfg(windows)]
     if daozai::platform::diagnostics_tool::requested(std::env::args()) {
         return match daozai::platform::diagnostics_tool::run(&daozai::model::config_dir()) {
             Ok(_) => std::process::ExitCode::SUCCESS,
-            Err(error) => {diagnostics::report("诊断收集未完成。", &error); std::process::ExitCode::FAILURE}
+            Err(error) => {shell::diagnostics::report("诊断收集未完成。", &error); std::process::ExitCode::FAILURE}
         };
     }
     match run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            diagnostics::report("岛仔启动或运行失败。", &error.to_string());
+            shell::diagnostics::report("岛仔启动或运行失败。", &error.to_string());
             std::process::ExitCode::FAILURE
         }
     }
@@ -1069,18 +1068,18 @@ fn main() -> std::process::ExitCode {
 
 fn run() -> eframe::Result<()> {
     // 自动重启或「立即重启」拉起的新进程：先等旧进程退出，再做单实例检查。
-    diagnostics::wait_for_previous_instance();
+    shell::diagnostics::wait_for_previous_instance();
     // 单实例（与原版同名互斥体）
     #[cfg(windows)]
     if !daozai::platform::tray::single_instance() {
         if !daozai::platform::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
-            diagnostics::report("岛仔已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe，再重新启动。");
+            shell::diagnostics::report("岛仔已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe，再重新启动。");
         }
         return Ok(());
     }
     #[cfg(windows)]
     std::thread::spawn(daozai::record_install_size);
-    diagnostics::startup("初始化图形窗口");
+    shell::diagnostics::startup("初始化图形窗口");
     let viewport = egui::ViewportBuilder::default()
         .with_title("岛仔").with_icon(daozai::render::theme::app_icon())
         .with_inner_size([app::CANVAS_W, app::WIN_H])
@@ -1092,5 +1091,5 @@ fn run() -> eframe::Result<()> {
         .with_always_on_top()
         .with_visible(false);
     let opts = eframe::NativeOptions { viewport, vsync: !cfg!(windows), ..Default::default() };
-    graphics::run(opts,|opts|eframe::run_native("岛仔", opts, Box::new(|cc| Ok(Box::new(Shell::new(cc))))))
+    shell::graphics::run(opts,|opts|eframe::run_native("岛仔", opts, Box::new(|cc| Ok(Box::new(Shell::new(cc))))))
 }

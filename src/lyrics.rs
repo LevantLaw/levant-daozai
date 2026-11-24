@@ -3,7 +3,7 @@
 const MAX_TEXT:usize=1024*1024;
 const MAX_LINES:usize=5000;
 const MAX_LINE_TEXT:usize=8192;
-fn rejected_lyrics()->Lyrics{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);Lyrics::default()}
+fn rejected_lyrics()->Lyrics{crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);Lyrics::default()}
 
 /// 确认「所有来源都没有同步歌词」后记住 7 天，期间不再联网；网络失败不会写入。
 const NEGATIVE_TTL:std::time::Duration=std::time::Duration::from_secs(7*24*3600);
@@ -195,7 +195,7 @@ pub(crate) fn log_native(source:&str,track:&str,artist:&str,outcome:&str,elapsed
     if cfg!(test) {return;}
     let line=format!("{} {source} · {track} - {artist} → 本地轮询:{outcome} 用时{}ms\n",
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),elapsed.as_millis());
-    crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
+    crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
 }
 
 /// 返回歌词及是否仍需等待酷狗缓存；等待期间复用已有歌词，不重复访问在线服务。
@@ -232,7 +232,7 @@ pub fn fetch_for_display_with(source:&str,track:&str,artist:&str,duration:f64,so
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
         take_trace().join(" → "),started.elapsed().as_millis());
     // 测试时不写，免得把模拟数据混进用户的真实诊断日志。
-    if !cfg!(test) {crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);}
+    if !cfg!(test) {crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);}
     result
 }
 
@@ -899,7 +899,7 @@ mod tests {
             let (mut recovered,_)=listener.accept().unwrap();
             recovered.read(&mut buffer).unwrap();
             write!(recovered,"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
-            crate::test_support::settle(&mut recovered);
+            crate::support::test_support::settle(&mut recovered);
         });
         let started=std::time::Instant::now();
         assert!(request_json_with_retry(&url,&url,true).is_ok());
@@ -1016,7 +1016,7 @@ mod tests {
             let (mut stream,_)=listener.accept().unwrap();
             let mut buf=[0;4096];let _=stream.read(&mut buf).unwrap();
             write!(stream,"HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-            crate::test_support::settle(&mut stream);
+            crate::support::test_support::settle(&mut stream);
         });
         (base,worker)
     }
@@ -1139,7 +1139,7 @@ mod tests {
                 let request=String::from_utf8_lossy(&buf[..n]);
                 assert!(request.contains("track_name=Track%20Name&artist_name=Artist"));
                 write!(stream,"HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-            crate::test_support::settle(&mut stream);
+            crate::support::test_support::settle(&mut stream);
             });
             let result=fetch_from(&base,"Track Name","Artist",120.0);
             worker.join().unwrap();

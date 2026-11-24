@@ -2,7 +2,7 @@
 #[cfg(windows)]
 fn main(){
     use std::{time::{Duration,Instant},collections::HashSet,sync::atomic::Ordering};
-    use daozai::{resources,smtc};
+    use daozai::{support::resources,smtc};
     let seconds=std::env::args().nth(1).map(|s|s.parse().unwrap()).unwrap_or(180);
     let directory=std::env::temp_dir().join(format!("daozai-media-resources-{}",std::process::id()));
     let monitor=resources::Monitor::start(directory.clone()).unwrap();

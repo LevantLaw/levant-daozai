@@ -44,16 +44,16 @@ pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::pl
     std::thread::Builder::new().name("daozai-system".into()).spawn(move||{
         let mut current=Observation{system:initial,input,fullscreen:None};
         let mut delivered=None;
-        let mut sampled=crate::poll_clock::PollClock::default();
+        let mut sampled=crate::support::poll_clock::PollClock::default();
         let mut input_at=sampled;
         loop {
             let identity=crate::platform::input::State::identity();
             let changed=identity.map(|state|(state.context,state.layout))!=current.input.map(|state|(state.context,state.layout));
             if changed || crate::platform::input::switch_recent() || input_at.ready(std::time::Duration::from_secs(1)){
-                current.input=crate::platform::input::State::read();input_at=crate::poll_clock::PollClock::now();
+                current.input=crate::platform::input::State::read();input_at=crate::support::poll_clock::PollClock::now();
             }
             if sampled.ready(std::time::Duration::from_millis(500)){
-                current.system=Snapshot::read();current.fullscreen=fullscreen();sampled=crate::poll_clock::PollClock::now();
+                current.system=Snapshot::read();current.fullscreen=fullscreen();sampled=crate::support::poll_clock::PollClock::now();
             }
             if delivered.as_ref()!=Some(&current) {
                 match tx.try_send(current.clone()) {
@@ -305,7 +305,7 @@ unsafe fn log_maximized_exclusion(hwnd: HWND, window: RECT, monitor: RECT) {
         GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32,
         (window.left, window.top, window.right, window.bottom), c.right - c.left, c.bottom - c.top,
         (monitor.left, monitor.top, monitor.right, monitor.bottom));
-    crate::resources::append_log(&crate::model::config_dir().join("diagnostics"), "fullscreen.log", &line);
+    crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"), "fullscreen.log", &line);
 }
 
 pub fn fullscreen() -> Option<crate::platform::display_layout::Bounds> {

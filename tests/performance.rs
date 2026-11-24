@@ -33,7 +33,7 @@ fn background_service_sample(){
     let (mut calendar_events,mut quota_events)=(Vec::new(),Vec::new());
     match service.as_str(){
         "media"=>{daozai::smtc::spawn_poller(media.clone(),context);},
-        "bluetooth"=>bluetooth=Some(daozai::bt::spawn()),
+        "bluetooth"=>bluetooth=Some(daozai::platform::bt::spawn()),
         "system"=>system=Some(daozai::platform::system::observe(context,Default::default(),None)),
         "notifications"=>notifications=Some(daozai::platform::system::connect(context,daozai::messenger::NotificationFilter::All).expect("已有通知权限")),
         "mail"=>{

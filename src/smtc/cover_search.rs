@@ -39,7 +39,7 @@ impl CoverSearch {
             let (sender,receiver)=mpsc::channel();
             let (title,artist,duration)=(media.title.clone(),media.artist.clone(),media.duration);
             // 与其他封面下载共用并发上限，网络卡住时不会越积越多。
-            self.worker=crate::resources::COVER.spawn(move||{let _=sender.send(load(title,artist,duration));});
+            self.worker=crate::support::resources::COVER.spawn(move||{let _=sender.send(load(title,artist,duration));});
             if self.worker.is_some(){
                 self.attempts+=1;self.retry_at=None;self.pending=Some(receiver);
             }
@@ -75,7 +75,7 @@ fn search(title:String,artist:String,duration:f64)->Found {
     use std::io::Read;
     let limit=512*1024;let mut bytes=Vec::new();
     response.into_reader().take(limit+1).read_to_end(&mut bytes).ok()?;
-    if bytes.len()>limit as usize{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
+    if bytes.len()>limit as usize{crate::support::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return None;}
     let value:serde_json::Value=serde_json::from_slice(&bytes).ok()?;
     if value.get("code").and_then(|v|v.as_i64())!=Some(200){return None;}
     let cover=pick(value.pointer("/result/songs")?.as_array()?,&title,&artist,duration)?;
@@ -102,12 +102,12 @@ mod tests {
     }
     #[test]
     fn cover_waits_for_a_free_worker_without_spending_an_attempt(){
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         let media=NowPlaying{title:"晚风".into(),artist:"示例歌手".into(),playback_type:MediaKind::Music,..Default::default()};
         let now=Instant::now();
         let mut cache=CoverSearch::default();
         cache.fill_with(&media,now,|_,_,_|None);
-        let busy=crate::test_support::acquire_pair(&crate::resources::COVER);
+        let busy=crate::support::test_support::acquire_pair(&crate::support::resources::COVER);
         cache.fill_with(&media,now+WAIT,|_,_,_|panic!("工作线程已占满"));
         drop(busy);
         let image=Arc::new(ColorImage::new([1,1],eframe::egui::Color32::RED));

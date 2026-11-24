@@ -201,7 +201,7 @@ fn kiro_credits_follow_the_ring_on_the_resident_bar(){
         windows:vec![Window{label:"月度额度".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     for _ in 0..60{h.frame(vec![]);}
     assert_eq!(h.app.quota_bar_indices().len(),1,"点数的 Kiro 账号应常驻");
-    let slot=crate::bar_layout::quota_slot(0);
+    let slot=crate::app::bar_layout::quota_slot(0);
     let layout=h.app.resident.current();
     let extra=layout.widths[slot]-27.0;
     assert!(extra>10.0,"环右侧要为点数让出位置：{:?}",layout.widths[slot]);
@@ -223,7 +223,7 @@ fn kiro_credit_pools_gallery(){
         let id="kiro".to_owned();h.app.quota.config.accounts.push(crate::quota::Account{id:id.clone(),provider:crate::quota::Provider::Kiro,alias:"Kiro".into(),source:"kiro.json".into(),slot:None,enabled:true,pinned:true});h.app.quota.config.selected=id.clone();h.app.quota_event(crate::quota::Event{id,result:Ok(snapshot)});h.app.show_page(6);
         let mut raster=feature_raster();shoot_feature(&mut h,&mut raster,&dest,&format!("kiro-{name}-{}",if pools{"pools"}else{"power"}),75,Some(H::local(300.0,60.0)),"2026-11-11");
         if pools{
-            h.app.settings.settings_theme=if name=="light"{crate::settings_theme::SettingsTheme::Light}else{crate::settings_theme::SettingsTheme::Dark};h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
+            h.app.settings.settings_theme=if name=="light"{crate::app::settings_theme::SettingsTheme::Light}else{crate::app::settings_theme::SettingsTheme::Dark};h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
             let size=egui::vec2(650.0,650.0);let ppp=1.5;let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
             egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{let id=viewport.ids.this;let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,size)),viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};*capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));});
             let mut raster=crate::preview_raster::Raster::new(975,975);
@@ -301,7 +301,7 @@ fn kiro_simulated_states_gallery(){
             }
             let settings=matches!(scene,"details"|"connecting"|"cancelled"|"identity");
             if settings{
-                h.app.settings.settings_theme=if theme=="light"{crate::settings_theme::SettingsTheme::Light}else{crate::settings_theme::SettingsTheme::Dark};h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
+                h.app.settings.settings_theme=if theme=="light"{crate::app::settings_theme::SettingsTheme::Light}else{crate::app::settings_theme::SettingsTheme::Dark};h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
                 let _pending=if matches!(scene,"connecting"|"cancelled"){
                     h.app.quota.config.accounts.clear();h.app.quota.provider=Provider::Kiro;h.app.quota.alias="个人账号".into();h.app.quota.connect_open=true;
                     let(mut connect,tx)=crate::quota::kiro::Connect::pending(None);if scene=="cancelled"{connect.cancel();}h.app.quota.kiro_connecting=Some(connect);Some(tx)
@@ -602,7 +602,7 @@ fn quota_cards_settings_gallery(){
         for (i,remaining) in [54.0,72.0].into_iter().enumerate(){let account_id=h.app.quota.config.accounts[i].id.clone();h.app.quota_event(crate::quota::Event{id:account_id,result:Ok(crate::quota::Snapshot{windows:vec![crate::quota::Window{label:"5 小时".into(),seconds:Some(18000),remaining:remaining+20.0,reset:None,amount:None},crate::quota::Window{label:"本周".into(),seconds:Some(604800),remaining,reset:None,amount:None}],at:chrono::Utc::now().timestamp(),..Default::default()})});}
         let id=h.app.quota.config.connect_deepseek("preview".into(),"DeepSeek".into());h.app.quota_event(crate::quota::Event{id,result:Err("API Key 验证失败，请重新连接账号".into())});
         h.app.quota.connect_open=dialog;h.app.quota.provider=crate::quota::Provider::DeepSeek;
-        h.app.settings.settings_theme=if light{crate::settings_theme::SettingsTheme::Light}else{crate::settings_theme::SettingsTheme::Dark};h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
+        h.app.settings.settings_theme=if light{crate::app::settings_theme::SettingsTheme::Light}else{crate::app::settings_theme::SettingsTheme::Dark};h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
         let size=egui::vec2(width,650.0);let ppp=1.5;let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
         egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{let id=viewport.ids.this;let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,size)),viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(ppp),focused:Some(true),..Default::default()})).collect(),focused:true,..Default::default()};*capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));});
         let (w,height)=((size.x*ppp)as u32,(size.y*ppp)as u32);let mut raster=crate::preview_raster::Raster::new(w as usize,height as usize);
@@ -743,7 +743,7 @@ fn claude_local_only_settings_show_notice_without_manual_reset_controls(){
 
 #[test]
 fn tray_quota_shows_during_bell_and_opens_the_quota_page(){
-    use crate::bar_layout::TRAY;
+    use crate::app::bar_layout::TRAY;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.quota_accounts(1);
     for _ in 0..30{h.frame(vec![]);}
@@ -752,7 +752,7 @@ fn tray_quota_shows_during_bell_and_opens_the_quota_page(){
     for _ in 0..20{h.frame(vec![]);}
     assert!(h.app.quota_bar_indices().is_empty(),"有铃铛时行内额度让位");
     assert_eq!(h.app.tray_active(),Some(crate::app::event_tray::Item::Quota));
-    assert!(h.app.resident.current().x[crate::bar_layout::QUOTA].is_none(),"额度不在常驻行");
+    assert!(h.app.resident.current().x[crate::app::bar_layout::QUOTA].is_none(),"额度不在常驻行");
     assert!(h.app.resident.current().x[TRAY].is_some(),"额度变化时容器占位");
     let center=*h.quota_centers().first().expect("容器里应画出额度环");
     h.click(Pos2::new(center,15.0));
@@ -1012,7 +1012,7 @@ fn quota_acceptance_gallery() {
     }
     for (group,indices) in [("plans",vec![0usize,1,2]),("relay",vec![3usize,4,5])] {
         for light in [false,true] {
-            let mut h=H::new();h.app.settings.settings_theme=if light{crate::settings_theme::SettingsTheme::Light}else{crate::settings_theme::SettingsTheme::Dark};
+            let mut h=H::new();h.app.settings.settings_theme=if light{crate::app::settings_theme::SettingsTheme::Light}else{crate::app::settings_theme::SettingsTheme::Dark};
             for &i in &indices {
                 let id=format!("preview-{i}");h.app.quota.config.accounts.push(Account{id:id.clone(),provider:providers[i],alias:providers[i].name().into(),source:if providers[i].relay(){"https://relay.example".into()}else{"cn".into()},slot:Some("synthetic-reference".into()),enabled:true,pinned:true});
                 h.app.quota.rows.insert(id.clone(),Ok(snapshots[i].clone()));if h.app.quota.config.selected.is_empty(){h.app.quota.config.selected=id;}
@@ -1031,7 +1031,7 @@ fn quota_acceptance_gallery() {
     }
     for (i,provider) in providers.into_iter().enumerate() {
         let mut h=H::new();h.app.quota.provider=provider;h.app.quota.connect_open=true;
-        h.app.settings.settings_theme=crate::settings_theme::SettingsTheme::Dark;h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
+        h.app.settings.settings_theme=crate::app::settings_theme::SettingsTheme::Dark;h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
         let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
         egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{let id=viewport.ids.this;*capture.lock().unwrap()=Some(ctx.run(egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,600.0))),viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(1.5),focused:Some(true),..Default::default()})).collect(),..Default::default()},|ctx|(viewport.viewport_ui_cb)(ctx)));});
         let mut raster=crate::preview_raster::Raster::new(1035,900);

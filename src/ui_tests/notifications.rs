@@ -189,7 +189,7 @@ fn windows_notifications_share_one_bell_and_skip_qq(){
     h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
     for _ in 0..60 {h.frame(vec![]);}
     assert!(h.app.windows_unread,"离开通知页后新通知重新点亮铃铛");
-    let bell_x=WIN_W/2.0+h.app.resident.current().x[crate::bar_layout::BELL].unwrap();
+    let bell_x=WIN_W/2.0+h.app.resident.current().x[crate::app::bar_layout::BELL].unwrap();
     h.click(Pos2::new(bell_x,15.0));
     assert_eq!(h.app.page,crate::app::WINDOWS_PAGE,"点击驻岛铃铛应打开 Windows 通知页");
 }
@@ -218,7 +218,7 @@ fn bluetooth_connection_soon_after_initial_scan_is_not_suppressed(){
     let mut h=H::new();
     h.frame(vec![]);
     h.t=2.0;
-    h.bt=vec![crate::bt::Device{id:"shokz".into(),name:"Shokz".into(),battery:Some(100),kind:crate::bt::DeviceKind::Bone}];
+    h.bt=vec![crate::platform::bt::Device{id:"shokz".into(),name:"Shokz".into(),battery:Some(100),kind:crate::platform::bt::DeviceKind::Bone}];
     h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("蓝牙设备"));
 }
@@ -227,17 +227,17 @@ fn bluetooth_connection_soon_after_initial_scan_is_not_suppressed(){
 fn bluetooth_notices_track_multiple_devices_independently(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    let audio=crate::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:None,kind:crate::bt::DeviceKind::Bone};
-    let keyboard=crate::bt::Device{id:"keyboard".into(),name:"QingLong 87".into(),battery:None,kind:crate::bt::DeviceKind::Keyboard};
+    let audio=crate::platform::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:None,kind:crate::platform::bt::DeviceKind::Bone};
+    let keyboard=crate::platform::bt::Device{id:"keyboard".into(),name:"QingLong 87".into(),battery:None,kind:crate::platform::bt::DeviceKind::Keyboard};
     h.bt=vec![audio.clone()];h.frame(vec![]);
     h.bt.push(keyboard.clone());h.t=3.0;h.frame(vec![]);
     let notice=h.app.notice.as_ref().unwrap();
     assert_eq!(notice.body,"QingLong 87");
-    assert_eq!(notice.bluetooth,Some((crate::bt::DeviceKind::Keyboard,true)));
+    assert_eq!(notice.bluetooth,Some((crate::platform::bt::DeviceKind::Keyboard,true)));
     h.t=7.0;h.bt=vec![keyboard];h.frame(vec![]);
     let notice=h.app.notice.as_ref().unwrap();
     assert_eq!(notice.body,"Shokz · 已断开");
-    assert_eq!(notice.bluetooth,Some((crate::bt::DeviceKind::Bone,false)));
+    assert_eq!(notice.bluetooth,Some((crate::platform::bt::DeviceKind::Bone,false)));
 }
 
 #[test]
@@ -368,14 +368,14 @@ fn hud_shrinks_smoothly_after_expiration(){
 fn bluetooth_badge_follows_connect_and_disconnect(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     // 首次扫描已连接的设备，记录但不作为新连接提醒。
-    h.bt=vec![crate::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::bt::DeviceKind::Earbuds}];h.frame(vec![]);
+    h.bt=vec![crate::platform::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Earbuds}];h.frame(vec![]);
     assert!(h.app.notice.is_none());
     assert_eq!(h.app.bt_shown.first().map(|d|d.name.as_str()),Some("Buds"));
     // 之后断开、再连上，各弹一条 HUD 通知。
     h.t=20.0;h.bt.clear();h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 已断开"));
     assert!(h.app.bt_shown.is_empty());
-    h.t=30.0;h.bt=vec![crate::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::bt::DeviceKind::Earbuds}];h.frame(vec![]);
+    h.t=30.0;h.bt=vec![crate::platform::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Earbuds}];h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 电量 80%"));
     // 没有设备时不留残留状态。
     h.t=40.0;h.bt.clear();h.frame(vec![]);
@@ -616,7 +616,7 @@ fn compact_font_atlas_preserves_panel_and_notice_pixels(){
 fn bluetooth_switch_clears_notices_and_restarts_with_fresh_baseline(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    let device=crate::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::bt::DeviceKind::Keyboard};
+    let device=crate::platform::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::platform::bt::DeviceKind::Keyboard};
     h.app.bluetooth_alert(&device,true);h.frame(vec![]);
     h.app.bluetooth_alert(&device,false);
     h.app.settings.bluetooth_notifications=false;h.frame(vec![]);
@@ -723,7 +723,7 @@ fn messenger_notice_status_gallery(){
                 7=>{h.app.show_page(4);h.app.messenger_unavailable("QQ 账号已退出");},
                 8=>h.app.alert("大写锁定","已开启",5,false),
                 9=>h.app.alert("系统音量","音量 60%",5,false),
-                10=>h.app.bluetooth_alert(&crate::bt::Device{id:"preview".into(),name:"耳机".into(),battery:Some(80),kind:crate::bt::DeviceKind::Headphones},true),
+                10=>h.app.bluetooth_alert(&crate::platform::bt::Device{id:"preview".into(),name:"耳机".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Headphones},true),
                 11=>h.app.alert("电量偏低","剩余 15% · 请连接电源",5,false),
                 12=>{
                     let start=chrono::Local::now()+chrono::Duration::minutes(10);

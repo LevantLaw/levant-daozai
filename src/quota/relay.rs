@@ -439,7 +439,7 @@ mod tests {
             let (mut stream,_)=listener.accept().unwrap();stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
             let mut request=Vec::new();let mut byte=[0u8;1];
             while request.len()<8192 && !request.ends_with(b"\r\n\r\n"){stream.read_exact(&mut byte).unwrap();request.push(byte[0]);}
-            std::thread::sleep(delay);let _=stream.write_all(&response);crate::test_support::settle(&mut stream);String::from_utf8(request).unwrap()
+            std::thread::sleep(delay);let _=stream.write_all(&response);crate::support::test_support::settle(&mut stream);String::from_utf8(request).unwrap()
         });(url,worker)
     }
     #[test]

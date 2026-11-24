@@ -297,7 +297,7 @@ mod tests {
             assert!(request.starts_with("post /aiserver.v1.dashboardservice/getsandusagestatus "));assert!(request.contains("authorization: bearer synthetic-token"));assert!(request.contains("connect-protocol-version: 1"));
             assert!(request.contains("x-cursor-checksum: "));assert!(request.contains("x-request-id: "));
             stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 24\r\nConnection: close\r\n\r\nsecret-that-must-not-echo").unwrap();
-            crate::test_support::settle(&mut stream);
+            crate::support::test_support::settle(&mut stream);
         });
         let error=usage_request(&ureq::AgentBuilder::new().build(),&url,"synthetic-token").unwrap_err();let(message,wait)=http_error(error);assert!(message.contains("401"));assert!(!message.contains("secret-that-must-not-echo"));assert_eq!(wait,0);server.join().unwrap();
     }

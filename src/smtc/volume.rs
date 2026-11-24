@@ -11,7 +11,7 @@ fn submit(job:Job)->bool {
     let mut worker=WORKER.lock().unwrap_or_else(|e|e.into_inner());
     if worker.is_none(){
         let (tx,rx)=mpsc::sync_channel::<Job>(2);
-        if crate::resources::VOLUME.spawn(move||{while let Ok(job)=rx.recv(){job();}}).is_none(){return false;}
+        if crate::support::resources::VOLUME.spawn(move||{while let Ok(job)=rx.recv(){job();}}).is_none(){return false;}
         *worker=Some(tx);
     }
     worker.as_ref().is_some_and(|tx|tx.try_send(job).is_ok())
@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn stuck_audio_driver_does_not_block_song_sampling(){
         // 全局音量工作线程是单线程的，两个占住它的用例必须串行。
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         let (release,wait)=mpsc::channel::<()>();let (entered,started)=mpsc::channel();
         assert!(submit(Box::new(move||{let _=entered.send(());let _=wait.recv_timeout(Duration::from_secs(10));})));
         started.recv_timeout(Duration::from_secs(2)).unwrap();
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn expired_write_is_discarded_when_the_worker_resumes(){
-        let _serial=crate::test_support::serial();
+        let _serial=crate::support::test_support::serial();
         let (release,wait)=mpsc::channel::<()>();
         assert!(submit(Box::new(move||{let _=wait.recv_timeout(Duration::from_secs(10));})));
         let (ran,observed)=mpsc::channel();

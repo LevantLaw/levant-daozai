@@ -58,7 +58,7 @@ pub(crate) fn record(line:&str,source:&str) {
         Some(format!(" · {exe} {}",super::music_log::file_version(&super::player_process::image_path(pid)?)))
     }).unwrap_or_default();
     let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
-    crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"music-gaps.log",&format!("{now} {line}{version}"));
+    crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"music-gaps.log",&format!("{now} {line}{version}"));
 }
 
 #[cfg(test)]

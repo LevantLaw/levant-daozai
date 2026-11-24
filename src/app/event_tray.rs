@@ -1,6 +1,6 @@
 //! 事件容器：数据变化时短暂出现；邮件、健康、待办、日程持续到条件解除。
 use crate::app::App;
-use crate::bar_layout;
+use crate::app::bar_layout;
 use crate::render::paint::Card;
 use crate::render::theme;
 use eframe::egui;

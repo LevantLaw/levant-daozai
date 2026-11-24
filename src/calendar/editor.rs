@@ -68,7 +68,7 @@ impl App {
         if report.cancelled>0{note.push_str(&format!("；{} 个已取消日程未导入",report.cancelled));}
         let warning=report.warning();if !warning.is_empty(){note.push('；');note.push_str(&warning);}
         if !errors.is_empty(){if !note.is_empty(){note.push('；');}note.push_str(&errors.join("；"));}
-        if !cfg!(test){crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"calendar.log",&format!("{} source=ics files={} received={} imported={added} duplicates={duplicates} capacity={capacity} outside={} invalid={} unsupported={} file_errors={} limited={}",chrono::Utc::now().timestamp(),files.len(),report.received,report.outside,report.invalid,report.unsupported,errors.len(),report.limited));}
+        if !cfg!(test){crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"calendar.log",&format!("{} source=ics files={} received={} imported={added} duplicates={duplicates} capacity={capacity} outside={} invalid={} unsupported={} file_errors={} limited={}",chrono::Utc::now().timestamp(),files.len(),report.received,report.outside,report.invalid,report.unsupported,errors.len(),report.limited));}
         self.calendar.import_note=note.clone();
         note
     }

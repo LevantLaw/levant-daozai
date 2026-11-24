@@ -672,7 +672,7 @@ fn record_fetch(provider:Provider,scope:&str,result:&Result<Fetched,Failure>){
     let (report,parsed,status)=match result{Ok(f)=>(&f.report,f.events.len(),f.report.status),Err(e)=>(e.report.as_ref().unwrap_or(&empty),0,e.status.or(e.report.as_ref().and_then(|report|report.status)))};
     let reason=result.as_ref().err().map_or("none",|error|error.kind);
     let line=format!("provider={} scope={scope} error={} reason={reason} calendars={} failed={} received={} parsed_instances={parsed} outside={} invalid={} unsupported={} cancelled={} limited={} status={}",provider.key(),result.is_err(),report.calendars,report.failed,report.received,report.outside,report.invalid,report.unsupported,report.cancelled,report.limited,status.unwrap_or(0));
-    crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"calendar.log",&format!("{} {line}",chrono::Utc::now().timestamp()));
+    crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"calendar.log",&format!("{} {line}",chrono::Utc::now().timestamp()));
 }
 
 /// 发现日历 → 查询滚动的 24 小时时间窗口 → 解析。
@@ -1303,7 +1303,7 @@ mod tests {
         assert!(read_discovery_request(&mut socket).starts_with("PROPFIND "));
         let xml="<d:multistatus><d:response><d:href>/calendar/</d:href><d:propstat><d:prop><d:resourcetype><c:calendar/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>";
         write!(socket,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{xml}",xml.len()).unwrap();
-        crate::test_support::settle(&mut socket);
+        crate::support::test_support::settle(&mut socket);
     }
 
     #[test]
@@ -1323,7 +1323,7 @@ mod tests {
                     "<d:multistatus><d:response><d:href>/work/a.ics</d:href><c:calendar-data>BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:work-event\nDTSTART:20261104T020000Z\nSUMMARY:工作日程\nEND:VEVENT\nEND:VCALENDAR</c:calendar-data></d:response></d:multistatus>"
                 }else{"<d:multistatus/>"};
                 write!(socket,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-                crate::test_support::settle(&mut socket);
+                crate::support::test_support::settle(&mut socket);
             }
         });
         let cfg=Config{provider:Provider::DingTalk,username:"test".into(),href:Some(format!("{base}empty/")),server:Some(base)};
@@ -1392,7 +1392,7 @@ mod tests {
                         _=>(404,"","")
                     };
                     write!(stream,"HTTP/1.1 {status} Test\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-                    crate::test_support::settle(&mut stream);
+                    crate::support::test_support::settle(&mut stream);
                 }
                 paths
             });
@@ -1430,7 +1430,7 @@ mod tests {
                                 _=>(404,"",""),
                             };
                             write!(stream,"HTTP/1.1 {status} Test\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-                            crate::test_support::settle(&mut stream);
+                            crate::support::test_support::settle(&mut stream);
                         }
                         paths
                     });
@@ -1457,7 +1457,7 @@ mod tests {
             let (mut stream,_)=listener.accept().unwrap();
             assert!(read_discovery_request(&mut stream).starts_with("PROPFIND /dav/ "));
             write!(stream,"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
-            crate::test_support::settle(&mut stream);
+            crate::support::test_support::settle(&mut stream);
             drop(stream);listener
         });
         let cfg=Config{provider:Provider::Custom,username:"synthetic".into(),href:None,server:Some(base)};
@@ -1477,7 +1477,7 @@ mod tests {
                 let (mut stream,_)=listener.accept().unwrap();
                 assert!(read_discovery_request(&mut stream).starts_with("REPORT /calendar/ "));
                 write!(stream,"HTTP/1.1 {code} Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
-                crate::test_support::settle(&mut stream);
+                crate::support::test_support::settle(&mut stream);
             });
             let cfg=Config{provider:Provider::Custom,username:"synthetic".into(),href:None,server:Some(base)};
             let error=fetch_month(&cfg,"synthetic-password",NaiveDate::from_ymd_opt(2026,11,1).unwrap()).err().unwrap();
@@ -1504,7 +1504,7 @@ mod tests {
         let worker=std::thread::spawn(move || {
             let (mut stream,_)=listener.accept().unwrap();let _=read_discovery_request(&mut stream);
             write!(stream,"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
-            crate::test_support::settle(&mut stream);
+            crate::support::test_support::settle(&mut stream);
             drop(stream);listener
         });
         let cfg=Config{provider:Provider::DingTalk,username:"synthetic".into(),href:None,server:Some(base)};
@@ -1525,7 +1525,7 @@ mod tests {
             let (mut stream,_)=listener.accept().unwrap();let _=read_discovery_request(&mut stream);
             let body=format!("<d:current-user-principal xmlns:d=\"DAV:\"><d:href>{foreign_url}</d:href></d:current-user-principal>");
             write!(stream,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-            crate::test_support::settle(&mut stream);
+            crate::support::test_support::settle(&mut stream);
         });
         let cfg=Config{provider:Provider::WeCom,username:"synthetic".into(),href:None,server:Some(base)};
         assert!(discover(&agent().unwrap(),&cfg,"synthetic-password").unwrap_err().message.contains("不可信"));
@@ -1559,7 +1559,7 @@ mod tests {
                 assert!(request.starts_with(if i==1{"REPORT /next "}else{"REPORT / "}));
                 assert!(request.to_ascii_lowercase().contains("authorization: basic "));
                 write!(stream,"HTTP/1.1 {status}\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
-                crate::test_support::settle(&mut stream);
+                crate::support::test_support::settle(&mut stream);
             }
         });
         let cfg=Config{provider:Provider::Feishu,username:"synthetic".into(),href:None,server:Some(base.clone())};
@@ -1697,7 +1697,7 @@ mod tests {
                     let status=if data.is_empty(){404}else{200};
                     let xml=format!("<d:multistatus><d:response><d:href>/calendar/item.ics</d:href><d:propstat><d:prop><c:calendar-data>{data}</c:calendar-data></d:prop><d:status>HTTP/1.1 {status} Result</d:status></d:propstat></d:response></d:multistatus>");
                     write!(socket,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",xml.len(),xml).unwrap();
-                    crate::test_support::settle(&mut socket);
+                    crate::support::test_support::settle(&mut socket);
                 }
             });
             let cfg=Config{provider:Provider::Feishu,username:"demo".into(),href:Some(format!("{base}calendar/")),server:Some(base)};
@@ -1737,7 +1737,7 @@ mod tests {
                     let collection="<d:response><d:href>/calendar/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>";
                     let xml=if index==0 {format!("<d:multistatus>{collection}</d:multistatus>")} else if index==1 {format!("<d:multistatus>{collection}<d:response><d:href>/calendar/item/</d:href></d:response></d:multistatus>")} else {object};
                     write!(socket,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",xml.len(),xml).unwrap();
-                    crate::test_support::settle(&mut socket);
+                    crate::support::test_support::settle(&mut socket);
                 }
             });
             let cfg=Config{provider:Provider::DingTalk,username:"demo".into(),href:Some(format!("{base}calendar/")),server:Some(base)};
@@ -1780,7 +1780,7 @@ mod tests {
             let xml=format!(r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:propstat><d:prop><c:calendar-data>BEGIN:VCALENDAR
 {ics}END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response></d:multistatus>"#);
             write!(socket,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",xml.len(),xml).unwrap();
-            crate::test_support::settle(&mut socket);
+            crate::support::test_support::settle(&mut socket);
             String::from_utf8(buf).unwrap()
         });
         let cfg=Config{provider:Provider::Feishu,username:"demo".into(),href:Some(format!("http://127.0.0.1:{port}/calendar/")),server:Some(format!("http://127.0.0.1:{port}/"))};
@@ -2004,7 +2004,7 @@ END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response></d:multistatu
                 };
                 let _ = sock.write_all(body.as_bytes());
                 let _ = sock.flush();
-                crate::test_support::settle(&mut sock);
+                crate::support::test_support::settle(&mut sock);
             }
             hits
         });

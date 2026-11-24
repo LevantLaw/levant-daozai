@@ -12,7 +12,7 @@ fn due() -> H {
 }
 
 fn health_badge(h:&H)->Rect {
-    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::bar_layout::HEALTH))))
+    h.ctx.read_response(egui::Id::new(("card",true,("page-badge",crate::app::bar_layout::HEALTH))))
         .unwrap_or_else(||panic!("缺少健康常驻入口")).rect
 }
 
@@ -115,7 +115,7 @@ fn health_side_docks_open_page_and_confirm_independently(){
         let mut h=due();h.app.settings.dock=dock;
         // 换停靠方式后胶囊要重新收拢，徽标才有可点击区域。
         for _ in 0..60{h.frame(vec![]);}
-        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::bar_layout::HEALTH))))
+        let rect=h.ctx.read_response(egui::Id::new(("card",true,("side-badge",crate::app::bar_layout::HEALTH))))
             .unwrap_or_else(||panic!("缺少侧栏健康入口")).rect;
         h.click(rect.center());
         assert_eq!(h.app.page,crate::app::WATER_PAGE);

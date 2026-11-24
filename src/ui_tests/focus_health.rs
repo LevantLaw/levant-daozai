@@ -311,7 +311,7 @@ fn singing_microphone_moves_relative_to_the_face_and_disappears_on_pause(){
         }).collect();
         assert_eq!(eyes.len(),2);offsets.push(head.y-(eyes[0]+eyes[1])/2.0);
     }
-    if crate::bar_layout::animations_enabled(){
+    if crate::app::bar_layout::animations_enabled(){
         let range=offsets.iter().copied().fold(f32::NEG_INFINITY,f32::max)-offsets.iter().copied().fold(f32::INFINITY,f32::min);
         assert!(range>0.4,"麦克风需要有独立动态");
     }
@@ -417,7 +417,7 @@ fn mascot_expression_gallery(){
 #[test]
 #[ignore="按需导出接入程序后的十二组表情"]
 fn mascot_integrated_expression_gallery(){
-    use crate::pet_expressions::Expression;
+    use crate::app::pet_expressions::Expression;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_PET_INTEGRATED_PREVIEW").expect("需指定预览目录"));
     std::fs::create_dir_all(&dest).unwrap();

@@ -151,7 +151,7 @@ fn server(status: &str, extra_headers: &str, body: &str) -> (String, std::thread
             }
         }
         let _ = stream.write_all(response.as_bytes());
-        crate::test_support::settle(&mut stream);
+        crate::support::test_support::settle(&mut stream);
         String::from_utf8(bytes).unwrap()
     });
     (url,task)

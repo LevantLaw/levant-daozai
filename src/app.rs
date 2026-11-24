@@ -5,14 +5,13 @@
 
 use crate::app::extras::{Alert, HealthReminder, PetState};
 use crate::render::anim::{self, lerp, smoothstep, Spring};
-use crate::bar_layout::{self as bar, Layout};
+use crate::app::bar_layout::{self as bar, Layout};
 use crate::calendar;
 use crate::render::glass;
 use crate::lyrics;
 use crate::mail;
 use crate::model;
 pub use crate::model::{NotificationSound, BAR_H, CANVAS_W, PH, PW, WIN_H, WIN_W};
-use crate::render::glass_shape;
 pub use crate::render::glass_shape::{blur_pieces, BlurPiece, GlassShape};
 use crate::render::paint::{self, Card, H};
 use crate::render::shape;
@@ -35,6 +34,11 @@ pub(crate) mod task_picker;
 pub(crate) mod dnd;
 pub(crate) mod page_badges;
 pub(crate) mod settings_window;
+pub(crate) mod bar_layout;
+pub(crate) mod pet;
+pub(crate) mod pet_expressions;
+pub mod settings_theme;
+pub(crate) mod updates;
 
 // ---------- 几何（逻辑点；原版 125% 截图 ÷ 1.25） ----------
 /// 展开后保留的常驻状态行高度；收起时它就是整颗药丸。
@@ -161,7 +165,7 @@ pub struct Env {
     /// 系统主音量（0..100, 是否静音）；v0.5.4 音量条与系统双向同步。
     pub volume: Option<(u32, bool)>,
     /// 已连接的蓝牙音频设备（名称 + 可选电量）。
-    pub bt: Vec<crate::bt::Device>,
+    pub bt: Vec<crate::platform::bt::Device>,
     /// 蓝牙服务是否已经完成首次扫描。
     pub bt_ready: bool,
     /// 岛所在屏幕（与 `win` 同一坐标系，逻辑点）；用于让通知详情留在屏幕内。
@@ -706,7 +710,7 @@ pub struct App {
     pub(crate) icons: crate::platform::icons::Cache,
     pub(crate) avoidance: crate::app::avoidance::Picker,
     pub(crate) confirm_clear: Option<f64>,
-    pub clipboard: crate::clipboard::Shared,
+    pub clipboard: crate::platform::clipboard::Shared,
     pub(crate) clip_first: usize,
     pub(crate) clip_confirm_clear: Option<f64>,
 
@@ -794,7 +798,7 @@ pub struct App {
     pub(crate) pending: Vec<Cmd>,
     pub(crate) todo_first: usize,
     pub(crate) todo_choosing: bool,
-    pub(crate) pet: crate::pet::Pet,
+    pub(crate) pet: crate::app::pet::Pet,
     pub(crate) last_drink: Option<(u32, usize)>,
     // 其它
     toast: Option<(String, f64)>,
@@ -827,7 +831,7 @@ pub struct App {
     /// 点了上一首 / 下一首的时刻：先本地把进度归零，等播放器报回新歌位置再交还。
     pub(crate) music_restart_at: Option<f64>,
     /// 上一次看到的蓝牙设备，用来只在连接/断开时提示一次。
-    pub(crate) bt_shown: Vec<crate::bt::Device>,
+    pub(crate) bt_shown: Vec<crate::platform::bt::Device>,
     bt_initialized: bool,
     /// v0.5.5：邮件账号、最近邮件与设置表单。
     pub(crate) mail: MailState,
@@ -843,7 +847,7 @@ pub struct App {
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
     pub(crate) weather_source: crate::weather::source_ui::State,
-    pub(crate) updates: crate::updates::State,
+    pub(crate) updates: crate::app::updates::State,
     pub(crate) resident: bar::Motion,
     pub(crate) event_tray: crate::app::event_tray::EventTray,
     pub(crate) dnd: crate::app::dnd::Dnd,
@@ -921,7 +925,7 @@ impl App {
             shelf_born: HashMap::new(),
             icons: Default::default(), avoidance: Default::default(),
             confirm_clear: None,
-            clipboard: crate::clipboard::Shared::new(clipboard_on),
+            clipboard: crate::platform::clipboard::Shared::new(clipboard_on),
             clip_first: 0,
             clip_confirm_clear: None,
             water_ring: Spring::new(0.0, 120.0, 0.9),
@@ -987,7 +991,7 @@ impl App {
             agent_open_after_notice:None,
             weather,
             weather_source,
-            updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
+            updates: crate::app::updates::State::load(model::config_dir().join("update-check.json")),
             resident: Default::default(), event_tray: Default::default(), dnd: Default::default(), shelf_badge_until:0.0, calendar_badge_until:0.0, resident_power:(None,false),
         }
     }
@@ -2984,7 +2988,7 @@ impl App {
         if kugou || lyrics::is_soda(&source) {
             let (tx,rx)=std::sync::mpsc::sync_channel(1);self.ly.native_rx=Some(rx);
             let (source,title,artist)=(source.clone(),title.clone(),artist.clone());
-            let native=crate::resources::NATIVE_LYRICS.spawn(move ||{
+            let native=crate::support::resources::NATIVE_LYRICS.spawn(move ||{
                 // 客户端通常在开播几秒内写好歌词：先密后疏（0.5s 起，最长 5s 一次），最多等 90 秒。
                 // 汽水的缓存文件可达 32MB，修改时间和大小都没变时不重复整份读取，但每 15 秒仍完整核对一次。
                 let started=std::time::Instant::now();
@@ -3019,7 +3023,7 @@ impl App {
     /// 也只会查询最新的那首；旧请求的结果因通道已更换而直接丢弃。
     fn spawn_lyrics_job(&mut self) {
         if self.ly.pending.is_none() || self.ly_worker.as_ref().is_some_and(|worker|!worker.is_finished()) {return;}
-        let Some(lease)=crate::resources::LYRICS.acquire() else {return;};
+        let Some(lease)=crate::support::resources::LYRICS.acquire() else {return;};
         let Some(job)=self.ly.pending.take() else {return;};
         let (tx, rx) = std::sync::mpsc::channel();
         self.ly.rx = Some(rx);

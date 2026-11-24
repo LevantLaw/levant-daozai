@@ -52,7 +52,7 @@ pub fn seek(seconds:f64)->bool {
     if std::fs::create_dir_all(path.parent().unwrap()).is_err(){return false;}
     let payload=serde_json::json!({"out":path}).to_string();
     let uri=format!("kugou://workbuddy?p={}",base64::engine::general_purpose::STANDARD.encode(payload));
-    if crate::child_process::spawn(std::process::Command::new(executable).arg(uri)).is_err(){return false;}
+    if crate::support::child_process::spawn(std::process::Command::new(executable).arg(uri)).is_err(){return false;}
     let started=std::time::Instant::now();
     while started.elapsed()<Duration::from_secs(3) {
         std::thread::sleep(Duration::from_millis(100));
@@ -87,7 +87,7 @@ mod tests {
                 let request=String::from_utf8_lossy(&bytes);assert!(request.starts_with("POST /v1/player/seek "));assert!(request.contains("X-Kugou-Token: test"));
                 let body=serde_json::json!({"code":0,"data":{"accepted":accepted}}).to_string();
                 write!(stream,"HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
-                crate::test_support::settle(&mut stream);
+                crate::support::test_support::settle(&mut stream);
             });
             assert_eq!(send_seek(&base,"test",12.5).is_some(),accepted);worker.join().unwrap();
         }

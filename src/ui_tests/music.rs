@@ -483,7 +483,7 @@ fn collapsed_focus_animates_without_music_or_mascot_and_stops_in_minimal_mode(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.pet=false;h.app.settings.tray_focus=false;h.app.pomo.running=true;
     for _ in 0..120 {h.frame(vec![]);}
-    if crate::bar_layout::animations_enabled(){assert!(h.animating,"关闭吉祥物后，常驻番茄的水面仍应轻微波动");}
+    if crate::app::bar_layout::animations_enabled(){assert!(h.animating,"关闭吉祥物后，常驻番茄的水面仍应轻微波动");}
     h.app.set_minimal(true);for _ in 0..120 {h.frame(vec![]);}
     assert!(!h.animating,"极简细线隐藏计时图标后，应停止其动画刷新");
 }
@@ -574,7 +574,7 @@ fn bluetooth_audio_connection_takes_precedence_over_volume_notice(){
         let mut h=H::new();h.frame(vec![]);
         h.app.alert("系统音量","音量 80%",5,false);
         if volume_already_visible {h.frame(vec![]);}
-        h.bt=vec![crate::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:Some(80),kind:crate::bt::DeviceKind::Bone}];
+        h.bt=vec![crate::platform::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:Some(80),kind:crate::platform::bt::DeviceKind::Bone}];
         h.frame(vec![]);
         assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("蓝牙设备"),"耳机连接应优先于音量提示");
         assert!(!h.app.alerts.iter().any(|a|a.title=="系统音量"),"切换耳机产生的音量提示不应延后补弹");
@@ -589,7 +589,7 @@ fn bluetooth_keyboard_connection_keeps_unrelated_volume_notice(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.frame(vec![]);
     h.app.alert("系统音量","音量 60%",5,false);h.frame(vec![]);
-    h.bt=vec![crate::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::bt::DeviceKind::Keyboard}];h.frame(vec![]);
+    h.bt=vec![crate::platform::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::platform::bt::DeviceKind::Keyboard}];h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("系统音量"));
     assert!(h.app.alerts.iter().any(|a|a.title=="蓝牙设备"));
 }
@@ -707,7 +707,7 @@ fn auto_minimal_music_stops_hidden_playback_animations(){
 
 #[test]
 fn tray_music_and_battery_leave_the_resident_row_and_show_on_change(){
-    use crate::bar_layout::{BATTERY,MUSIC,TRAY};
+    use crate::app::bar_layout::{BATTERY,MUSIC,TRAY};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.tray_music=true;h.app.settings.tray_battery=true;
     h.power=(Some(80),false);

@@ -147,7 +147,7 @@ fn log_scan(filename:&str,outcome:&str,state:&Scan,round:usize){
     if cfg!(test){return;}
     let line=format!("{} 酷狗曲长 · {filename} → {outcome} 第{round}轮 扫描{}MB 用时{}ms\n",
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),state.bytes/1024/1024,state.spent.as_millis());
-    crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
+    crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
 }
 
 /// 同一首歌最多扫描这么多次；第 n 次失败后等待 RETRY[n] 再试，用完即放弃。
@@ -182,7 +182,7 @@ impl Cache {
         let line=format!("{} 酷狗曲长 · {title} - {artist}（{}字）→ 未匹配到酷狗窗口，窗口标题：{shown}
 ",
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),title.chars().count()+artist.chars().count()+3);
-        if !cfg!(test) {crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);}
+        if !cfg!(test) {crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);}
     }
     fn recent_key(&self,title:&str,artist:&str)->Option<(u32,String)>{
         if self.seen?.elapsed()>Duration::from_secs(2){return None;}

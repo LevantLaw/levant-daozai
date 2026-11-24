@@ -251,7 +251,7 @@ fn quota_reset_text(snapshot:&Snapshot,window:&quota::Window,now:&chrono::DateTi
 fn claude_disclaimer(ui:&mut egui::Ui){
     ui.separator();
     ui.label(egui::RichText::new("免责声明").size(12.0).strong());
-    ui.add(egui::Label::new(egui::RichText::new("岛仔为非官方辅助工具，数据仅供参考，以 Claude 官方显示为准；本地读取不构成账号安全保证。").size(12.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75)))).wrap());
+    ui.add(egui::Label::new(egui::RichText::new("岛仔为非官方辅助工具，数据仅供参考，以 Claude 官方显示为准；本地读取不构成账号安全保证。").size(12.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75)))).wrap());
 }
 impl App {
     pub(crate) fn quota_close_connection(&mut self){
@@ -376,15 +376,15 @@ impl App {
             Some((position,extra))
         }).collect()
     }
-    pub(crate) fn draw_quota_bar(&mut self,c:&Card,cx:f32,layout:&crate::bar_layout::Layout,indices:&[usize]){
+    pub(crate) fn draw_quota_bar(&mut self,c:&Card,cx:f32,layout:&crate::app::bar_layout::Layout,indices:&[usize]){
         let mut chosen=None;
         for (position,i)in indices.iter().enumerate(){
-            let alpha=layout.pet_clearance(crate::bar_layout::quota_slot(position));
+            let alpha=layout.pet_clearance(crate::app::bar_layout::quota_slot(position));
             let faded=c.faded(alpha);let faded=if alpha<0.8{faded.ghost()}else{faded};let c=&faded;
-            let a=&self.quota.config.accounts[*i];let x=cx+layout.x[crate::bar_layout::quota_slot(position)].unwrap();
+            let a=&self.quota.config.accounts[*i];let x=cx+layout.x[crate::app::bar_layout::quota_slot(position)].unwrap();
             let snapshot=self.quota.rows.get(&a.id).and_then(|r|r.as_ref().ok());
             if a.provider.balance(){
-                let wide=true;let extra=if wide{layout.widths[crate::bar_layout::quota_slot(position)]-27.0}else{0.0};let icon_x=x-extra/2.0;
+                let wide=true;let extra=if wide{layout.widths[crate::app::bar_layout::quota_slot(position)]-27.0}else{0.0};let icon_x=x-extra/2.0;
                 if a.provider!=Provider::DeepSeek{logo(c,a.provider,icon_x,15.0,22.0);}else{deepseek_badge(c,self.settings.skin,icon_x,15.0,24.0);}
                 let loading=self.quota.balance_loading(&a.id);let stale=self.quota.stale.contains_key(&a.id);
                 if stale||(!loading&&snapshot.is_none()){
@@ -405,7 +405,7 @@ impl App {
                 if c.hit(x-(27.0+extra)/2.0,1.0,27.0+extra,28.0,("quota-pin",&a.id)).clicked(){chosen=Some(a.id.clone());}continue;
             }
             // 有具体点数的额度（如 Kiro）在环右侧跟一段剩余点数，与余额类的排布一致。
-            let extra=(layout.widths[crate::bar_layout::quota_slot(position)]-27.0).max(0.0);
+            let extra=(layout.widths[crate::app::bar_layout::quota_slot(position)]-27.0).max(0.0);
             let x=if extra>0.0{x-extra/2.0}else{x};
             ring(c,a,snapshot,x,15.0,27.0,accent_colors(&self.quota.config,a));
             if extra>0.0{let stale=self.quota.stale.contains_key(&a.id);if let Some(text)=self.quota.tail_text(&a.id){c.text(x+15.5,21.0,&text,render::theme::size::PILL_CLOCK,W::Bold,if stale{theme::GRAY}else{theme::WHITE},H::Left);}}
@@ -417,9 +417,9 @@ impl App {
         if let Some(id)=chosen{self.quota.config.selected=id;self.quota.config.save();self.show_page(6);}
     }
     /// 事件容器里的额度组：只按常驻账号排布，按实际内容居中，宽度随账号和点数尾巴变化。
-    fn quota_tray_layout(&self,ctx:&egui::Context)->crate::bar_layout::Layout{
+    fn quota_tray_layout(&self,ctx:&egui::Context)->crate::app::bar_layout::Layout{
         let pinned=self.quota_pinned();
-        let mut mini=crate::bar_layout::Layout::new(false,pinned.len(),false,false,false,false,false,false);
+        let mut mini=crate::app::bar_layout::Layout::new(false,pinned.len(),false,false,false,false,false,false);
         for (position,extra) in self.quota_balance_layout(ctx){mini.balance_tail(position,extra);}
         mini.hide_clock();
         mini.center_content();
@@ -610,7 +610,7 @@ impl App {
         });ui.add_space(8.0);
         let accounts=self.quota.config.accounts.clone();let mut remove=None;let mut connect=None;let mut reorder=None;
         for mut a in accounts{
-            let fill=crate::settings_theme::color(ui.ctx(),Color32::from_rgb(35,35,38),Color32::WHITE);
+            let fill=crate::app::settings_theme::color(ui.ctx(),Color32::from_rgb(35,35,38),Color32::WHITE);
             let row=egui::Frame::new().fill(fill).corner_radius(10).inner_margin(egui::Margin::symmetric(16,12)).show(ui,|ui|{
                 ui.set_width((ui.available_width()-1.0).max(0.0));ui.spacing_mut().item_spacing.y=6.0;
                 ui.push_id(a.id.clone(),|ui|{
@@ -627,7 +627,7 @@ impl App {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
                             if ui.button(if open{"收起"}else{"详情"}).clicked(){open=!open;}
                             if a.pinned{ui.label(egui::RichText::new("常驻").size(11.0).color(ui.visuals().weak_text_color()));}
-                            let warn=crate::settings_theme::color(ui.ctx(),Color32::from_rgb(231,175,108),Color32::from_rgb(151,94,28));
+                            let warn=crate::app::settings_theme::color(ui.ctx(),Color32::from_rgb(231,175,108),Color32::from_rgb(151,94,28));
                             if !a.enabled{ui.label(egui::RichText::new("已暂停").size(11.5).color(ui.visuals().weak_text_color()));}
                             else if error.is_some(){ui.label(egui::RichText::new("需要处理").size(11.5).color(warn));}
                             else if let Some(s)=snapshot{ui.label(egui::RichText::new(quota_summary(s)).size(11.5));}
@@ -666,7 +666,7 @@ impl App {
                         }
                     }
                     if !a.enabled{ui.label(egui::RichText::new("已暂停监控").size(11.0).color(ui.visuals().weak_text_color()));}
-                    else if let Some(error)=error{ui.add(egui::Label::new(egui::RichText::new(error).size(11.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_rgb(231,175,108),Color32::from_rgb(151,94,28)))).wrap());}
+                    else if let Some(error)=error{ui.add(egui::Label::new(egui::RichText::new(error).size(11.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_rgb(231,175,108),Color32::from_rgb(151,94,28)))).wrap());}
                     else if snapshot.is_none(){ui.label(egui::RichText::new(if self.quota.busy.contains(&a.id){"正在查询额度…"}else{"等待更新"}).size(11.0).color(ui.visuals().weak_text_color()));}
                     ui.horizontal_wrapped(|ui|{
                         ui.checkbox(&mut a.enabled,"监控");ui.checkbox(&mut a.pinned,"常驻岛上");
@@ -680,7 +680,7 @@ impl App {
                     }
                     if a.provider==Provider::Claude{
                         ui.separator();ui.label(egui::RichText::new("本地读取说明").size(12.0).strong());
-                        ui.add(egui::Label::new(egui::RichText::new(CLAUDE_LOCAL_NOTICE).size(12.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75)))).wrap());
+                        ui.add(egui::Label::new(egui::RichText::new(CLAUDE_LOCAL_NOTICE).size(12.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75)))).wrap());
                         claude_disclaimer(ui);
                     }
                     }
@@ -709,7 +709,7 @@ impl App {
             // 套用设置页的按钮、输入框和分隔线样式，和其他弹窗一致。
             crate::app::extras::settings_apply_style(ui);
             if crate::app::extras::settings_modal_title(ui,title){open=false;}
-            ui.set_max_width(440.0);ui.style_mut().wrap_mode=Some(egui::TextWrapMode::Wrap);ui.spacing_mut().item_spacing.y=9.0;ui.visuals_mut().override_text_color=Some(crate::settings_theme::color(ctx,Color32::from_gray(225),Color32::from_gray(35)));
+            ui.set_max_width(440.0);ui.style_mut().wrap_mode=Some(egui::TextWrapMode::Wrap);ui.spacing_mut().item_spacing.y=9.0;ui.visuals_mut().override_text_color=Some(crate::app::settings_theme::color(ctx,Color32::from_gray(225),Color32::from_gray(35)));
             if self.quota.provider==Provider::RelayCustom{ui.set_min_height((ctx.screen_rect().height()-160.0).clamp(260.0,560.0));}
             egui::ScrollArea::vertical().max_height(if self.quota.provider==Provider::RelayCustom{(ctx.screen_rect().height()-140.0).clamp(260.0,640.0)}else{460.0}).show(ui,|ui|{
             let previous_provider=self.quota.provider;
@@ -803,7 +803,7 @@ impl App {
                 if ui.add_enabled(self.quota.deepseek_connecting.is_none()&&!self.quota.deepseek_key.trim().is_empty(),egui::Button::new("验证并连接")).clicked(){self.quota.note.clear();self.quota.deepseek_connecting=Some(quota::deepseek::Connect::start(self.quota.alias.clone(),std::mem::take(&mut self.quota.deepseek_key)));}
                 if self.quota.deepseek_connecting.is_some(){ui.spinner();ui.label("正在连接 DeepSeek…");ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));}
             }else if self.quota.provider==Provider::Gemini{
-                ui.label(egui::RichText::new("读取 Gemini 网页的 5 小时与每周额度。").size(12.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
+                ui.label(egui::RichText::new("读取 Gemini 网页的 5 小时与每周额度。").size(12.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
                 ui.horizontal_wrapped(|ui|{
                     if ui.button("打开默认浏览器登录").clicked(){self.pending.push(Cmd::OpenUrl("https://gemini.google.com/usage".into()));}
                     if ui.add_enabled(self.quota.gemini_connecting.is_none(),egui::Button::new("连接已登录的 Chrome")).clicked(){self.quota.note.clear();self.quota.gemini_connecting=Some(quota::gemini::Connect::start(self.quota.alias.clone(),self.quota.gemini_email.clone(),None,self.quota.connect_target.as_ref().and_then(|id|self.quota.config.accounts.iter().find(|a|&a.id==id)).and_then(|a|a.slot.clone())));}
@@ -848,13 +848,13 @@ impl App {
                     if ui.button("从本机导入").clicked(){self.quota.note=match quota::grok::native_path(){Some(path)=>match self.quota.config.import_grok(&path,&self.quota.alias){Ok(n)=>format!("新增 {n} 个 Grok Bot 账号"),Err(e)=>e},None=>"请先安装 Grok Bot 并登录，或使用浏览器连接".into()};}
                 });
                 ui.collapsing("导入其他登录文件",|ui|{self.quota_file_form(ui);});
-                ui.label(egui::RichText::new("使用 Grok Bot 对应的 Cursor 账号登录，浏览器授权支持自动续期。").size(12.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
+                ui.label(egui::RichText::new("使用 Grok Bot 对应的 Cursor 账号登录，浏览器授权支持自动续期。").size(12.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
             }else if self.quota.provider==Provider::ZCode{
                 if ui.button("连接本机 ZCode").clicked(){self.quota.note=match quota::zcode::path().ok_or_else(||"未找到 ZCode 登录目录".to_owned()).and_then(|p|quota::zcode::add(&mut self.quota.config,&p,&self.quota.alias)){Ok(())=>"ZCode 已连接".into(),Err(e)=>e};}
             }else if self.quota.provider==Provider::Kiro{
                 if ui.add_enabled(self.quota.kiro_connecting.is_none(),egui::Button::new("连接本机 Kiro")).clicked(){match quota::kiro::path(){Some(path)=>self.quota_start_kiro(path),None=>self.quota.note="未找到 Kiro 登录目录".into()}}
                 ui.collapsing("导入其他登录文件",|ui|{self.quota_file_form(ui);});
-                ui.label(egui::RichText::new("只读识别 Kiro 登录缓存，核验用户后显示套餐、有效试用和赠送 / 加购点数；超额上限单独显示。不自动续期，登录过期时请在 Kiro 中重新登录。").size(12.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
+                ui.label(egui::RichText::new("只读识别 Kiro 登录缓存，核验用户后显示套餐、有效试用和赠送 / 加购点数；超额上限单独显示。不自动续期，登录过期时请在 Kiro 中重新登录。").size(12.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
             }else if self.quota.provider==Provider::Claude{
                 ui.add(egui::Label::new(CLAUDE_LOCAL_NOTICE).wrap());
                 ui.horizontal(|ui|{
@@ -866,11 +866,11 @@ impl App {
                 claude_disclaimer(ui);
             }else{
                 self.quota_file_form(ui);
-                ui.label(egui::RichText::new("各账号使用各自的登录文件；移除只取消监控。登录失效时，请在对应工具中重新登录。").size(12.0).color(crate::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
+                ui.label(egui::RichText::new("各账号使用各自的登录文件；移除只取消监控。登录失效时，请在对应工具中重新登录。").size(12.0).color(crate::app::settings_theme::color(ui.ctx(),Color32::from_gray(180),Color32::from_gray(75))));
             }
             if !self.quota.note.is_empty(){
                 ui.add_space(8.0);
-                let color=crate::settings_theme::color(ui.ctx(),Color32::from_rgb(112,190,255),Color32::from_rgb(24,94,160));
+                let color=crate::app::settings_theme::color(ui.ctx(),Color32::from_rgb(112,190,255),Color32::from_rgb(24,94,160));
                 egui::Frame::new().fill(color.gamma_multiply(0.12)).stroke(egui::Stroke::new(1.0,color.gamma_multiply(0.4))).corner_radius(8).inner_margin(10.0).show(ui,|ui|{
                     ui.set_min_width((ui.available_width()-1.0).max(0.0));
                     ui.label(egui::RichText::new(format!("●  {}",self.quota.note)).size(13.0).strong().color(color));

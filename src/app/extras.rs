@@ -51,7 +51,7 @@ pub(crate) struct Alert {
     pub page: usize,
     pub at: f64,
     pub duration: f64,
-    pub bluetooth: Option<(crate::bt::DeviceKind, bool)>,
+    pub bluetooth: Option<(crate::platform::bt::DeviceKind, bool)>,
     pub meeting: Option<(crate::mail::Meeting, String)>,
     pub unread: Option<crate::app::Unread>,
     /// 最早可显示横幅的时刻；展开期间到达的通知等岛体收起后再显示。
@@ -95,15 +95,15 @@ fn bluetooth_notice_content(body:&str)->(&str,&str,Option<u8>){
     (body,"已连接",None)
 }
 
-pub(crate) fn device_icon(c: &Card, kind: crate::bt::DeviceKind, x: f32, y: f32, size: f32) {
+pub(crate) fn device_icon(c: &Card, kind: crate::platform::bt::DeviceKind, x: f32, y: f32, size: f32) {
     let icon=match kind {
-        crate::bt::DeviceKind::Bone | crate::bt::DeviceKind::Earbuds | crate::bt::DeviceKind::Headphones=>egui::include_image!("../../assets/device-icons/headphones-round-bold.svg"),
-        crate::bt::DeviceKind::Speaker=>egui::include_image!("../../assets/device-icons/speaker-bold.svg"),
-        crate::bt::DeviceKind::Keyboard=>egui::include_image!("../../assets/device-icons/keyboard-bold.svg"),
-        crate::bt::DeviceKind::Mouse=>egui::include_image!("../../assets/device-icons/mouse-bold.svg"),
-        crate::bt::DeviceKind::Gamepad=>egui::include_image!("../../assets/device-icons/gamepad-bold.svg"),
-        crate::bt::DeviceKind::Phone=>egui::include_image!("../../assets/device-icons/smartphone-bold.svg"),
-        crate::bt::DeviceKind::Other=>egui::include_image!("../../assets/device-icons/bluetooth-linear.svg"),
+        crate::platform::bt::DeviceKind::Bone | crate::platform::bt::DeviceKind::Earbuds | crate::platform::bt::DeviceKind::Headphones=>egui::include_image!("../../assets/device-icons/headphones-round-bold.svg"),
+        crate::platform::bt::DeviceKind::Speaker=>egui::include_image!("../../assets/device-icons/speaker-bold.svg"),
+        crate::platform::bt::DeviceKind::Keyboard=>egui::include_image!("../../assets/device-icons/keyboard-bold.svg"),
+        crate::platform::bt::DeviceKind::Mouse=>egui::include_image!("../../assets/device-icons/mouse-bold.svg"),
+        crate::platform::bt::DeviceKind::Gamepad=>egui::include_image!("../../assets/device-icons/gamepad-bold.svg"),
+        crate::platform::bt::DeviceKind::Phone=>egui::include_image!("../../assets/device-icons/smartphone-bold.svg"),
+        crate::platform::bt::DeviceKind::Other=>egui::include_image!("../../assets/device-icons/bluetooth-linear.svg"),
     };
     let rect=c.rect(x,y,size,size);
     let egui::ImageSource::Bytes{uri,bytes}=icon else{return};
@@ -114,12 +114,12 @@ pub(crate) fn device_icon(c: &Card, kind: crate::bt::DeviceKind, x: f32, y: f32,
     }
 }
 
-pub(crate) use crate::pet::PetState;
+pub(crate) use crate::app::pet::PetState;
 
 pub(crate) fn notice_badge(c:&Card,x:f32,y:f32,a:&Alert){
     if a.source==AlertSource::Internal && a.title=="蓝牙设备"{
         c.circle(x,y,11.0,if a.body.contains("已断开"){Color32::from_gray(95)}else{theme::BLUE});
-        device_icon(c,a.bluetooth.map_or(crate::bt::DeviceKind::Other,|v|v.0),x-7.5,y-7.5,15.0);
+        device_icon(c,a.bluetooth.map_or(crate::platform::bt::DeviceKind::Other,|v|v.0),x-7.5,y-7.5,15.0);
     }else{notice_icon(&c.scaled(x,y,0.85),x,y,a);}
 }
 pub(crate) fn messenger_icon(c:&Card,x:f32,y:f32,source:crate::app::Messenger){(source.adapter().paint_icon)(c,x,y);}
@@ -313,9 +313,9 @@ impl App {
             banner_at: self.t,
         }, true);
     }
-    pub(crate) fn bluetooth_alert(&mut self, device: &crate::bt::Device, connected: bool) {
+    pub(crate) fn bluetooth_alert(&mut self, device: &crate::platform::bt::Device, connected: bool) {
         if !self.settings.bluetooth_notifications { return; }
-        if connected && matches!(device.kind,crate::bt::DeviceKind::Bone|crate::bt::DeviceKind::Earbuds|crate::bt::DeviceKind::Headphones|crate::bt::DeviceKind::Speaker) {
+        if connected && matches!(device.kind,crate::platform::bt::DeviceKind::Bone|crate::platform::bt::DeviceKind::Earbuds|crate::platform::bt::DeviceKind::Headphones|crate::platform::bt::DeviceKind::Speaker) {
             self.alerts.retain(|a|a.title!="系统音量");
             if self.notice.as_ref().is_some_and(|a|a.title=="系统音量") {self.notice=None;}
         }
@@ -637,7 +637,7 @@ impl App {
             if a.title=="蓝牙设备" {
                 let (name,status,battery)=bluetooth_notice_content(&a.body);
                 nc.circle(26.0,24.0,14.0,if status=="已连接"{Color32::from_rgb(10,132,255)}else{Color32::from_gray(95)});
-                let kind=a.bluetooth.map(|(kind,_)|kind).unwrap_or(crate::bt::DeviceKind::Other);
+                let kind=a.bluetooth.map(|(kind,_)|kind).unwrap_or(crate::platform::bt::DeviceKind::Other);
                 device_icon(&nc,kind,17.0,15.0,18.0);
                 let right=HUD_W-14.0;
                 let name_end=if let Some(level)=battery {

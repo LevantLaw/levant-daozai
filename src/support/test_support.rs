@@ -23,7 +23,7 @@ pub fn serial() -> std::sync::MutexGuard<'static, ()> {
 }
 
 /// 全局工作位可能被并行测试的临时任务占着；等到两个空闲位再返回。
-pub fn acquire_pair(lane: &'static crate::resources::Lane) -> [crate::resources::Lease; 2] {
+pub fn acquire_pair(lane: &'static crate::support::resources::Lane) -> [crate::support::resources::Lease; 2] {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         let first = lane.acquire();

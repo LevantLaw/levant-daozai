@@ -29,7 +29,7 @@ fn changed(topic:&str,state:&str)->bool {
 fn write(line:&str) {
     if cfg!(test) {return;}
     let line=format!("{} {line}\n",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
-    crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
+    crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
 }
 
 /// 记一条状态；与上次相同则不写。

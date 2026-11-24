@@ -216,7 +216,7 @@ fn request(agent: &ureq::Agent, url: &url::Url, service: &str, route: &str) -> R
         .and_then(|response|json(response).map_err(|error|{detail="invalid_response".into();(error,true)}));
     if !cfg!(test) {
         // 只记录环节、域名与错误类别，不记录查询参数、IP、坐标或代理地址。
-        crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"weather-network.log",
+        crate::support::resources::append_log(&crate::model::config_dir().join("diagnostics"),"weather-network.log",
             &format!("time={} stage={service} route={route} host={} elapsed_ms={} result={detail}",chrono::Utc::now().timestamp(),url.host_str().unwrap_or_default(),start.elapsed().as_millis()));
     }
     result
@@ -764,7 +764,7 @@ mod tests {
                     stream.set_read_timeout(Some(Duration::from_secs(12))).unwrap();
                     if !matches!(stream.read(&mut [0;4096]),Ok(n) if n>0){return false;}
                     let ok = stream.write_all(response.as_bytes()).is_ok();
-                    crate::test_support::settle(&mut stream);
+                    crate::support::test_support::settle(&mut stream);
                     return ok;
                 }
                 std::thread::sleep(Duration::from_millis(10));
@@ -917,7 +917,7 @@ mod tests {
                     let mut request=[0;4096];let n=stream.read(&mut request).unwrap();
                     let request=String::from_utf8_lossy(&request[..n]).into_owned();
                     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}").unwrap();
-                    crate::test_support::settle(&mut stream);
+                    crate::support::test_support::settle(&mut stream);
                     return request;
                 }
                 std::thread::sleep(Duration::from_millis(10));

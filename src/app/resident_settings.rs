@@ -1,4 +1,4 @@
-use crate::{bar_layout::*,app::extras::{setting_row_nested,settings_group_fold},render,render::paint::{self,Card,H},settings_theme::color as settings_color,render::theme::{self,W}};
+use crate::{app::bar_layout::*,app::extras::{setting_row_nested,settings_group_fold},render,render::paint::{self,Card,H},app::settings_theme::color as settings_color,render::theme::W};
 use eframe::egui::{self,Color32,RichText,Rect,Pos2,Vec2};
 
 /// 预览编辑器自己的统一间距；不跟随岛上的 `GAP`，以便在有限宽度里放下全部组件。

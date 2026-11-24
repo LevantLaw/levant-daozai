@@ -842,14 +842,14 @@ impl App {
         let ink_w = |t: &str| ctx.fonts(|fonts| fonts.layout_no_wrap(t.to_string(), theme::font(size, W::Bold), theme::WHITE).mesh_bounds.width());
         let ink = match text.strip_prefix('-') { Some(rest) => ink_w("-") + size * 0.07 + ink_w(rest), None => ink_w(&text) }.ceil();
         let chip = PILL_ICON + PILL_GAP + ink + 2.0;
-        Some(chip - crate::bar_layout::WEATHER_WIDTH)
+        Some(chip - crate::app::bar_layout::WEATHER_WIDTH)
     }
 
     /// 常驻胶囊的天气徽标：小图标 + 温度；点击进入天气页。
-    pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::bar_layout::Layout) {
+    pub(crate) fn draw_pill_weather(&mut self, c: &Card, x: f32, layout: &crate::app::bar_layout::Layout) {
         let Some(snapshot) = self.weather_pill().cloned() else { return };
-        let width = layout.widths[crate::bar_layout::WEATHER];
-        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::bar_layout::WEATHER));
+        let width = layout.widths[crate::app::bar_layout::WEATHER];
+        self.paint_weather(c, x, &snapshot, width, layout.pet_clearance(crate::app::bar_layout::WEATHER));
         let tip = format!("{} · {}\n更新于 {} · {}", snapshot.place, snapshot.description(), weather::clock(snapshot.at),self.weather_source.displayed.name());
         // 用 bar_tooltip：常驻胶囊上的提示不能用 on_hover_text，悬浮层会盖住指针、抢走点击。
         if crate::quota::ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
@@ -885,9 +885,9 @@ impl App {
     }
 
     /// 只画不响应命中，设置页的常驻预览与事件容器复用。
-    pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::bar_layout::Layout, snapshot: &crate::weather::Snapshot) {
-        let width = layout.widths[crate::bar_layout::WEATHER];
-        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::bar_layout::WEATHER));
+    pub(crate) fn paint_pill_weather(&self, c: &Card, x: f32, layout: &crate::app::bar_layout::Layout, snapshot: &crate::weather::Snapshot) {
+        let width = layout.widths[crate::app::bar_layout::WEATHER];
+        self.paint_weather(c, x, snapshot, width, layout.pet_clearance(crate::app::bar_layout::WEATHER));
     }
 
     /// 按给定宽度和透明度画天气徽标；徽标在宽度内居中。
@@ -1088,7 +1088,7 @@ impl App {
 
     pub(crate) fn weather_settings(&mut self, ui: &mut egui::Ui) {
         use crate::app::extras::{settings_card, settings_hint, settings_label};
-        use crate::settings_theme::color;
+        use crate::app::settings_theme::color;
         let ctx=ui.ctx().clone();
         let accent=color(&ctx,Color32::from_rgb(96,164,255),Color32::from_rgb(34,108,220));
         ui.add_space(4.0);
@@ -1193,7 +1193,7 @@ fn info_row(ui: &mut egui::Ui, title: &str, right: impl FnOnce(&mut egui::Ui)) {
 /// 城市列表的一行：单选圆点、缓存天气图标、名称与地区、缓存温度；可删除的行右侧带 ×。
 /// 返回 (点击整行, 点击删除)。
 pub(crate) fn city_row(ui: &mut egui::Ui, selected: bool, removable: bool, title: &str, detail: &str, cached: Option<&weather::Snapshot>, accent: Color32) -> (bool, bool) {
-    use crate::settings_theme::color;
+    use crate::app::settings_theme::color;
     let ctx = ui.ctx().clone();
     let (rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 48.0), egui::Sense::click());
     let remove_rect = egui::Rect::from_center_size(egui::pos2(rect.right() - 18.0, rect.center().y), egui::vec2(26.0, 26.0));
@@ -1252,7 +1252,7 @@ pub(crate) fn city_row(ui: &mut egui::Ui, selected: bool, removable: bool, title
 /// 城市搜索下拉的一项：定位标记 + 名称（粗）+ 行政区（灰），左对齐；
 /// 已选中的右侧打勾，已在列表里的标「已添加」。
 pub(crate) fn city_option(ui: &mut egui::Ui, position: &weather::Position, chosen: bool, saved: bool) -> egui::Response {
-    use crate::settings_theme::color;
+    use crate::app::settings_theme::color;
     let ctx = ui.ctx().clone();
     let width = ui.available_width().max(220.0);
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 44.0), egui::Sense::click());

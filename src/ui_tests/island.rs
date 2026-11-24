@@ -392,8 +392,8 @@ fn ui_alignment_layout_gallery(){
         if name=="water-chart"{h.app.show_page(2);h.app.water_view=1;h.app.water.drunk_ml=1250;h.app.water.hours[9]=250;h.app.water.hours[8]=500;h.app.water.hours[7]=500;}
         if name=="focus-running"{h.app.show_page(1);h.app.pomo.running=true;h.app.pomo.remaining=1283.0;}
         if let Some(kind)=name.strip_prefix("bt-"){
-            let kind=match kind{"headphones"=>crate::bt::DeviceKind::Headphones,"keyboard"=>crate::bt::DeviceKind::Keyboard,"mouse"=>crate::bt::DeviceKind::Mouse,"gamepad"=>crate::bt::DeviceKind::Gamepad,"phone"=>crate::bt::DeviceKind::Phone,"speaker"=>crate::bt::DeviceKind::Speaker,_=>crate::bt::DeviceKind::Other};
-            h.app.bluetooth_alert(&crate::bt::Device{id:"preview".into(),name:"我的蓝牙设备 · 超长设备名称与连接状态".into(),battery:Some(100),kind},true);
+            let kind=match kind{"headphones"=>crate::platform::bt::DeviceKind::Headphones,"keyboard"=>crate::platform::bt::DeviceKind::Keyboard,"mouse"=>crate::platform::bt::DeviceKind::Mouse,"gamepad"=>crate::platform::bt::DeviceKind::Gamepad,"phone"=>crate::platform::bt::DeviceKind::Phone,"speaker"=>crate::platform::bt::DeviceKind::Speaker,_=>crate::platform::bt::DeviceKind::Other};
+            h.app.bluetooth_alert(&crate::platform::bt::Device{id:"preview".into(),name:"我的蓝牙设备 · 超长设备名称与连接状态".into(),battery:Some(100),kind},true);
         }
         match name{"volume"=>{h.app.volume_ui=Some((64,false));h.app.alert("系统音量","64%",0,false);},"caps"=>h.app.alert("大写锁定","已开启",0,false),"language"=>h.app.alert("键盘输入语言","中文（简体，中国）",0,false),"network"=>h.app.alert("网络连接","Wi-Fi · 网络已连接",0,false),"power"=>h.app.alert("电源已连接","当前电量 76%",0,false),"meeting"=>h.app.meeting_alert(crate::mail::Meeting{ all_day:false,title:"产品方案评审与下阶段开发排期确认".into(),start:chrono::Local::now().timestamp()+600,end:None,at:"11-01 10:00".into(),uid:"preview".into()},"邮件 · product-and-design-team@company-example.com".into(),5),_=>{}}
         if name=="meeting-dingtalk" || name=="meeting-wecom" {
@@ -426,7 +426,7 @@ fn ui_alignment_layout_gallery(){
 
 #[test]
 fn resident_components_can_be_dragged_saved_and_reset(){
-    use crate::bar_layout::{CLOCK,BATTERY,WEATHER};
+    use crate::app::bar_layout::{CLOCK,BATTERY,WEATHER};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(h:&mut H,events:Vec<egui::Event>,slot:usize)->[Pos2;2]{
         let mut points=[Pos2::ZERO;2];
@@ -454,7 +454,7 @@ fn resident_components_can_be_dragged_saved_and_reset(){
 
 #[test]
 fn resident_drag_inserts_on_the_pointer_side(){
-    use crate::bar_layout::{BATTERY,CLOCK};
+    use crate::app::bar_layout::{BATTERY,CLOCK};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(h:&mut H,events:Vec<egui::Event>)->(Pos2,Pos2){
         let mut points=(Pos2::ZERO,Pos2::ZERO);

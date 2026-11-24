@@ -278,7 +278,7 @@ pub struct Settings {
     pub oled_shift: bool,
     /// 停靠边缘；左右停靠时 `island_offset` 表示上下位置。
     pub dock: Dock,
-    pub settings_theme: crate::settings_theme::SettingsTheme,
+    pub settings_theme: crate::app::settings_theme::SettingsTheme,
     pub pet: bool,
     pub browser_minimal: bool,
     pub avoid_browsers: bool,
@@ -424,7 +424,7 @@ impl Settings {
         let mut s = Self::default();
         for (k, v) in read_kv(&config_dir().join("settings.txt")) {
             match k.as_str() {
-                "settings_theme" => s.settings_theme=crate::settings_theme::SettingsTheme::parse(&v),
+                "settings_theme" => s.settings_theme=crate::app::settings_theme::SettingsTheme::parse(&v),
                 "display_id" => s.display_id = v,
                 "skin" => {
                     // 早期测试版把胶囊当作皮肤保存。
@@ -443,14 +443,14 @@ impl Settings {
                 "avoid_apps" => s.avoid_apps = serde_json::from_str(&v).unwrap_or_default(),
                 "resident_order" => {
                     let mut order:Vec<usize>=v.split(',').filter_map(|n|n.parse().ok()).collect();
-                    if order.len()==6 && !order.contains(&crate::bar_layout::WEATHER) {
-                        if let Some(clock)=order.iter().position(|slot|*slot==crate::bar_layout::CLOCK){order.insert(clock+1,crate::bar_layout::WEATHER);}
+                    if order.len()==6 && !order.contains(&crate::app::bar_layout::WEATHER) {
+                        if let Some(clock)=order.iter().position(|slot|*slot==crate::app::bar_layout::CLOCK){order.insert(clock+1,crate::app::bar_layout::WEATHER);}
                     }
-                    if order.len()==7 && crate::bar_layout::DEFAULT_ORDER[..7].iter().all(|slot|order.contains(slot)) {
+                    if order.len()==7 && crate::app::bar_layout::DEFAULT_ORDER[..7].iter().all(|slot|order.contains(slot)) {
                         // 旧配置里没有 AI 会话槽：接在最后。
-                        order.push(crate::bar_layout::AGENT);
+                        order.push(crate::app::bar_layout::AGENT);
                     }
-                    if crate::bar_layout::valid_order(&order){s.resident_order=order;}
+                    if crate::app::bar_layout::valid_order(&order){s.resident_order=order;}
                 }
                 "page_order" => {
                     if let Ok(mut order)=v.split(',').map(str::parse::<usize>).collect::<Result<Vec<_>,_>>() {
@@ -486,11 +486,11 @@ impl Settings {
                 "tray_battery" => s.tray_battery = v != "0",
                 "tray_order" => {
                     let mut order:Vec<usize>=v.split(',').filter_map(|n|n.parse().ok()).collect();
-                    if order.len()==9 && crate::bar_layout::TRAY_ORDER.iter().filter(|slot|**slot!=crate::bar_layout::CALENDAR).all(|slot|order.contains(slot)) {
+                    if order.len()==9 && crate::app::bar_layout::TRAY_ORDER.iter().filter(|slot|**slot!=crate::app::bar_layout::CALENDAR).all(|slot|order.contains(slot)) {
                         // 旧配置里没有日程槽：接在置物架之后。
-                        if let Some(index)=order.iter().position(|slot|*slot==crate::bar_layout::SHELF){order.insert(index+1,crate::bar_layout::CALENDAR);}
+                        if let Some(index)=order.iter().position(|slot|*slot==crate::app::bar_layout::SHELF){order.insert(index+1,crate::app::bar_layout::CALENDAR);}
                     }
-                    if crate::bar_layout::valid_tray_order(&order){s.tray_order=order;}
+                    if crate::app::bar_layout::valid_tray_order(&order){s.tray_order=order;}
                 }
                 "show_mail" => s.show_mail = v != "0",
                 "show_health" => s.show_health = v != "0",

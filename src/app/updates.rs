@@ -412,7 +412,7 @@ fn download(release: &Release, tx: &mpsc::Sender<Event>, cancel: &AtomicBool) ->
         let mut input = response.into_reader();
         let mut output = std::fs::File::create(work.join("update.zip")).map_err(|_| "无法保存更新包")?;
         transfer(&mut input, &mut output, package, cancel, |progress| { let _ = tx.send(Event::Progress(progress)); })?;
-        std::fs::write(work.join("apply.ps1"), concat!("\u{feff}", include_str!("../installer/update.ps1"))).map_err(|_| "无法准备更新程序")?;
+        std::fs::write(work.join("apply.ps1"), concat!("\u{feff}", include_str!("../../installer/update.ps1"))).map_err(|_| "无法准备更新程序")?;
         std::fs::write(work.join("version.txt"), release.version.trim_start_matches('v')).map_err(|_| "无法保存更新信息")?;
         std::fs::write(work.join("hash.txt"), &package.hash).map_err(|_| "无法保存校验信息")?;
         if cancel.load(Ordering::Relaxed) { return Err("下载已取消".into()); }
@@ -444,7 +444,7 @@ fn launch_installer(work: &std::path::Path) -> Result<(), String> {
     let target = std::env::current_exe().map_err(|_| "无法找到当前程序")?;
     let shell = std::env::var_os("SystemRoot").map(PathBuf::from).ok_or("无法找到 Windows 目录")?
         .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    let mut child = crate::child_process::spawn(std::process::Command::new(shell).args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+    let mut child = crate::support::child_process::spawn(std::process::Command::new(shell).args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(work.join("apply.ps1")).arg("-WorkPath").arg(work).arg("-TargetExe").arg(target)
         .arg("-ParentProcessId").arg(std::process::id().to_string()))
         .map_err(|_| "无法启动更新程序，请通过浏览器下载安装")?;
@@ -616,7 +616,7 @@ mod tests {
                     let n = stream.read(&mut request).unwrap();
                     assert!(String::from_utf8_lossy(&request[..n]).starts_with("GET http://127.0.0.1:1/update.zip"));
                     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok").unwrap();
-                    crate::test_support::settle(&mut stream);
+                    crate::support::test_support::settle(&mut stream);
                     return;
                 }
                 if start.elapsed() > Duration::from_secs(3) { return; }
