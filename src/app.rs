@@ -4,17 +4,17 @@
 //! 时间一律来自 `Env::t`（秒），不直接读系统时钟，所以录屏可逐帧复现。
 
 use crate::extras::{Alert, HealthReminder, PetState};
-use crate::anim::{self, lerp, smoothstep, Spring};
+use crate::render::anim::{self, lerp, smoothstep, Spring};
 use crate::bar_layout::{self as bar, Layout};
 use crate::calendar;
-use crate::glass;
+use crate::render::glass;
 use crate::lyrics;
 use crate::mail;
 use crate::model;
-use crate::paint::{self, Card, H};
-use crate::shape;
+use crate::render::paint::{self, Card, H};
+use crate::render::shape;
 use crate::smtc::{NowPlaying, Transport};
-use crate::theme::{self, size, W};
+use crate::render::theme::{self, size, W};
 use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -792,7 +792,7 @@ pub struct App {
     pub(crate) shelf_menu_rect: Option<Rect>,
     pub(crate) shelf_x: HashMap<PathBuf, Spring>,
     pub(crate) shelf_born: HashMap<PathBuf, f64>,
-    pub(crate) icons: crate::icons::Cache,
+    pub(crate) icons: crate::platform::icons::Cache,
     pub(crate) avoidance: crate::avoidance::Picker,
     pub(crate) confirm_clear: Option<f64>,
     pub clipboard: crate::clipboard::Shared,
@@ -844,12 +844,12 @@ pub struct App {
     pub(crate) forced_open_until:f64,
     pub settings_open:bool,
     settings_window:std::sync::Arc<std::sync::Mutex<crate::settings_window::State>>,
-    pub displays:Vec<crate::display_layout::Display>,
+    pub displays:Vec<crate::platform::display_layout::Display>,
     browser_at_top:bool,
     pub(crate) browser_minimal_active:bool,
     /// 毛玻璃着色量（平滑过渡，避免背景变化时闪烁）；0 表示尚未初始化。
     glass_tint:f32,
-    pub(crate) fluid:crate::fluid::Fluid,
+    pub(crate) fluid:crate::render::fluid::Fluid,
     pub(crate) fluid_origin:Pos2,
     fluid_art:Option<egui::TextureId>,
     fluid_title:String,
@@ -1596,10 +1596,10 @@ impl App {
     pub fn save_window_before_exit(&self){self.window_layout().close();}
 
     #[cfg(windows)]
-    pub fn start_tray(&self,state:crate::tray::State)->Option<crate::tray::Tray>{
+    pub fn start_tray(&self,state:crate::platform::tray::State)->Option<crate::platform::tray::Tray>{
         let layout=self.settings_window.clone();
         // 原生文件选择框会占用界面线程，托盘退出时直接保存最近一次观察到的布局。
-        crate::tray::Tray::start_with_exit(state,move||layout.lock().unwrap_or_else(|e|e.into_inner()).close())
+        crate::platform::tray::Tray::start_with_exit(state,move||layout.lock().unwrap_or_else(|e|e.into_inner()).close())
     }
 
     pub fn open_settings(&mut self){
@@ -1683,7 +1683,7 @@ impl App {
     /// OLED 像素偏移只在收起动画完成、没有鼠标交互、不在编辑时移动；
     /// 展开、点击、拖拽时保持当前位置，避免面板内容和位移一起跳。
     pub fn oled_shift_idle(&self,ctx:&egui::Context) -> bool {
-        crate::oled_shift::should_move(self.open, self.position_drag.is_some() || self.drag_glide.is_some(), self.is_editing())
+        crate::platform::oled_shift::should_move(self.open, self.position_drag.is_some() || self.drag_glide.is_some(), self.is_editing())
             && self.hover_since.is_none() && !self.drag_hot
             && self.w.settled(PW) && self.h.settled(self.expanded_height())
             && self.drag_lift.settled(1.0) && self.drag_stretch.settled(1.0)
@@ -1804,7 +1804,7 @@ impl App {
         let layout=|text:String| {
             // 维语等从右往左的歌词：先按阅读顺序分行再逐行转换，否则折行后第一行会是句子的结尾（#200）。
             let font=theme::font(11.0,W::Semibold);
-            let text=crate::rtl_text::display_wrapped(&text,LYRIC_BAR_W-80.0,|s|ctx.fonts(|fonts|fonts.layout_no_wrap(s.to_owned(),font.clone(),ink).size().x)).into_owned();
+            let text=crate::render::rtl_text::display_wrapped(&text,LYRIC_BAR_W-80.0,|s|ctx.fonts(|fonts|fonts.layout_no_wrap(s.to_owned(),font.clone(),ink).size().x)).into_owned();
             let mut job=egui::text::LayoutJob::simple(text,font,ink,LYRIC_BAR_W-80.0);
             job.halign=egui::Align::Center;
             job.wrap.break_anywhere=true;
@@ -2087,8 +2087,8 @@ impl App {
     }
 
     /// 当前皮肤的换色调色板（经典为 None）。
-    pub(crate) fn skin_palette(&self)->Option<crate::skin_paint::Palette> {
-        match self.settings.skin {model::Skin::Cream=>Some(crate::skin_paint::CREAM),model::Skin::GlassLight=>Some(crate::skin_paint::GLASS_LIGHT),model::Skin::GlassDark=>Some(crate::skin_paint::GLASS_DARK),model::Skin::Classic|model::Skin::Fluid=>None}
+    pub(crate) fn skin_palette(&self)->Option<crate::render::skin_paint::Palette> {
+        match self.settings.skin {model::Skin::Cream=>Some(crate::render::skin_paint::CREAM),model::Skin::GlassLight=>Some(crate::render::skin_paint::GLASS_LIGHT),model::Skin::GlassDark=>Some(crate::render::skin_paint::GLASS_DARK),model::Skin::Classic|model::Skin::Fluid=>None}
     }
 
     /// 设置页预览用的岛体底色：没有真实模糊，毛玻璃按较实的玻璃表现。
@@ -2106,7 +2106,7 @@ impl App {
         match self.settings.skin {
             model::Skin::GlassDark=>{let (r,g,b)=glass::GROUND_DARK;Color32::from_rgba_unmultiplied(r,g,b,alpha)}
             model::Skin::GlassLight=>{let [r,g,b]=glass::LIGHT_GROUND.map(|v|(v*255.0).round() as u8);Color32::from_rgba_unmultiplied(r,g,b,alpha)}
-            model::Skin::Cream=>{let [r,g,b]=crate::skin_paint::CREAM.paper;Color32::from_rgb(r,g,b)}
+            model::Skin::Cream=>{let [r,g,b]=crate::render::skin_paint::CREAM.paper;Color32::from_rgb(r,g,b)}
             model::Skin::Classic=>Color32::BLACK,
             model::Skin::Fluid=>self.fluid.compose(0.5,0.5,1.0,1.0,0.0),
         }
@@ -2228,7 +2228,7 @@ impl App {
                 let switch=target.is_some();
                 if let Some(dock)=target {self.settings.dock=dock;}
                 let (position,length,extent,start)=if self.side() {(cursor.y,screen.height(),crate::side_dock::SIDE_HALF_EXTENT,drag.start.y)}
-                    else {(cursor.x,screen.width(),crate::display_layout::ISLAND_HALF_EXTENT,drag.start.x)};
+                    else {(cursor.x,screen.width(),crate::platform::display_layout::ISLAND_HALF_EXTENT,drag.start.x)};
                 let travel=(length/2.0-extent).max(0.0);
                 let raw=if travel<=0.0 {0.0}else if switch {(position-length/2.0)/travel*limit}
                     else {drag.offset+(position-start)/travel*limit};
@@ -2321,7 +2321,7 @@ impl App {
         // 中轴细线：屏幕中轴一条向外渐隐的细线，岛体中心一截短刻度，两者重合即居中；吸住后细线同样转绿。
         // 细线画在桌面上，底色未知：彩芯加淡黑描边，深浅壁纸都看得清。
         if let Some(screen)=screen.filter(|_|vis>0.004) {
-            let travel=if side {screen.height()/2.0-crate::side_dock::SIDE_HALF_EXTENT}else{screen.width()/2.0-crate::display_layout::ISLAND_HALF_EXTENT}.max(0.0);
+            let travel=if side {screen.height()/2.0-crate::side_dock::SIDE_HALF_EXTENT}else{screen.width()/2.0-crate::platform::display_layout::ISLAND_HALF_EXTENT}.max(0.0);
             // 屏幕中轴相对岛体中心的位置（与窗口跟随同源，不会差一帧）。
             let off=self.placement_offset()*travel;
             let (out,edge)=match dock {

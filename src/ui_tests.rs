@@ -265,11 +265,11 @@ fn complex_script_lyrics_preview(){
             "[00:01]བཀྲ་ཤིས་བདེ་ལེགས།\n[00:05]སྐྱིད་པོའི་གྲོགས་པོ་ཁྱེད་རང་ཡིན།\n[00:09]ཕ་ཡུལ་གྱི་རི་བོ་མཐོན་པོ།\n[00:13]སྙིང་གི་གཏམ་བརྗོད།"),
     ];
     for fixed in [false,true] {
-        crate::rtl_text::BYPASS.store(!fixed,std::sync::atomic::Ordering::Relaxed);
+        crate::render::rtl_text::BYPASS.store(!fixed,std::sync::atomic::Ordering::Relaxed);
         for (name,title,artist,lrc) in songs {
             for open in [false,true] {
                 let mut h=H::new();h.app.settings.pet=false;
-                if !fixed {h.ctx.set_fonts(crate::theme::fonts_without_tibetan());}
+                if !fixed {h.ctx.set_fonts(crate::render::theme::fonts_without_tibetan());}
                 h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
                 let media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:title.into(),artist:artist.into(),duration:215.0,playing:true,position:7.0,
                     playback_type:crate::smtc::MediaKind::Music,..Default::default()};
@@ -302,7 +302,7 @@ fn complex_script_lyrics_preview(){
             }
         }
     }
-    crate::rtl_text::BYPASS.store(false,std::sync::atomic::Ordering::Relaxed);
+    crate::render::rtl_text::BYPASS.store(false,std::sync::atomic::Ordering::Relaxed);
 }
 
 #[test]
@@ -499,7 +499,7 @@ fn weather_refresh_keeps_music_and_settings_shortcuts_separate(){
 #[test]
 fn resized_font_atlases_stop_reuploading_and_release_unused_sizes(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let ctx=egui::Context::default();crate::theme::load_fonts(&ctx);
+    let ctx=egui::Context::default();crate::render::theme::load_fonts(&ctx);
     ctx.set_embed_viewports(false);
     let child=egui::ViewportId::from_hash_of("font-upload-settings");
     let children=std::sync::Arc::new(Mutex::new(Vec::new()));let capture=children.clone();
@@ -650,8 +650,8 @@ fn top_bar_modes_preserve_legacy_settings_and_save_the_selected_display_mode(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let _h=H::new();
     use crate::model::Settings;
     let path=crate::model::config_dir().join("settings.txt");std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let bounds=crate::display_layout::Bounds{left:-1920,top:-400,right:0,bottom:680};
-    let display=crate::display_layout::Display{id:"test".into(),label:"测试屏".into(),bounds,work_top:-368,primary:true};
+    let bounds=crate::platform::display_layout::Bounds{left:-1920,top:-400,right:0,bottom:680};
+    let display=crate::platform::display_layout::Display{id:"test".into(),label:"测试屏".into(),bounds,work_top:-368,primary:true};
     for enabled in [false,true] {
         std::fs::write(&path,format!("avoid_top_bar={}\n",enabled as u8)).unwrap();
         let mut settings=Settings::load();
@@ -659,7 +659,7 @@ fn top_bar_modes_preserve_legacy_settings_and_save_the_selected_display_mode(){
         for on_top in [false,true] {
             settings.top_bar_on_top=on_top;settings.save();let saved=Settings::load();
             assert_eq!((saved.avoid_top_bar,saved.top_bar_on_top),(enabled,on_top));
-            assert_eq!(crate::display_layout::placement_bounds(&display,saved.avoids_top_bar()).top,if enabled&&!on_top{-368}else{-400},"置顶方式应回到屏幕顶边；关闭适配后不避让");
+            assert_eq!(crate::platform::display_layout::placement_bounds(&display,saved.avoids_top_bar()).top,if enabled&&!on_top{-368}else{-400},"置顶方式应回到屏幕顶边；关闭适配后不避让");
         }
     }
 }
@@ -1304,8 +1304,8 @@ fn rand_id() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
 }
 
-fn island_drag_frame(h:&mut H,bounds:crate::display_layout::Bounds,ppp:f32,pointer:Option<Pos2>,pressed:Option<bool>)->Rect {
-    use crate::{display_layout,side_dock};
+fn island_drag_frame(h:&mut H,bounds:crate::platform::display_layout::Bounds,ppp:f32,pointer:Option<Pos2>,pressed:Option<bool>)->Rect {
+    use crate::{platform::display_layout,side_dock};
     let dock=h.app.settings.dock;
     let (width,height)=if dock.is_side(){(side_dock::SIDE_W,side_dock::SIDE_H)}else{(WIN_W,WIN_H)};
     let offset=h.app.placement_offset();
@@ -1326,7 +1326,7 @@ fn island_drag_frame(h:&mut H,bounds:crate::display_layout::Bounds,ppp:f32,point
     screen
 }
 
-fn island_drag_header(h:&mut H,bounds:crate::display_layout::Bounds,ppp:f32)->Pos2 {
+fn island_drag_header(h:&mut H,bounds:crate::platform::display_layout::Bounds,ppp:f32)->Pos2 {
     h.app.show_page(1);
     let mut screen=Rect::NOTHING;
     for _ in 0..90{screen=island_drag_frame(h,bounds,ppp,None,None);}
@@ -1343,7 +1343,7 @@ fn settings_button(h:&H)->Pos2 {
 #[test]
 fn island_position_drag_tracks_screen_coordinates_and_saves_on_release(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
+    let bounds=crate::platform::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
     for dock in crate::model::Dock::ALL {for ppp in [1.0,1.5] {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_offset=-40;h.app.settings.save();
         // 起点离居中足够远，90 点位移不会落进居中吸附范围。
@@ -1370,7 +1370,7 @@ fn island_position_drag_tracks_screen_coordinates_and_saves_on_release(){
 #[test]
 fn island_position_drag_clamps_to_existing_limits_and_stays_resident(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     for dock in crate::model::Dock::ALL {for shape in crate::model::IslandShape::ALL {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_shape=shape;
         let start=island_drag_header(&mut h,bounds,1.0);
@@ -1396,9 +1396,9 @@ fn island_position_drag_clamps_to_existing_limits_and_stays_resident(){
 fn island_position_drag_below_a_top_bar_switches_edges_like_the_bare_screen(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::{Dock,Settings};
-    let monitor=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
-    let display=crate::display_layout::Display{id:"d".into(),label:"d".into(),bounds:monitor,work_top:28,primary:true};
-    let bounds=crate::display_layout::placement_bounds(&display,true);
+    let monitor=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let display=crate::platform::display_layout::Display{id:"d".into(),label:"d".into(),bounds:monitor,work_top:28,primary:true};
+    let bounds=crate::platform::display_layout::placement_bounds(&display,true);
     for to in [Dock::Left,Dock::Right] {
         let mut h=H::new();h.app.settings.save();
         let start=island_drag_header(&mut h,bounds,1.0);
@@ -1420,7 +1420,7 @@ fn island_position_drag_below_a_top_bar_switches_edges_like_the_bare_screen(){
 fn island_position_drag_switches_between_all_three_edges_and_saves_on_release(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::{Dock,IslandShape,Settings};
-    let bounds=crate::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
+    let bounds=crate::platform::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
     for from in Dock::ALL {for to in Dock::ALL.into_iter().filter(|to|*to!=from) {for ppp in [1.0,1.5] {for shape in IslandShape::ALL {
         let mut h=H::new();h.app.settings.dock=from;h.app.settings.island_shape=shape;h.app.settings.save();
         let start=island_drag_header(&mut h,bounds,ppp);
@@ -1453,7 +1453,7 @@ fn island_position_drag_switches_between_all_three_edges_and_saves_on_release(){
 fn island_position_drag_keeps_the_edge_in_the_middle_and_does_not_flap_at_corners(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::Dock;
-    let bounds=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     let mut h=H::new();let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
     for (point,dock) in [(Pos2::new(500.0,500.0),Dock::Top),(Pos2::new(0.0,500.0),Dock::Left),
@@ -1476,7 +1476,7 @@ fn island_position_drag_keeps_the_edge_in_the_middle_and_does_not_flap_at_corner
 #[test]
 fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     let mut h=H::new();h.app.settings.island_offset=-30;h.app.settings.save();
     let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
@@ -1485,7 +1485,7 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     assert!(!h.app.open && h.app.progress()<0.5,"按住不动也应拿起岛体");
     assert_eq!(h.app.settings.island_offset,-30);
     // 窗口平滑跟随：一帧跳过去的光标，窗口要分几帧追上，且不按整数刻度跳。
-    let travel=1920.0/2.0-crate::display_layout::ISLAND_HALF_EXTENT;
+    let travel=1920.0/2.0-crate::platform::display_layout::ISLAND_HALF_EXTENT;
     let to=|units:f32|Pos2::new(start.x+(units+30.0)/100.0*travel,start.y);
     island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);
     island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);
@@ -1518,7 +1518,7 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
 #[test]
 fn island_position_drag_ignores_jitter_and_preserves_header_buttons(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let bounds=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     let mut h=H::new();let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
     island_drag_frame(&mut h,bounds,1.0,Some(start+Vec2::splat(1.0)),None);
@@ -4390,9 +4390,9 @@ fn collapsed_focus_uses_tomato_and_rest_uses_a_white_cup(){
         h.app.pomo.phase=phase;h.app.pomo.remaining=h.app.phase_secs(phase);h.app.pomo.running=true;
         for _ in 0..120 {h.frame(vec![]);}
         let secs=h.app.pomo.remaining.ceil() as u32;let text=format!("{:02}:{:02}",secs/60,secs%60);
-        let color=if phase==Phase::Focus{crate::theme::RED_TOP}else{crate::theme::SOFT_GREEN};
+        let color=if phase==Phase::Focus{crate::render::theme::RED_TOP}else{crate::render::theme::SOFT_GREEN};
         assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==text && t.fallback_color==color)),"常驻倒计时颜色应跟随阶段");
-        let tomato=h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Mesh(m) if m.vertices.iter().any(|v|v.color==crate::theme::RED_TOP)));
+        let tomato=h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Mesh(m) if m.vertices.iter().any(|v|v.color==crate::render::theme::RED_TOP)));
         if phase==Phase::Focus {assert!(tomato,"专注时应显示红色番茄水位");}
         else {
             assert!(!tomato,"休息时应替换番茄");
@@ -4640,10 +4640,10 @@ fn bluetooth_notices_track_multiple_devices_independently(){
 #[test]
 fn display_choice_saves_and_keeps_disconnected_selection(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings_open=true;h.app.settings_tab=crate::extras::SETTINGS_TAB_BODY;h.ctx.set_embed_viewports(false);
-    let bounds=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
+    let bounds=crate::platform::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     h.app.displays=vec![
-        crate::display_layout::Display{id:"internal".into(),label:"显示器 1 · 主屏".into(),bounds,work_top:0,primary:true},
-        crate::display_layout::Display{id:r"\\?\DISPLAY#external".into(),label:"显示器 2 · 外接屏".into(),bounds,work_top:0,primary:false},
+        crate::platform::display_layout::Display{id:"internal".into(),label:"显示器 1 · 主屏".into(),bounds,work_top:0,primary:true},
+        crate::platform::display_layout::Display{id:r"\\?\DISPLAY#external".into(),label:"显示器 2 · 外接屏".into(),bounds,work_top:0,primary:false},
     ];
     let mut raster=crate::preview_raster::Raster::new(690,560);
     fn frame(h:&mut H,raster:&mut crate::preview_raster::Raster,events:Vec<egui::Event>){
@@ -4683,7 +4683,7 @@ fn display_choice_saves_and_keeps_disconnected_selection(){
     h.app.displays.pop();frame(&mut h,&mut raster,vec![]);
     reveal(&mut h,&mut raster,"所选屏幕未连接");
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="所选屏幕未连接")));
-    assert_eq!(crate::display_layout::selected(&h.app.displays,&h.app.settings.display_id).unwrap().id,"internal");
+    assert_eq!(crate::platform::display_layout::selected(&h.app.displays,&h.app.settings.display_id).unwrap().id,"internal");
     click(&mut h,&mut raster,"所选屏幕未连接");click(&mut h,&mut raster,"跟随主屏");
     assert!(crate::model::Settings::load().display_id.is_empty());
 }
@@ -5333,10 +5333,10 @@ fn mail_hyperlink_click_requests_the_default_browser() {
 #[test]
 fn new_notification_sways_twice_then_stops_and_restarts_on_the_next_one() {
     for (i,expected_positive) in [true,false,true,false].into_iter().enumerate(){
-        let angle=crate::paint::bell_swing(0.95*(i as f64*0.25+0.125));
+        let angle=crate::render::paint::bell_swing(0.95*(i as f64*0.25+0.125));
         assert_eq!(angle>0.0,expected_positive);
     }
-    assert_eq!(crate::paint::bell_swing(1.0),0.0);
+    assert_eq!(crate::render::paint::bell_swing(1.0),0.0);
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.settings.read_notifications=true;h.app.receive_notification("测试通知".into(),"test.notification".into(),"第一条".into());
     let first=h.app.notification_bell_at;
@@ -6100,7 +6100,7 @@ fn hidden_components_do_not_keep_static_pages_animating(){
     h.app.settings.pet=false;
     h.app.show_page(4);h.hover(H::local(300.0,60.0),2.0);
     assert!(!h.animating);
-    let mut moving=crate::anim::Spring::new(0.0,230.0,0.9);moving.target=200.0;
+    let mut moving=crate::render::anim::Spring::new(0.0,230.0,0.9);moving.target=200.0;
     h.app.shelf_x.insert("hidden.txt".into(),moving);
     h.frame(vec![]);
     assert!(!h.animating,"离开置物页后，未完成的文件动画不能让其他页面持续刷新");
@@ -6121,10 +6121,10 @@ fn auto_minimal_music_stops_hidden_playback_animations(){
 
 #[test]
 fn native_app_icon_uses_bounded_resolution(){
-    let icon=crate::theme::app_icon();
+    let icon=crate::render::theme::app_icon();
     assert!(icon.width<=128 && icon.height<=128,"原生窗口图标不需要常驻完整的 1024 像素品牌原图");
     assert_eq!(icon.rgba.len(),(icon.width*icon.height*4)as usize);
-    assert!(std::sync::Arc::ptr_eq(&icon,&crate::theme::app_icon()));
+    assert!(std::sync::Arc::ptr_eq(&icon,&crate::render::theme::app_icon()));
 }
 
 #[test]
@@ -6595,7 +6595,7 @@ fn clock_residency_switch_in_island_body_saves(){
             draw(&mut h,&mut raster,vec![]);
             assert_eq!(h.app.settings.show_clock,expected);assert_eq!(crate::model::Settings::load().show_clock,expected,"常驻时间开关应自动保存");
             // 预览会随组件数量整体缩放，时钟字号按比例缩小；滑块上的「25:00」字号明显更小。
-            let preview=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text().contains(':')&&t.galley.job.sections.first().is_some_and(|s|s.format.font_id.size>crate::theme::size::PILL_CLOCK*0.8&&s.format.font_id.size<=crate::theme::size::PILL_CLOCK+0.01)=>Some(t.fallback_color.a()),_=>None}).expect("常驻排列应保留时间的位置");
+            let preview=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text().contains(':')&&t.galley.job.sections.first().is_some_and(|s|s.format.font_id.size>crate::render::theme::size::PILL_CLOCK*0.8&&s.format.font_id.size<=crate::render::theme::size::PILL_CLOCK+0.01)=>Some(t.fallback_color.a()),_=>None}).expect("常驻排列应保留时间的位置");
             assert_eq!(preview==255,expected,"关闭时间后排列预览应置灰");
             if let Some(dest)=std::env::var_os("DAOZAI_CLOCK_RESIDENCY_PREVIEW") {
                 let dest=std::path::PathBuf::from(dest);std::fs::create_dir_all(&dest).unwrap();
@@ -6627,8 +6627,8 @@ fn clock_seconds_keep_resident_spacing_and_digit_width(){
             assert!((layout.x[CLOCK].unwrap()-layout.x[WEATHER].unwrap()).abs()>(layout.widths[CLOCK]+layout.widths[WEATHER])/2.0,"排列反转后仍需预留秒数宽度");
         }
         let _=h.ctx.run(Default::default(),|ctx|{egui::CentralPanel::default().show(ctx,|ui|{
-            let c=crate::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
-            let widths:Vec<_>=(0..60).map(|second|crate::paint::clock_width(&c,&h.app.settings.clock_text(&format!("09:41:{second:02}")),crate::theme::size::PILL_CLOCK)).collect();
+            let c=crate::render::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
+            let widths:Vec<_>=(0..60).map(|second|crate::render::paint::clock_width(&c,&h.app.settings.clock_text(&format!("09:41:{second:02}")),crate::render::theme::size::PILL_CLOCK)).collect();
             assert!(widths.iter().all(|w|(w-widths[0]).abs()<0.01),"秒数变化不应改变时钟占位");
         });});
         h.app.show_page(0);h.hover(H::local(200.0,40.0),1.0);
@@ -6737,10 +6737,10 @@ fn clock_period_visually_centers_with_digits() {
     for scale in [1.0,1.25,1.5,2.0] {
         let output=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(420.0,230.0))),..Default::default()},|ctx|{
             egui::CentralPanel::default().show(ctx,|ui|{
-                let mut c=crate::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());c.s=scale;
+                let mut c=crate::render::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());c.s=scale;
                 for (i,period) in ["凌晨","上午","中午","下午","傍晚","晚上"].iter().enumerate() {
                     for (j,size) in [12.5,15.5].iter().enumerate() {
-                        crate::paint::clock(&c,10.0+j as f32*100.0,18.0+i as f32*18.0,&format!("{period} 12:59"),*size);
+                        crate::render::paint::clock(&c,10.0+j as f32*100.0,18.0+i as f32*18.0,&format!("{period} 12:59"),*size);
                     }
                 }
             });
@@ -9212,7 +9212,7 @@ fn weather_resident_bar_preview(){
 
 #[test]
 fn weather_icons_stay_bright_on_light_skins(){
-    use crate::skin_paint::{map_color,CREAM,GLASS_LIGHT,GLASS_DARK};
+    use crate::render::skin_paint::{map_color,CREAM,GLASS_LIGHT,GLASS_DARK};
     let luma=|c:egui::Color32|0.299*c.r() as f32+0.587*c.g() as f32+0.114*c.b() as f32;
     let cloud=egui::Color32::from_rgb(238,242,250);let sun=egui::Color32::from_rgb(255,196,72);
     for palette in [CREAM,GLASS_LIGHT]{
@@ -9229,14 +9229,14 @@ fn weather_icons_stay_bright_on_light_skins(){
 #[test]
 #[ignore="按需导出常驻天气的全部图标样式"]
 fn weather_icon_atlas_preview(){
-    use crate::{paint::{Card,H as Align},theme::{self,W},weather::{self,Snapshot}};
+    use crate::{render::paint::{Card,H as Align},render::theme::{self,W},weather::{self,Snapshot}};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_WEATHER_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     let cases=[("晴 · 白天",0,true,"0"),("晴 · 夜间",0,false,"0"),("晴间多云 · 白天",2,true,"1 / 2"),
         ("晴间多云 · 夜间",2,false,"1 / 2"),("阴天",3,true,"3"),("雾 / 雾凇",45,true,"45 / 48"),
         ("细雨 / 冻毛毛雨",51,true,"51 / 53 / 55 / 56 / 57"),("雨 / 冻雨",63,true,"61 / 63 / 65 / 66 / 67"),("阵雨",80,true,"80 / 81 / 82"),
         ("雪 / 阵雪",73,true,"71 / 73 / 75 / 77 / 85 / 86"),("雷雨 / 冰雹",95,true,"95 / 96 / 99"),("未知代码 · 回退云图标",200,true,"其他代码")];
-    for (name,palette,ppp) in [("weather-icons-dark",None,2.0f32),("weather-icons-cream",Some(crate::skin_paint::CREAM),2.0),("weather-icons-glass-light",Some(crate::skin_paint::GLASS_LIGHT),2.0),("weather-icons-dark-1x",None,1.0),("weather-icons-dark-125",None,1.25),("weather-icons-dark-150",None,1.5)] {
+    for (name,palette,ppp) in [("weather-icons-dark",None,2.0f32),("weather-icons-cream",Some(crate::render::skin_paint::CREAM),2.0),("weather-icons-glass-light",Some(crate::render::skin_paint::GLASS_LIGHT),2.0),("weather-icons-dark-1x",None,1.0),("weather-icons-dark-125",None,1.25),("weather-icons-dark-150",None,1.5)] {
         let (pw,ph)=((924.0*ppp) as usize,(700.0*ppp) as usize);
         let mut h=H::new();h.app.settings.pet=false;
         let mut layout=crate::bar_layout::Layout::new(false,0,false,false,false,false,true,false);layout.widths[crate::bar_layout::WEATHER]=50.0;
@@ -9264,7 +9264,7 @@ fn weather_icon_atlas_preview(){
                 }
                 c.text(20.0,690.0,"无数据、关闭天气或极简模式时不显示；超过半小时未更新时，温度转灰。",10.5,W::Regular,theme::GRAY,Align::Left);
                 // 和岛上一样按图层换色，天气图标登记的浅色配色才会生效。
-                if let Some(palette)=palette {let layer=ui.layer_id();crate::skin_paint::recolor_layer(ctx,layer,&[(0,crate::skin_paint::shape_count(ctx,layer))],&palette);}
+                if let Some(palette)=palette {let layer=ui.layer_id();crate::render::skin_paint::recolor_layer(ctx,layer,&[(0,crate::render::skin_paint::shape_count(ctx,layer))],&palette);}
             });});
             raster.update_textures(&output.textures_delta);
             if frame==3 {raster.buf.fill([0.0,0.0,0.0,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join(format!("{name}.png")),&rgba,pw as u32,ph as u32,image::ColorType::Rgba8).unwrap();}
@@ -9557,7 +9557,7 @@ fn quota_acceptance_period_colors_match_the_drawn_rings() {
     let id="period-colors";
     h.app.quota.config.accounts=vec![Account{id:id.into(),provider:Provider::MiniMax,alias:"MiniMax".into(),source:Default::default(),slot:None,enabled:true,pinned:false}];
     h.app.quota.config.selected=id.into();h.app.quota.config.colors.insert(id.into(),Accent::Pink);
-    let outer=egui::Color32::from_rgb(255,43,132);let inner=crate::paint::mix(outer,egui::Color32::WHITE,0.16);
+    let outer=egui::Color32::from_rgb(255,43,132);let inner=crate::render::paint::mix(outer,egui::Color32::WHITE,0.16);
     for seconds in [[None,None],[Some(18000),Some(604800)]] {
         h.app.quota.rows.insert(id.into(),Ok(Snapshot{windows:vec![
             Window{label:"当前周期".into(),seconds:seconds[0],remaining:62.0,reset:None,amount:None},
@@ -9565,10 +9565,10 @@ fn quota_acceptance_period_colors_match_the_drawn_rings() {
         ],extra:vec![Window{label:"工具".into(),seconds:None,remaining:80.0,reset:None,amount:None}],..Default::default()}));
         let output=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(400.0,200.0))),..Default::default()},|ctx|{
             egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
-                let c=crate::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());h.app.page_quota(&c);
+                let c=crate::render::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());h.app.page_quota(&c);
             });
         });
-        let expected=if seconds[0].is_none(){[inner,outer,crate::theme::GRAY]}else{[outer,inner,crate::theme::GRAY]};
+        let expected=if seconds[0].is_none(){[inner,outer,crate::render::theme::GRAY]}else{[outer,inner,crate::render::theme::GRAY]};
         for (i,color) in expected.into_iter().enumerate(){
             let center=egui::pos2(159.0,79.0+i as f32*23.0);
             let dot=output.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Circle(c)if(c.radius-2.5).abs()<0.01&&c.center.distance(center)<0.01=>Some(c.fill),_=>None}).expect("应显示周期色点");

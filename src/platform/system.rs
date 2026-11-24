@@ -34,12 +34,12 @@ pub struct Snapshot {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Observation {
     pub system: Snapshot,
-    pub input: Option<crate::input::State>,
-    pub fullscreen: Option<crate::display_layout::Bounds>,
+    pub input: Option<crate::platform::input::State>,
+    pub fullscreen: Option<crate::platform::display_layout::Bounds>,
 }
 
 /// 跨进程输入法查询和 COM 状态采样留在后台，只在状态改变时唤醒界面。
-pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::input::State>)->Receiver<Observation> {
+pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::platform::input::State>)->Receiver<Observation> {
     let(tx,rx)=mpsc::sync_channel(1);
     std::thread::Builder::new().name("daozai-system".into()).spawn(move||{
         let mut current=Observation{system:initial,input,fullscreen:None};
@@ -47,10 +47,10 @@ pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::in
         let mut sampled=crate::poll_clock::PollClock::default();
         let mut input_at=sampled;
         loop {
-            let identity=crate::input::State::identity();
+            let identity=crate::platform::input::State::identity();
             let changed=identity.map(|state|(state.context,state.layout))!=current.input.map(|state|(state.context,state.layout));
-            if changed || crate::input::switch_recent() || input_at.ready(std::time::Duration::from_secs(1)){
-                current.input=crate::input::State::read();input_at=crate::poll_clock::PollClock::now();
+            if changed || crate::platform::input::switch_recent() || input_at.ready(std::time::Duration::from_secs(1)){
+                current.input=crate::platform::input::State::read();input_at=crate::poll_clock::PollClock::now();
             }
             if sampled.ready(std::time::Duration::from_millis(500)){
                 current.system=Snapshot::read();current.fullscreen=fullscreen();sampled=crate::poll_clock::PollClock::now();
@@ -247,7 +247,7 @@ unsafe fn foreground_info(hwnd: HWND) -> Foreground {
 }
 
 /// 窗口盖满它所在的整块屏幕时返回该屏幕范围。
-unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::display_layout::Bounds> {
+unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::platform::display_layout::Bounds> {
     if !IsWindow(hwnd).as_bool() || !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
         return None;
     }
@@ -274,7 +274,7 @@ unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::display_layout::Bounds> 
         #[cfg(not(test))] log_maximized_exclusion(hwnd, r, info.rcMonitor);
         return None;
     }
-    covers.then_some(crate::display_layout::Bounds {left:info.rcMonitor.left,top:info.rcMonitor.top,right:info.rcMonitor.right,bottom:info.rcMonitor.bottom})
+    covers.then_some(crate::platform::display_layout::Bounds {left:info.rcMonitor.left,top:info.rcMonitor.top,right:info.rcMonitor.right,bottom:info.rcMonitor.bottom})
 }
 
 /// 客户区（不含标题栏和边框）是否盖满整块屏幕。
@@ -308,7 +308,7 @@ unsafe fn log_maximized_exclusion(hwnd: HWND, window: RECT, monitor: RECT) {
     crate::resources::append_log(&crate::model::config_dir().join("diagnostics"), "fullscreen.log", &line);
 }
 
-pub fn fullscreen() -> Option<crate::display_layout::Bounds> {
+pub fn fullscreen() -> Option<crate::platform::display_layout::Bounds> {
     use std::sync::Mutex;
     // 上一次判定为全屏的窗口：前台切到它的附属窗口时沿用（见 `keeps_fullscreen`）。
     static LAST: Mutex<Option<Foreground>> = Mutex::new(None);

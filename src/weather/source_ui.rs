@@ -14,14 +14,14 @@ pub(crate) fn provider_option(ui:&mut egui::Ui,provider:Provider,selected:bool,w
     let ctx=ui.ctx();let painter=ui.painter();
     let accent=color(ctx,Color32::from_rgb(111,174,255),Color32::from_rgb(48,113,211));
     let base=color(ctx,Color32::from_rgb(37,37,41),Color32::WHITE);
-    let fill=if selected{crate::paint::mix(base,accent,0.10)}else if response.hovered(){color(ctx,Color32::from_rgb(45,45,50),Color32::from_rgb(246,248,252))}else{base};
+    let fill=if selected{crate::render::paint::mix(base,accent,0.10)}else if response.hovered(){color(ctx,Color32::from_rgb(45,45,50),Color32::from_rgb(246,248,252))}else{base};
     let border=if selected||response.has_focus(){accent}else{color(ctx,Color32::from_rgb(65,65,71),Color32::from_rgb(221,226,234))};
     painter.rect(rect,9.0,fill,egui::Stroke::new(if selected{1.3}else{1.0},border),egui::StrokeKind::Inside);
     let overseas=provider==Provider::OpenMeteo;
     let title=if overseas{"Open-Meteo"}else{"和风天气"};
     let ink=if overseas{accent}else{color(ctx,Color32::from_rgb(111,209,177),Color32::from_rgb(29,139,105))};
     let icon=egui::Rect::from_min_size(rect.min+egui::vec2(10.0,10.0),egui::vec2(24.0,24.0));
-    painter.rect_filled(icon,6.0,crate::paint::mix(fill,ink,0.15));
+    painter.rect_filled(icon,6.0,crate::render::paint::mix(fill,ink,0.15));
     let center=icon.center();let stroke=egui::Stroke::new(1.2,ink);
     if overseas {
         painter.circle_stroke(center,7.0,stroke);
@@ -39,13 +39,13 @@ pub(crate) fn provider_option(ui:&mut egui::Ui,provider:Provider,selected:bool,w
     let badge_ink=if overseas{ui.visuals().weak_text_color()}else{color(ctx,Color32::from_rgb(235,194,127),Color32::from_rgb(143,93,29))};
     let galley=painter.layout_no_wrap(badge.into(),egui::FontId::proportional(9.0),badge_ink);
     let badge_rect=egui::Rect::from_min_size(egui::pos2(rect.right()-10.0-galley.size().x-10.0,rect.top()+12.0),galley.size()+egui::vec2(10.0,6.0));
-    painter.rect_filled(badge_rect,4.0,crate::paint::mix(fill,badge_ink,0.10));painter.galley(badge_rect.min+egui::vec2(5.0,3.0),galley,badge_ink);
+    painter.rect_filled(badge_rect,4.0,crate::render::paint::mix(fill,badge_ink,0.10));painter.galley(badge_rect.min+egui::vec2(5.0,3.0),galley,badge_ink);
     let mut x=rect.left()+42.0;
     for (label,fee) in [(if overseas{"海外"}else{"国内"},false),(if overseas{"免费"}else{"免费额度"},true)]{
         let ink=if fee{color(ctx,Color32::from_rgb(130,211,168),Color32::from_rgb(30,127,79))}else{ui.visuals().weak_text_color()};
         let galley=painter.layout_no_wrap(label.into(),egui::FontId::proportional(10.0),ink);
         let pill=egui::Rect::from_min_size(egui::pos2(x,rect.top()+40.0),galley.size()+egui::vec2(10.0,6.0));
-        painter.rect_filled(pill,4.0,crate::paint::mix(fill,ink,if fee{0.10}else{0.06}));painter.galley(pill.min+egui::vec2(5.0,3.0),galley,ink);x=pill.right()+5.0;
+        painter.rect_filled(pill,4.0,crate::render::paint::mix(fill,ink,if fee{0.10}else{0.06}));painter.galley(pill.min+egui::vec2(5.0,3.0),galley,ink);x=pill.right()+5.0;
     }
     response.widget_info(||egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel,ui.is_enabled(),selected,title));
     response.on_hover_text(if overseas{"海外源，默认免费使用，无需 Key。"}else{"和风天气：国内源·精准。自备 API Host 与 Key；有免费额度，超额可能收费。"})
@@ -441,7 +441,7 @@ impl App {
         if !self.weather_source.tutorial_open{self.weather_source.tutorial_textures.clear();return;}
         let id=egui::ViewportId::from_hash_of("daozai-weather-tutorial");
         ctx.show_viewport_immediate(id,egui::ViewportBuilder::default().with_title("和风天气配置教程 · 岛仔")
-            .with_icon(crate::theme::app_icon()).with_inner_size([820.0,680.0]).with_min_inner_size([520.0,420.0]),|ctx,_|{
+            .with_icon(crate::render::theme::app_icon()).with_inner_size([820.0,680.0]).with_min_inner_size([520.0,420.0]),|ctx,_|{
             if ctx.input(|i|i.viewport().close_requested()){self.weather_source.tutorial_open=false;}
             let original=ctx.style();let mut style=(*original).clone();
             style.visuals=if self.settings.settings_theme.dark(crate::settings_theme::system_dark(ctx)){egui::Visuals::dark()}else{egui::Visuals::light()};

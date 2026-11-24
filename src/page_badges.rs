@@ -1,8 +1,8 @@
 //! 页面徽标：邮箱未读、健康提醒、待办到期、置物架拖入、日程提醒、勿扰模式。
 use crate::app::{App, CALENDAR_PAGE, MAIL_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE};
 use crate::bar_layout::{self, Layout};
-use crate::paint::{self, Card};
-use crate::theme;
+use crate::render::paint::{self, Card};
+use crate::render::theme;
 use eframe::egui::Color32;
 
 pub(crate) const HOLD: f64 = 10.0;
@@ -120,15 +120,15 @@ impl App {
         match slot {
             bar_layout::MAIL => {
                 paint::envelope(c, x - 5.0, 15.0, bar_layout::GLYPH, color);
-                c.centered_text(x + 7.0, 15.0, &self.mail_unread_count().to_string(), 9.5, crate::theme::W::Semibold, color, crate::paint::H::Center);
+                c.centered_text(x + 7.0, 15.0, &self.mail_unread_count().to_string(), 9.5, crate::render::theme::W::Semibold, color, crate::render::paint::H::Center);
             }
             bar_layout::HEALTH => {
                 if let Some(kind) = self.health_badges().first() { kind.icon(c, x, 15.0, 0.68); }
-                else { crate::paint::droplet(c, x, 15.0, bar_layout::GLYPH, color); }
+                else { crate::render::paint::droplet(c, x, 15.0, bar_layout::GLYPH, color); }
             }
             bar_layout::TODO => {
                 paint::checklist(c, x - 5.0, 15.0, bar_layout::GLYPH, color, Color32::TRANSPARENT);
-                c.centered_text(x + 7.0, 15.0, &self.todo_due_count().to_string(), 9.5, crate::theme::W::Semibold, color, crate::paint::H::Center);
+                c.centered_text(x + 7.0, 15.0, &self.todo_due_count().to_string(), 9.5, crate::render::theme::W::Semibold, color, crate::render::paint::H::Center);
             }
             // 托盘前唇和日历顶部挂钩让墨迹上下不对称，按视觉中线微调回 15 点。
             bar_layout::SHELF => paint::tray(c, x, 14.2, bar_layout::GLYPH, 0.0, color, theme::GRAY),

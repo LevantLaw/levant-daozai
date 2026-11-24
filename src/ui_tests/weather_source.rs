@@ -18,14 +18,14 @@ fn weather_badge_only_dims_after_repeated_failures_and_old_data(){
             h.app.weather.failures=failures;
             let snapshot=crate::weather::Snapshot{place:"广州".into(),temp:23.0,code:2,day:true,at:chrono::Utc::now().timestamp()-age,..Default::default()};
             let output=h.ctx.run(Default::default(),|ctx|{egui::CentralPanel::default().show(ctx,|ui|{
-                let c=crate::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
+                let c=crate::render::paint::Card::new(ui,Pos2::ZERO,ui.max_rect());
                 let layout=crate::bar_layout::Layout::new(false,0,false,false,false,false,true,false);
                 h.app.paint_pill_weather(&c,100.0,&layout,&snapshot);
                 h.app.paint_side_weather(&c,220.0,30.0,&snapshot);
             });});
             let colors:Vec<_>=output.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()=="23°"=>Some(t.fallback_color),_=>None}).collect();
             assert_eq!(colors.len(),2,"横向和侧边都应显示温度");
-            assert!(colors.iter().all(|c|*c==if gray{crate::theme::GRAY}else{crate::theme::WHITE}),"等待刷新或单次失败时应保持白色，只有连续失败且数据明显过期才变灰：age={age}, failures={failures}");
+            assert!(colors.iter().all(|c|*c==if gray{crate::render::theme::GRAY}else{crate::render::theme::WHITE}),"等待刷新或单次失败时应保持白色，只有连续失败且数据明显过期才变灰：age={age}, failures={failures}");
         }
     }
 }

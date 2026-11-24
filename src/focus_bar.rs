@@ -1,5 +1,5 @@
 //! 常驻岛的番茄水位、休息茶杯与倒计时。
-use crate::{app::{Phase,Pomo},paint::{self,Card,H},theme::{self,W}};
+use crate::{app::{Phase,Pomo},render,render::paint::{self,Card,H},render::theme::{self,W}};
 use eframe::egui::{self,Color32};
 
 pub(crate) const WIDTH:f32=68.0;
@@ -36,7 +36,7 @@ fn liquid(points:&[(f32,f32)],fraction:f32,t:f32)->Vec<(f32,f32)>{
     let min=points.iter().map(|p|p.1).fold(f32::INFINITY,f32::min);
     let max=points.iter().map(|p|p.1).fold(f32::NEG_INFINITY,f32::max);
     let level=max-(max-min)*fraction;let mut clipped=Vec::new();
-    let amplitude=0.24*crate::anim::smoothstep(0.0,0.1,fraction)*(1.0-crate::anim::smoothstep(0.9,1.0,fraction));
+    let amplitude=0.24*crate::render::anim::smoothstep(0.0,0.1,fraction)*(1.0-crate::render::anim::smoothstep(0.9,1.0,fraction));
     for pair in points.windows(2) {
         let (a,b)=(pair[0],pair[1]);
         if a.1>=level {clipped.push(a);}
@@ -55,12 +55,12 @@ fn liquid(points:&[(f32,f32)],fraction:f32,t:f32)->Vec<(f32,f32)>{
 fn tomato(c:&Card,x:f32,y:f32,fraction:f32,t:f32){
     let c=c.scaled(x,y,0.73);
     let outline=tomato_outline(x,y+0.7);let ink=theme::RED_TOP;
-    fill_polygon(&c,&outline,paint::mix(theme::CARD,ink,0.11));
+    fill_polygon(&c,&outline,render::paint::mix(theme::CARD,ink,0.11));
     fill_polygon(&c,&liquid(&outline,fraction,t),ink);
-    c.path(&outline,1.2,paint::mix(ink,theme::WHITE,0.08));
+    c.path(&outline,1.2,render::paint::mix(ink,render::theme::WHITE,0.08));
     for (dx,dy) in [(-3.3,2.0),(3.0,1.5),(0.3,5.8)] {
         let py=y+0.7+dy;
-        if py>y+9.9-18.1*fraction+0.5 {c.seg((x+dx-0.5,py-0.65),(x+dx+0.5,py+0.65),0.55,paint::alpha(theme::WHITE,0.42));}
+        if py>y+9.9-18.1*fraction+0.5 {c.seg((x+dx-0.5,py-0.65),(x+dx+0.5,py+0.65),0.55,render::paint::alpha(theme::WHITE,0.42));}
     }
     let y=y-7.1;let sway=(t*0.85).sin()*0.4;let leaf=theme::SOFT_GREEN;
     c.seg((x,y),(x+0.8+sway,y-3.6),1.0,leaf);
@@ -72,13 +72,13 @@ fn tomato(c:&Card,x:f32,y:f32,fraction:f32,t:f32){
 pub(crate) fn tea(c:&Card,x:f32,y:f32,fraction:f32,t:f32){
     let porcelain=Color32::from_rgb(245,242,234);
     c.fill(x-5.6,y-1.5,10.0,7.5,2.7,porcelain);
-    c.fill(x-4.4,y-1.0,7.6,2.0,1.0,paint::mix(theme::CARD,Color32::from_rgb(225,170,83),fraction));
-    c.stroke(x-5.6,y-1.5,10.0,7.5,2.7,0.8,theme::WHITE);
+    c.fill(x-4.4,y-1.0,7.6,2.0,1.0,render::paint::mix(theme::CARD,Color32::from_rgb(225,170,83),fraction));
+    c.stroke(x-5.6,y-1.5,10.0,7.5,2.7,0.8,render::theme::WHITE);
     c.arc(x+4.8,y+1.1,2.7,-std::f32::consts::FRAC_PI_2,std::f32::consts::FRAC_PI_2,1.1,porcelain);
     c.seg((x-6.5,y+7.3),(x+6.5,y+7.3),0.8,porcelain);
     for dx in [-2.8,1.0] {
         let lift=(t*0.85+dx).sin()*0.45;
-        c.path(&[(x+dx,y-3.5),(x+dx+0.7,y-5.2-lift),(x+dx,y-7.5-lift)],0.75,paint::alpha(theme::WHITE,0.65));
+        c.path(&[(x+dx,y-3.5),(x+dx+0.7,y-5.2-lift),(x+dx,y-7.5-lift)],0.75,render::paint::alpha(theme::WHITE,0.65));
     }
 }
 

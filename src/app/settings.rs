@@ -175,11 +175,11 @@ pub(crate) fn settings_danger_button(text:&str)->egui::Button<'static>{
 }
 /// Windows 通知设置里已开启的应用；其他平台只显示已经收到过通知的应用。
 #[cfg(windows)]
-fn enabled_notification_apps()->Vec<(String,String)>{crate::system::notification_apps_enabled()}
+fn enabled_notification_apps()->Vec<(String,String)>{crate::platform::system::notification_apps_enabled()}
 #[cfg(not(windows))]
 fn enabled_notification_apps()->Vec<(String,String)>{Vec::new()}
 #[cfg(windows)]
-fn notification_app_enabled(id:&str)->bool{crate::system::notification_enabled(id)!=Some(false)}
+fn notification_app_enabled(id:&str)->bool{crate::platform::system::notification_enabled(id)!=Some(false)}
 #[cfg(not(windows))]
 fn notification_app_enabled(_id:&str)->bool{true}
 /// 带状态胶囊的开关行：胶囊在开关左侧，说明胶囊不可点。
@@ -845,8 +845,8 @@ impl App {
                                 if self.settings.top_bar_on_top {
                                     settings_hint(ui,"岛体显示在顶栏上方。");
                                 } else {
-                                    let reserved=crate::display_layout::selected(&self.displays,&self.settings.display_id).map_or(0,|d|{
-                                        let b=crate::display_layout::placement_bounds(d,true);(b.top-d.bounds.top).max(0)
+                                    let reserved=crate::platform::display_layout::selected(&self.displays,&self.settings.display_id).map_or(0,|d|{
+                                        let b=crate::platform::display_layout::placement_bounds(d,true);(b.top-d.bounds.top).max(0)
                                     });
                                     settings_hint(ui,&if reserved>0 {format!("已检测到顶栏，岛体下移 {reserved} 像素。")}else{"未检测到顶栏；没有向系统登记的顶栏可尝试“岛仔置顶”。".to_string()});
                                 }
@@ -1007,12 +1007,12 @@ impl App {
                         settings_label(ui,"Windows 通知");
                         settings_card(ui,|ui|{
                             // 系统通知就是监听开关：开启后自动监听，关闭时无需监听。
-                            let current=crate::system::system_notifications_enabled();
+                            let current=crate::platform::system::system_notifications_enabled();
                             let mut system_on=current;
                             let listener_on=current && self.settings.read_notifications && listening(&self.listener_status);
                             setting_row_chip(ui,"系统通知",if listener_on{"监听中"}else{"未监听"},listener_on,&status_tip(&self.listener_status),&mut system_on);
                             if system_on!=current {
-                                match crate::system::set_system_notifications(system_on) {
+                                match crate::platform::system::set_system_notifications(system_on) {
                                     Ok(())=>self.pending.push(if system_on{Cmd::RequestNotifications}else{Cmd::DisconnectNotifications}),
                                     Err(error)=>self.say(error),
                                 }
@@ -1402,7 +1402,7 @@ impl App {
                                 if ui.button("打开本地数据目录").clicked(){self.pending.push(Cmd::Open(crate::model::config_dir()));}
                                 if ui.button("收集诊断").clicked(){
                                     // 另起 `daozai.exe --collect-diagnostics`：在新窗口里收集，诊断包保存到桌面并自动选中。
-                                    if crate::diagnostics_tool::launch().is_err(){self.say("无法启动诊断收集，请从开始菜单打开「收集岛仔诊断」");}
+                                    if crate::platform::diagnostics_tool::launch().is_err(){self.say("无法启动诊断收集，请从开始菜单打开「收集岛仔诊断」");}
                                 }
                                 ui.label(egui::RichText::new("设备图标：Solar Icons · 480 Design").size(11.0).color(settings_color(ctx,Color32::from_gray(150),Color32::from_gray(105))));
                                 ui.hyperlink_to("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/");

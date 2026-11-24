@@ -1,8 +1,8 @@
 //! 岛内右侧的日期、小时和分钟滚轮。
 use chrono::{Datelike,Duration,Local,NaiveDate,NaiveDateTime,Timelike};
 use eframe::egui::{self,Color32};
-use crate::paint::{capsule,Card,H};
-use crate::theme::{self,W};
+use crate::render::paint::{capsule,Card,H};
+use crate::render::theme::{self,W};
 
 pub(crate) enum PickerAction { Save, Skip, Cancel }
 pub(crate) struct ReminderPicker {

@@ -142,11 +142,11 @@ mod native_crash {
         let code = record.ExceptionCode.0 as u32;
         let (module, offset) = module_at(record.ExceptionAddress as usize);
         let uptime = super::STARTED.get().map(|at| at.elapsed().as_secs()).unwrap_or(0);
-        let gl_driver = daozai::renderer::is_gl_driver(&module);
-        let renderer = if daozai::renderer::compat_active() { "兼容渲染（Direct3D 12）" } else { "OpenGL" };
+        let gl_driver = daozai::render::renderer::is_gl_driver(&module);
+        let renderer = if daozai::render::renderer::compat_active() { "兼容渲染（Direct3D 12）" } else { "OpenGL" };
         let mut details = format!("异常代码：{code:#010x}\n崩溃模块：{module}\n模块内偏移：{offset:#x}\n已运行：{uptime} 秒\n渲染方式：{renderer}\n");
-        if gl_driver && !daozai::renderer::compat_active() {
-            daozai::renderer::request_fallback(&module);
+        if gl_driver && !daozai::render::renderer::compat_active() {
+            daozai::render::renderer::request_fallback(&module);
             details.push_str("判断：崩在显卡的 OpenGL 驱动里，下次启动自动改用兼容渲染（Direct3D 12）。\n");
         }
         let restarted = super::relaunch_after_failure(&format!("进程崩溃（{module}）"));

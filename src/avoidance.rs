@@ -17,7 +17,7 @@ pub(crate) struct Picker {
     selected:Option<String>,
     rx:Option<Receiver<Result<Vec<Candidate>,String>>>,
     error:String,
-    icons:crate::icons::Cache,
+    icons:crate::platform::icons::Cache,
     /// 「全部添加」先进入确认状态，再点一次「确定添加」才真正添加。
     confirm_all:bool,
 }
@@ -27,7 +27,7 @@ impl Picker {
         let (tx,rx)=mpsc::channel();self.rx=Some(rx);self.error.clear();self.selected=None;
         let ctx=ctx.clone();
         std::thread::spawn(move||{
-            #[cfg(windows)] let result=crate::system::avoidance_windows();
+            #[cfg(windows)] let result=crate::platform::system::avoidance_windows();
             #[cfg(not(windows))] let result=Err("应用选择仅支持 Windows".into());
             let _=tx.send(result);ctx.request_repaint();
         });
@@ -37,7 +37,7 @@ impl Picker {
             ui.painter().image(texture.id(),rect,Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);
         }else{
             ui.painter().rect_filled(rect,7.0,ui.visuals().widgets.inactive.bg_fill);
-            ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,name.chars().next().unwrap_or('▦'),crate::theme::font(17.0,crate::theme::W::Semibold),ui.visuals().text_color());
+            ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,name.chars().next().unwrap_or('▦'),crate::render::theme::font(17.0,crate::render::theme::W::Semibold),ui.visuals().text_color());
         }
     }
     /// 渲染「避让」卡片里的自动避让部分；外层的卡片和分区标题由调用方提供。
@@ -69,7 +69,7 @@ impl Picker {
                         let remove_button=ui.interact(Rect::from_center_size(center,Vec2::splat(20.0)),ui.id().with(("avoidance-remove",index)),egui::Sense::click());
                         let fill=if remove_button.hovered(){ui.visuals().widgets.hovered.bg_fill}else{ui.visuals().widgets.inactive.bg_fill};
                         ui.painter().circle_filled(center,7.0,fill);
-                        ui.painter().text(center,egui::Align2::CENTER_CENTER,"×",crate::theme::font(9.0,crate::theme::W::Regular),ui.visuals().text_color());
+                        ui.painter().text(center,egui::Align2::CENTER_CENTER,"×",crate::render::theme::font(9.0,crate::render::theme::W::Regular),ui.visuals().text_color());
                         if remove_button.on_hover_text(format!("移除 {name}")).clicked(){remove=Some(index);}
                     }
                     if settings.avoid_apps.is_empty(){ui.add_sized([icon_width,44.0],egui::Label::new(egui::RichText::new("添加需要自动避让的其他应用").size(11.5).weak()));}
@@ -117,12 +117,12 @@ impl Picker {
                         ui.painter().rect_filled(rect,7.0,ui.visuals().selection.bg_fill);
                     }else if reason.is_none() && response.hovered(){ui.painter().rect_filled(rect,7.0,ui.visuals().widgets.hovered.bg_fill);}
                     self.icon(ui,Rect::from_min_size(rect.min+egui::vec2(8.0,13.0),Vec2::splat(32.0)),&app.path,&app.name);
-                    let c=crate::paint::Card::new(ui,rect.min,rect);
+                    let c=crate::render::paint::Card::new(ui,rect.min,rect);
                     let ink=if reason.is_some(){ui.visuals().weak_text_color()}else{ui.visuals().text_color()};
                     let width=(rect.width()-56.0-if reason.is_some(){112.0}else{0.0}).max(40.0);
-                    c.centered_text(50.0,19.0,&c.fit(&app.name,13.0,crate::theme::W::Regular,width),13.0,crate::theme::W::Regular,ink,crate::paint::H::Left);
-                    c.centered_text(50.0,39.0,&c.fit(&app.title,11.0,crate::theme::W::Regular,width),11.0,crate::theme::W::Regular,ui.visuals().weak_text_color(),crate::paint::H::Left);
-                    if let Some(reason)=reason{c.centered_text(rect.width()-8.0,29.0,reason,10.5,crate::theme::W::Regular,ui.visuals().weak_text_color(),crate::paint::H::Right);}
+                    c.centered_text(50.0,19.0,&c.fit(&app.name,13.0,crate::render::theme::W::Regular,width),13.0,crate::render::theme::W::Regular,ink,crate::render::paint::H::Left);
+                    c.centered_text(50.0,39.0,&c.fit(&app.title,11.0,crate::render::theme::W::Regular,width),11.0,crate::render::theme::W::Regular,ui.visuals().weak_text_color(),crate::render::paint::H::Left);
+                    if let Some(reason)=reason{c.centered_text(rect.width()-8.0,29.0,reason,10.5,crate::render::theme::W::Regular,ui.visuals().weak_text_color(),crate::render::paint::H::Right);}
                     if response.clicked() && reason.is_none(){self.selected=Some(app.path.clone());}
                     response.on_hover_text(format!("{}\n{}",app.title,app.path));
                 }

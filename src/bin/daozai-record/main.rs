@@ -237,7 +237,7 @@ fn wallpaper(w: usize, h: usize) -> Vec<[f32; 4]> {
                 c[i] = (c[i] + glow).min(1.0);
             }
             // 轻微颗粒，避免色带
-            let n = (daozai::anim::hash01((x * 7919 + y * 104729) as u64) - 0.5) * 0.008;
+            let n = (daozai::render::anim::hash01((x * 7919 + y * 104729) as u64) - 0.5) * 0.008;
             v[y * w + x] = [c[0] + n, c[1] + n, c[2] + n, 1.0];
         }
     }
@@ -409,7 +409,7 @@ fn main() {
             events.push(Event::PointerButton { pos: cursor, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
             pending_release = false;
         }
-        drag_a = daozai::anim::approach(drag_a, if dragging.is_some() { 1.0 } else { 0.0 }, 14.0, 1.0 / 60.0);
+        drag_a = daozai::render::anim::approach(drag_a, if dragging.is_some() { 1.0 } else { 0.0 }, 14.0, 1.0 / 60.0);
 
         // 鼠标只有在窗口的可交互区域里才会被应用“看见”（与真窗口的区域裁剪一致）
         let inside = region.contains(cursor) && !first;
@@ -479,7 +479,7 @@ fn main() {
             ripples.retain(|(_, t0)| t - t0 < 0.45);
             for (at, t0) in &ripples {
                 let k = ((t - t0) / 0.45) as f32;
-                let r = 5.0 + 13.0 * daozai::anim::ease_out_cubic(k);
+                let r = 5.0 + 13.0 * daozai::render::anim::ease_out_cubic(k);
                 painter.circle_stroke(*at, r, Stroke::new(1.6_f32, Color32::from_white_alpha((150.0 * (1.0 - k)) as u8)));
             }
             let press = (1.0 - ((t - press_t) / 0.18) as f32).clamp(0.0, 1.0);

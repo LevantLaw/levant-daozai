@@ -1,7 +1,7 @@
 //! 岛仔的原生状态、矢量表情与表情图集播放。
-use crate::anim::{approach, lerp, smoothstep};
-use crate::paint::{Card, H};
-use crate::theme::{self, W};
+use crate::render::anim::{approach, lerp, smoothstep};
+use crate::render::paint::{Card, H};
+use crate::render::theme::{self, W};
 use crate::pet_expressions::Expression;
 use eframe::egui::Color32;
 
@@ -307,7 +307,7 @@ impl Pet {
         }
         if self.expressions.current().is_some() {eyes=[Eye::open(4.4);2];look=[0.0;2];y=0.0;}
         if self.expressions.current().is_none() && matches!(state, PetState::Awake | PetState::Curious | PetState::Focused | PetState::Worried) {
-            let start = 2.0 + crate::anim::hash01((t / 5.6).floor() as u64) * 2.7;
+            let start = 2.0 + crate::render::anim::hash01((t / 5.6).floor() as u64) * 2.7;
             let blink = ((t % 5.6) as f32 - start) / 0.18;
             if (0.0..1.0).contains(&blink) {
                 for eye in &mut eyes { eye.height *= 1.0 - (blink * std::f32::consts::PI).sin(); }
@@ -319,7 +319,7 @@ impl Pet {
         self.y = approach(self.y, y, 14.0, dt);
     }
 
-    pub fn draw(&mut self, c: &Card, cx: f32, t: f64, palette:Option<crate::skin_paint::Palette>) {
+    pub fn draw(&mut self, c: &Card, cx: f32, t: f64, palette:Option<crate::render::skin_paint::Palette>) {
         if self.expressions.draw(c,cx,palette) {return;}
         // 眼睛的墨迹中心比状态行中线高半点，整体下移使视觉中线落在 15 点。
         let c=&c.shifted(0.0,0.5);
@@ -349,7 +349,7 @@ impl Pet {
                     c.seg((cx+dx,y-r),(cx+dx,y+r),1.0,theme::GREEN);
                 }
             },
-            PetState::Satisfied => crate::paint::droplet(c,cx+18.0,12.0,5.0,theme::CYAN),
+            PetState::Satisfied => crate::render::paint::droplet(c,cx+18.0,12.0,5.0,theme::CYAN),
             PetState::Music => {
                 let segment=music_segment_at(self.music_age);
                 self.draw_music(&c.faded(smoothstep(0.0,1.0,segment.elapsed)),cx,segment.pose);

@@ -1,5 +1,5 @@
 //! 同心额度环、账号选择及账号设置。
-use crate::{app::{App,Cmd},extras::{settings_control_row},paint::{Card,H},quota::{self,Accent,Account,Amount,Config,Provider,Snapshot},theme::{self,W}};
+use crate::{app::{App,Cmd},extras::{settings_control_row},render,render::paint::{Card,H},quota::{self,Accent,Account,Amount,Config,Provider,Snapshot},render::theme::{self,W}};
 use eframe::egui::{self,Color32};
 use std::collections::{HashMap,HashSet};
 use chrono::Datelike;
@@ -107,7 +107,7 @@ fn accent_color(accent:Accent,provider:Provider)->Color32{
 }
 fn accent_colors(config:&Config,a:&Account)->[Color32;2]{
     let main=accent_color(config.colors.get(&a.id).copied().unwrap_or_default(),a.provider);
-    [main,crate::paint::mix(main,Color32::WHITE,0.16)]
+    [main,crate::render::paint::mix(main,Color32::WHITE,0.16)]
 }
 fn color_picker(ui:&mut egui::Ui,provider:Provider,value:&mut Accent){
     ui.allocate_ui_with_layout(egui::vec2(ui.available_width(),30.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{
@@ -152,7 +152,7 @@ fn logo_texture(ctx:&egui::Context,provider:Provider,pixels:u32)->Option<egui::T
     // 白色标识使用矢量覆盖率，避免透明边缘再次变暗。
     for pixel in &mut image.pixels{if keeps_brand_color(provider){continue;}*pixel=if provider==Provider::DeepSeek{Color32::from_rgba_unmultiplied(77,107,254,pixel.a())}else{Color32::from_white_alpha(pixel.a())};}
     let texture=ctx.load_texture(format!("quota-logo-{}-{pixels}",provider.name()),image,egui::TextureOptions::LINEAR);
-    if (!provider.balance()||provider.relay())&&!keeps_brand_color(provider){crate::skin_paint::mark_monochrome(texture.id());}else{crate::skin_paint::mark_colored(texture.id());}
+    if (!provider.balance()||provider.relay())&&!keeps_brand_color(provider){crate::render::skin_paint::mark_monochrome(texture.id());}else{crate::render::skin_paint::mark_colored(texture.id());}
     ctx.data_mut(|data|data.insert_temp(key,texture.clone()));Some(texture)
 }
 fn logo(c:&Card,provider:Provider,x:f32,y:f32,size:f32){
@@ -174,7 +174,7 @@ fn deepseek_badge(c:&Card,skin:crate::model::Skin,x:f32,y:f32,size:f32){
     let texture=ctx.data_mut(|data|data.get_temp::<egui::TextureHandle>(key)).or_else(||{
         let image=egui_extras::image::load_svg_bytes_with_size(deepseek_badge_svg(skin).as_bytes(),Some(egui::load::SizeHint::Size(pixels,pixels))).ok()?;
         let texture=ctx.load_texture(format!("deepseek-badge-{}-{pixels}",skin.key()),image,egui::TextureOptions::LINEAR);
-        crate::skin_paint::mark_colored(texture.id());
+        crate::render::skin_paint::mark_colored(texture.id());
         ctx.data_mut(|data|data.insert_temp(key,texture.clone()));Some(texture)
     });
     if let Some(texture)=texture{
@@ -191,7 +191,7 @@ fn ring(c:&Card,a:&Account,snapshot:Option<&Snapshot>,x:f32,y:f32,size:f32,color
     for i in 0..if dual{2}else{1}{
         let r=radius-i as f32*(stroke+gap);
         if let Some(w)=windows.get(i){
-            let col=colors[i];let dark=crate::paint::mix(col,Color32::BLACK,0.8);
+            let col=colors[i];let dark=crate::render::paint::mix(col,Color32::BLACK,0.8);
             if w.remaining>=100.0{c.ring(x,y,r,stroke,col);}else if w.remaining<=0.0{c.ring(x,y,r,stroke,dark);}else{
                 let end=start+std::f32::consts::TAU*w.remaining/100.0;
                 c.arc(x,y,r,end,start+std::f32::consts::TAU,stroke,dark);
@@ -205,9 +205,9 @@ fn ring(c:&Card,a:&Account,snapshot:Option<&Snapshot>,x:f32,y:f32,size:f32,color
     else if size<35.0 {logo(c,a.provider,x,y,if dual{10.0}else{12.0});}else if dual {logo(c,a.provider,x,y,24.0);}else if let Some(w)=windows.first(){
         let value=format!("{:.0}",w.remaining);let large=if value.len()>2{22.0}else{28.0};
         let number_width=c.text_w(&value,large,W::Bold);let width=number_width+c.text_w("%",11.0,W::Semibold)+2.0;
-        let left=x-width/2.0;c.centered_text(left,y,&value,large,W::Bold,theme::WHITE,H::Left);
-        c.centered_text(left+number_width+2.0,y+3.0,"%",11.0,W::Semibold,theme::GRAY,H::Left);
-    }else{c.centered_text(x,y,"—",24.0,W::Semibold,theme::DIM,H::Center);}
+        let left=x-width/2.0;c.centered_text(left,y,&value,large,W::Bold,render::theme::WHITE,H::Left);
+        c.centered_text(left+number_width+2.0,y+3.0,"%",11.0,W::Semibold,render::theme::GRAY,H::Left);
+    }else{c.centered_text(x,y,"—",24.0,W::Semibold,render::theme::DIM,H::Center);}
 }
 fn reset_text(at:Option<i64>,now:&chrono::DateTime<chrono::Local>)->String {
     let Some(at)=at.and_then(|at|chrono::DateTime::from_timestamp(at,0)) else{return "重置时间未知".into();};
@@ -370,7 +370,7 @@ impl App {
     pub(crate) fn quota_balance_layout(&self,ctx:&egui::Context)->Vec<(usize,f32)>{
         self.quota_pinned().iter().enumerate().filter_map(|(position,index)|{
             let account=&self.quota.config.accounts[*index];
-            let extra=if let Some(text)=self.quota.tail_text(&account.id){ctx.fonts(|fonts|fonts.layout_no_wrap(text,theme::font(theme::size::PILL_CLOCK,W::Bold),theme::WHITE).size().x).ceil()+6.0}
+            let extra=if let Some(text)=self.quota.tail_text(&account.id){ctx.fonts(|fonts|fonts.layout_no_wrap(text,render::theme::font(theme::size::PILL_CLOCK,W::Bold),render::theme::WHITE).size().x).ceil()+6.0}
                 else if account.provider.balance()&&self.quota.balance_loading(&account.id){22.0}
                 else{return None;};
             Some((position,extra))
@@ -395,10 +395,10 @@ impl App {
                     if let Some(text)=self.quota.balance_text(&a.id){
                         let wallet=snapshot.and_then(|s|s.wallet.as_ref());
                         let color=if stale{theme::GRAY}else if wallet.is_some_and(|w|!w.available||w.primary().total<=0.0){Color32::from_rgb(255,166,77)}else{theme::WHITE};
-                        c.text(icon_x+18.0,21.0,&text,theme::size::PILL_CLOCK,W::Bold,color,H::Left);
+                        c.text(icon_x+18.0,21.0,&text,render::theme::size::PILL_CLOCK,W::Bold,color,H::Left);
                     }else if loading{
                         let active=(self.t*3.0) as usize%3;
-                        for dot in 0..3{c.circle(icon_x+20.0+dot as f32*5.0,15.0,1.65,theme::GRAY.gamma_multiply(if dot==active{1.0}else{0.35}));}
+                        for dot in 0..3{c.circle(icon_x+20.0+dot as f32*5.0,15.0,1.65,render::theme::GRAY.gamma_multiply(if dot==active{1.0}else{0.35}));}
                         c.ui.ctx().request_repaint_after(std::time::Duration::from_millis(160));
                     }
                 }
@@ -408,7 +408,7 @@ impl App {
             let extra=(layout.widths[crate::bar_layout::quota_slot(position)]-27.0).max(0.0);
             let x=if extra>0.0{x-extra/2.0}else{x};
             ring(c,a,snapshot,x,15.0,27.0,accent_colors(&self.quota.config,a));
-            if extra>0.0{let stale=self.quota.stale.contains_key(&a.id);if let Some(text)=self.quota.tail_text(&a.id){c.text(x+15.5,21.0,&text,theme::size::PILL_CLOCK,W::Bold,if stale{theme::GRAY}else{theme::WHITE},H::Left);}}
+            if extra>0.0{let stale=self.quota.stale.contains_key(&a.id);if let Some(text)=self.quota.tail_text(&a.id){c.text(x+15.5,21.0,&text,render::theme::size::PILL_CLOCK,W::Bold,if stale{theme::GRAY}else{theme::WHITE},H::Left);}}
             let mut same=self.quota.config.accounts.iter().filter(|other|other.provider==a.provider && other.enabled);
             if same.clone().count()>1{let n=same.position(|other|other.id==a.id).unwrap_or(0)+1;c.circle(x+10.0,24.0,4.5,Color32::from_gray(225));c.text(x+10.0,26.8,&n.to_string(),6.5,W::Bold,Color32::BLACK,H::Center);}
             let summary=snapshot.map(|s|s.rings().iter().map(|w|w.summary()).collect::<Vec<_>>().join(" · ")).unwrap_or_else(||if self.quota.busy.contains(&a.id){"正在更新".into()}else{"额度暂不可用".into()});
@@ -434,16 +434,16 @@ impl App {
     }
     pub(crate) fn page_quota(&mut self,c:&Card){
         if c.hit(303.0,8.0,32.0,21.0,"quota-refresh").on_hover_text("刷新额度").clicked(){self.pending.push(Cmd::QuotaRefresh);}
-        c.text(319.0,23.0,if self.quota.busy.is_empty(){"刷新"}else{"更新中"},10.5,W::Regular,theme::GRAY,H::Center);
+        c.text(319.0,23.0,if self.quota.busy.is_empty(){"刷新"}else{"更新中"},10.5,W::Regular,render::theme::GRAY,H::Center);
         let Some(selected)=self.quota.config.selected_index() else{
-            c.text(43.0,61.0,"还没有添加 AI 账号",13.0,W::Bold,theme::WHITE,H::Left);
-            c.text(43.0,80.0,"连接 AI 账号，查看剩余额度",10.5,W::Regular,theme::GRAY,H::Left);
-            let(r,b)=crate::paint::capsule(c,43.0,92.0,94.0,24.0,"add-quota-account",theme::BTN,theme::BTN_HOVER);b.text(90.0,108.0,"添加账号",10.0,W::Semibold,theme::WHITE,H::Center);if r.clicked(){self.settings_tab=11;self.open_settings();}return;
+            c.text(43.0,61.0,"还没有添加 AI 账号",13.0,W::Bold,render::theme::WHITE,H::Left);
+            c.text(43.0,80.0,"连接 AI 账号，查看剩余额度",10.5,W::Regular,render::theme::GRAY,H::Left);
+            let(r,b)=crate::render::paint::capsule(c,43.0,92.0,94.0,24.0,"add-quota-account",render::theme::BTN,render::theme::BTN_HOVER);b.text(90.0,108.0,"添加账号",10.0,W::Semibold,render::theme::WHITE,H::Center);if r.clicked(){self.settings_tab=11;self.open_settings();}return;
         };
         let indices=self.quota.config.ordered_indices(false);
         let pos=indices.iter().position(|i|*i==selected).unwrap_or(0);let start=pos/3*3;let mut picked=None;
-        if indices.len()>3{for (x,offset,label)in [(42.0,-1isize,"‹"),(357.0,1,"›")]{if c.hit(x-7.0,30.0,18.0,19.0,("quota-account-next",offset)).clicked(){picked=Some(indices[(pos as isize+offset).rem_euclid(indices.len() as isize) as usize]);}c.text(x+2.0,44.0,label,13.0,W::Regular,theme::GRAY,H::Center);}}
-        for (column,index)in indices.iter().skip(start).take(3).enumerate(){let a=&self.quota.config.accounts[*index];let x=59.0+column as f32*99.0;let on=*index==selected;let colors=accent_colors(&self.quota.config,a);let color=colors[0];let(r,b)=crate::paint::capsule(c,x,30.0,94.0,21.0,&format!("quota-account-{}",a.id),if on{Color32::from_rgb(color.r()/5,color.g()/5,color.b()/5)}else{Color32::BLACK},theme::BTN_HOVER);let text=b.fit(&a.alias,10.5,W::Regular,84.0);b.text(x+47.0,45.0,&text,10.5,W::Regular,if on{colors[1]}else{theme::GRAY},H::Center);if r.on_hover_text(format!("{} · {}",a.provider.name(),a.alias)).clicked(){picked=Some(*index);}}
+        if indices.len()>3{for (x,offset,label)in [(42.0,-1isize,"‹"),(357.0,1,"›")]{if c.hit(x-7.0,30.0,18.0,19.0,("quota-account-next",offset)).clicked(){picked=Some(indices[(pos as isize+offset).rem_euclid(indices.len() as isize) as usize]);}c.text(x+2.0,44.0,label,13.0,W::Regular,render::theme::GRAY,H::Center);}}
+        for (column,index)in indices.iter().skip(start).take(3).enumerate(){let a=&self.quota.config.accounts[*index];let x=59.0+column as f32*99.0;let on=*index==selected;let colors=accent_colors(&self.quota.config,a);let color=colors[0];let(r,b)=crate::render::paint::capsule(c,x,30.0,94.0,21.0,&format!("quota-account-{}",a.id),if on{Color32::from_rgb(color.r()/5,color.g()/5,color.b()/5)}else{Color32::BLACK},render::theme::BTN_HOVER);let text=b.fit(&a.alias,10.5,W::Regular,84.0);b.text(x+47.0,45.0,&text,10.5,W::Regular,if on{colors[1]}else{theme::GRAY},H::Center);if r.on_hover_text(format!("{} · {}",a.provider.name(),a.alias)).clicked(){picked=Some(*index);}}
         if let Some(i)=picked{self.quota.config.selected=self.quota.config.accounts[i].id.clone();self.quota.config.save();}
         let a=&self.quota.config.accounts[selected];let result=self.quota.rows.get(&a.id);let snapshot=result.and_then(|r|r.as_ref().ok());
         let colors=accent_colors(&self.quota.config,a);
@@ -464,10 +464,10 @@ impl App {
         if a.provider==Provider::WorkBuddy{
             logo(c,a.provider,85.0,105.0,44.0);
             if let Some(credits)=snapshot.and_then(|s|s.credits.as_ref()){
-                c.text(125.0,81.0,"可用积分",10.5,W::Regular,theme::GRAY,H::Left);
-                c.text(125.0,107.0,&credits.full(),23.0,W::Semibold,theme::WHITE,H::Left);
-                let detail=if let Some(reason)=self.quota.stale.get(&a.id){reason.clone()}else{credits.packages.iter().map(|(label,n)|format!("{label} {n}")).collect::<Vec<_>>().join(" · ")};c.text(125.0,131.0,&c.fit(&detail,10.0,W::Regular,225.0),10.0,W::Regular,theme::GRAY,H::Left);
-            }else{let text=result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("正在查询积分…");for(i,line)in c.wrap(text,11.0,W::Regular,226.0,3).iter().enumerate(){c.text(125.0,92.0+i as f32*17.0,line,11.0,W::Regular,theme::GRAY,H::Left);}}
+                c.text(125.0,81.0,"可用积分",10.5,W::Regular,render::theme::GRAY,H::Left);
+                c.text(125.0,107.0,&credits.full(),23.0,W::Semibold,render::theme::WHITE,H::Left);
+                let detail=if let Some(reason)=self.quota.stale.get(&a.id){reason.clone()}else{credits.packages.iter().map(|(label,n)|format!("{label} {n}")).collect::<Vec<_>>().join(" · ")};c.text(125.0,131.0,&c.fit(&detail,10.0,W::Regular,225.0),10.0,W::Regular,render::theme::GRAY,H::Left);
+            }else{let text=result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("正在查询积分…");for(i,line)in c.wrap(text,11.0,W::Regular,226.0,3).iter().enumerate(){c.text(125.0,92.0+i as f32*17.0,line,11.0,W::Regular,render::theme::GRAY,H::Left);}}
             return;
         }
         if a.provider==Provider::DeepSeek{
@@ -475,15 +475,15 @@ impl App {
             if let Some(s)=snapshot{
                 if let Some(wallet)=&s.wallet{
                     let b=wallet.primary();
-                    c.text(125.0,81.0,if wallet.available{"可用余额"}else{"余额不可用"},10.5,W::Regular,theme::GRAY,H::Left);
+                    c.text(125.0,81.0,if wallet.available{"可用余额"}else{"余额不可用"},10.5,W::Regular,render::theme::GRAY,H::Left);
                     let amount=b.full(b.total);let size=(23.0*145.0/c.text_w(&amount,23.0,W::Semibold).max(145.0)).min(23.0);
                     c.text(125.0,109.0,&amount,size,W::Semibold,if !wallet.available{Color32::from_rgb(255,166,77)}else{theme::WHITE},H::Left);
                     for (y,label,value) in [(90.0,"充值",b.topped_up),(118.0,"赠送",b.granted)]{
-                        c.text(281.0,y,label,10.0,W::Regular,theme::GRAY,H::Left);
-                        let text=b.full(value);let size=10.0*54.0/c.text_w(&text,10.0,W::Semibold).max(54.0);c.text(357.0,y,&text,size,W::Semibold,theme::WHITE,H::Right);
+                        c.text(281.0,y,label,10.0,W::Regular,render::theme::GRAY,H::Left);
+                        let text=b.full(value);let size=10.0*54.0/c.text_w(&text,10.0,W::Semibold).max(54.0);c.text(357.0,y,&text,size,W::Semibold,render::theme::WHITE,H::Right);
                     }
                 }
-            }else{let text=if self.quota.busy.contains(&a.id){"正在更新余额…"}else{result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("等待更新余额")};for (i,line) in c.wrap(text,11.0,W::Regular,226.0,3).iter().enumerate(){c.text(125.0,92.0+i as f32*17.0,line,11.0,W::Regular,theme::GRAY,H::Left);}}
+            }else{let text=if self.quota.busy.contains(&a.id){"正在更新余额…"}else{result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("等待更新余额")};for (i,line) in c.wrap(text,11.0,W::Regular,226.0,3).iter().enumerate(){c.text(125.0,92.0+i as f32*17.0,line,11.0,W::Regular,render::theme::GRAY,H::Left);}}
             return;
         }
         if a.provider.relay(){
@@ -492,7 +492,7 @@ impl App {
                 if let Some(amount)=q.primary(){
                     let exhausted=amount.remaining.is_some_and(|n|n<=0.0)&&!amount.unlimited;
                     let title=if matches!(amount.scope,quota::relay::Scope::Account){if amount.label=="账户余额"{"账户余额".into()}else{"账户剩余额度".into()}}else if amount.label=="剩余额度"{"剩余额度".into()}else{format!("{}剩余",amount.label)};
-                    c.text(125.0,78.0,&c.fit(&title,11.0,W::Semibold,176.0),11.0,W::Semibold,theme::GRAY,H::Left);
+                    c.text(125.0,78.0,&c.fit(&title,11.0,W::Semibold,176.0),11.0,W::Semibold,render::theme::GRAY,H::Left);
                     let value=amount.remaining_text();let size=23.0*(225.0/c.text_w(&value,23.0,W::Semibold).max(225.0));
                     c.text(125.0,109.0,&value,size,W::Semibold,if exhausted{Color32::from_rgb(255,166,77)}else{theme::WHITE},H::Left);
                     let detail=if exhausted{format!("{}已用尽",amount.label)}else if matches!(amount.scope,quota::relay::Scope::Subscription){
@@ -501,23 +501,23 @@ impl App {
                     }else{format!("{} · 以站点返回单位为准",q.source)};
                     c.text(125.0,132.0,&c.fit(&detail,10.5,W::Regular,225.0),10.5,W::Regular,if exhausted{Color32::from_rgb(255,166,77)}else{theme::GRAY},H::Left);
                 }else{
-                    c.text(125.0,78.0,"账户余额与套餐额度",11.0,W::Semibold,theme::GRAY,H::Left);
-                    c.text(125.0,109.0,q.unavailable_text(),18.0,W::Semibold,theme::WHITE,H::Left);
-                    c.text(125.0,132.0,if a.provider==Provider::NewApi{"请检查查询模板或账户查询权限"}else{"请到站点查看账户余额或套餐"},10.5,W::Regular,theme::GRAY,H::Left);
+                    c.text(125.0,78.0,"账户余额与套餐额度",11.0,W::Semibold,render::theme::GRAY,H::Left);
+                    c.text(125.0,109.0,q.unavailable_text(),18.0,W::Semibold,render::theme::WHITE,H::Left);
+                    c.text(125.0,132.0,if a.provider==Provider::NewApi{"请检查查询模板或账户查询权限"}else{"请到站点查看账户余额或套餐"},10.5,W::Regular,render::theme::GRAY,H::Left);
                 }
                 if c.hit(310.0,60.0,47.0,22.0,("relay-details",&a.id)).on_hover_text("查看全部周期与额度").clicked(){
                     self.quota.detail_account=Some(a.id.clone());self.settings_tab=11;self.open_settings();
                 }
-                c.text(355.0,77.0,"明细 ›",10.0,W::Regular,theme::GRAY,H::Right);
+                c.text(355.0,77.0,"明细 ›",10.0,W::Regular,render::theme::GRAY,H::Right);
             }else{
                 let text=result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("等待更新额度");
-                for(i,line)in c.wrap(text,11.0,W::Regular,226.0,3).iter().enumerate(){c.text(125.0,99.0+i as f32*17.0,line,11.0,W::Regular,theme::GRAY,H::Left);}
+                for(i,line)in c.wrap(text,11.0,W::Regular,226.0,3).iter().enumerate(){c.text(125.0,99.0+i as f32*17.0,line,11.0,W::Regular,render::theme::GRAY,H::Left);}
             }
             return;
         }
         if a.provider.api_key()||a.provider==Provider::Doubao{
             let label=match snapshot.map(|s|s.plan.as_str()).filter(|s|!s.is_empty()){Some(plan)=>format!("{} · {plan}",a.provider.name()),None=>a.provider.name().into()};
-            c.text(157.0,64.0,&c.fit(&label,12.0,W::Semibold,145.0),12.0,W::Semibold,theme::WHITE,H::Left);
+            c.text(157.0,64.0,&c.fit(&label,12.0,W::Semibold,145.0),12.0,W::Semibold,render::theme::WHITE,H::Left);
             if let Some(snapshot)=snapshot{
                 let mut main=snapshot.windows.iter().collect::<Vec<_>>();main.sort_by(|a,b|a.remaining.total_cmp(&b.remaining));
                 let meter=Snapshot{windows:main.iter().take(2).map(|w|(**w).clone()).collect(),..Default::default()};
@@ -534,42 +534,42 @@ impl App {
                 for (i,w) in rows.iter().enumerate(){
                     let y=83.0+i as f32*23.0;let color=if w.remaining<=0.0{Color32::from_rgb(255,166,77)}else{displayed.iter().position(|v|**v==**w).map(|slot|colors[slot]).unwrap_or(theme::GRAY)};
                     c.circle(159.0,y-4.0,2.5,color);
-                    c.text(168.0,y,&c.fit(&w.label,11.0,W::Semibold,114.0),11.0,W::Semibold,theme::WHITE,H::Left);
+                    c.text(168.0,y,&c.fit(&w.label,11.0,W::Semibold,114.0),11.0,W::Semibold,render::theme::WHITE,H::Left);
                     c.text(355.0,y,&format!("{:.0}%",w.remaining),17.0,W::Semibold,if w.remaining<=0.0{color}else{theme::WHITE},H::Right);
-                    c.text(168.0,y+12.0,&c.fit(&reset_text(w.reset,&now),9.0,W::Regular,187.0),9.0,W::Regular,theme::GRAY,H::Left);
+                    c.text(168.0,y+12.0,&c.fit(&reset_text(w.reset,&now),9.0,W::Regular,187.0),9.0,W::Regular,render::theme::GRAY,H::Left);
                 }
                 let details=c.hit(309.0,51.0,48.0,20.0,("api-quota-details",&a.id)).on_hover_text(snapshot_details(snapshot)).clicked();
-                c.text(355.0,64.0,"明细 ›",10.0,W::Regular,theme::GRAY,H::Right);
+                c.text(355.0,64.0,"明细 ›",10.0,W::Regular,render::theme::GRAY,H::Right);
                 if details{self.quota.detail_account=Some(a.id.clone());self.settings_tab=11;self.open_settings();}
             }else{
                 logo(c,a.provider,103.0,105.0,40.0);
                 let text=result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("等待更新额度");
-                for(i,line)in c.wrap(text,11.0,W::Regular,197.0,3).iter().enumerate(){c.text(157.0,96.0+i as f32*17.0,line,11.0,W::Regular,theme::GRAY,H::Left);}
+                for(i,line)in c.wrap(text,11.0,W::Regular,197.0,3).iter().enumerate(){c.text(157.0,96.0+i as f32*17.0,line,11.0,W::Regular,render::theme::GRAY,H::Left);}
             }
             return;
         }
         ring(c,a,snapshot,103.0,105.0,70.0,colors);
         let raw_plan=snapshot.map(|s|s.plan.as_str()).unwrap_or_default();let plan=match raw_plan{"pro"|"prolite"|"pro_lite"=>"Pro","plus"=>"Plus","free"=>"Free","team"|"business"=>"Business","enterprise"=>"Enterprise",other=>other};let label=if a.provider==Provider::Claude{"Claude · 本地记录".into()}else if plan.is_empty(){a.provider.name().to_owned()}else{format!("{} · {}",a.provider.name(),plan)};
-        c.text(157.0,64.0,&c.fit(&label,12.0,W::Semibold,145.0),12.0,W::Semibold,theme::WHITE,H::Left);
+        c.text(157.0,64.0,&c.fit(&label,12.0,W::Semibold,145.0),12.0,W::Semibold,render::theme::WHITE,H::Left);
         if let Some(s)=snapshot{
             let windows=s.rings();let now=chrono::Local::now();
             if windows.is_empty() && a.provider==Provider::ZCode{
-                c.text(157.0,104.0,"官网未分配体验额度",11.0,W::Regular,theme::GRAY,H::Left);
+                c.text(157.0,104.0,"官网未分配体验额度",11.0,W::Regular,render::theme::GRAY,H::Left);
             }else if windows.len()==1{
-                let w=windows[0];c.text(157.0,103.0,&format!("{}剩余",w.label),12.0,W::Semibold,theme::WHITE,H::Left);
-                if let Some(amount)=&w.amount{let text=format!("{} 点",amount.full());let available=355.0-157.0-c.text_w(&format!("{}剩余",w.label),12.0,W::Semibold)-8.0;let size=12.5*(available/c.text_w(&text,12.5,W::Semibold).max(available));c.text(355.0,103.0,&text,size,W::Semibold,theme::WHITE,H::Right);}
-                let reset=quota_reset_text(s,w,&now);c.text(157.0,124.0,&c.fit(&reset,11.0,W::Regular,197.0),11.0,W::Regular,theme::GRAY,H::Left);
+                let w=windows[0];c.text(157.0,103.0,&format!("{}剩余",w.label),12.0,W::Semibold,render::theme::WHITE,H::Left);
+                if let Some(amount)=&w.amount{let text=format!("{} 点",amount.full());let available=355.0-157.0-c.text_w(&format!("{}剩余",w.label),12.0,W::Semibold)-8.0;let size=12.5*(available/c.text_w(&text,12.5,W::Semibold).max(available));c.text(355.0,103.0,&text,size,W::Semibold,render::theme::WHITE,H::Right);}
+                let reset=quota_reset_text(s,w,&now);c.text(157.0,124.0,&c.fit(&reset,11.0,W::Regular,197.0),11.0,W::Regular,render::theme::GRAY,H::Left);
             }else{
-                c.text(355.0,64.0,"剩余",10.5,W::Regular,theme::GRAY,H::Right);
+                c.text(355.0,64.0,"剩余",10.5,W::Regular,render::theme::GRAY,H::Right);
                 for (i,w)in windows.iter().enumerate(){
                     let y=86.0+i as f32*35.0;c.circle(159.0,y-4.0,2.5,colors[i]);
-                    c.text(168.0,y,&w.label,11.5,W::Semibold,theme::WHITE,H::Left);
+                    c.text(168.0,y,&w.label,11.5,W::Semibold,render::theme::WHITE,H::Left);
                     let reset=quota_reset_text(s,w,&now);
-                    c.text(168.0,y+17.0,&c.fit(&reset,11.0,W::Regular,185.0),11.0,W::Regular,theme::GRAY,H::Left);
-                    c.centered_text(355.0,y+4.0,&w.value_text(),if w.amount.is_some(){13.0}else{22.0},W::Semibold,theme::WHITE,H::Right);
+                    c.text(168.0,y+17.0,&c.fit(&reset,11.0,W::Regular,185.0),11.0,W::Regular,render::theme::GRAY,H::Left);
+                    c.centered_text(355.0,y+4.0,&w.value_text(),if w.amount.is_some(){13.0}else{22.0},W::Semibold,render::theme::WHITE,H::Right);
                 }
             }
-        }else{let message=if self.quota.busy.contains(&a.id){"正在更新额度…"}else{result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("等待更新额度")};for(i,line)in c.wrap(message,11.0,W::Regular,197.0,2).iter().enumerate(){c.text(157.0,103.0+i as f32*17.0,line,11.0,W::Regular,theme::GRAY,H::Left);}}
+        }else{let message=if self.quota.busy.contains(&a.id){"正在更新额度…"}else{result.and_then(|r|r.as_ref().err()).map(String::as_str).unwrap_or("等待更新额度")};for(i,line)in c.wrap(message,11.0,W::Regular,197.0,2).iter().enumerate(){c.text(157.0,103.0+i as f32*17.0,line,11.0,W::Regular,render::theme::GRAY,H::Left);}}
     }
     fn quota_open_connection(&mut self,id:Option<String>){
         if self.quota.kiro_connecting.is_some()||self.quota.api_connecting.is_some()||self.quota.workbuddy_connecting.is_some()||self.quota.deepseek_connecting.is_some()||self.quota.gemini_connecting.is_some()||self.quota.doubao_connecting.is_some()||self.quota.login.is_some(){self.quota.connect_open=true;return;}
@@ -621,7 +621,7 @@ impl App {
                     ui.horizontal(|ui|{
                         ui.add(egui::Label::new("::").sense(egui::Sense::drag())).on_hover_text("拖动调整账号顺序").dnd_set_drag_payload(a.id.clone());
                         let (rect,_)=ui.allocate_exact_size(egui::vec2(26.0,28.0),egui::Sense::hover());let c=Card::new(ui,rect.min,ui.clip_rect());
-                        if a.provider==Provider::DeepSeek{deepseek_badge(&c,if ui.visuals().dark_mode{crate::model::Skin::Classic}else{crate::model::Skin::GlassLight},13.0,14.0,26.0);}else if matches!(a.provider,Provider::ZCode|Provider::Kiro){logo(&c,a.provider,13.0,14.0,26.0);}else{c.circle(13.0,14.0,13.0,crate::paint::mix(accent_colors(&self.quota.config,&a)[0],Color32::BLACK,0.75));logo(&c,a.provider,13.0,14.0,20.0);}
+                        if a.provider==Provider::DeepSeek{deepseek_badge(&c,if ui.visuals().dark_mode{crate::model::Skin::Classic}else{crate::model::Skin::GlassLight},13.0,14.0,26.0);}else if matches!(a.provider,Provider::ZCode|Provider::Kiro){logo(&c,a.provider,13.0,14.0,26.0);}else{c.circle(13.0,14.0,13.0,crate::render::paint::mix(accent_colors(&self.quota.config,&a)[0],Color32::BLACK,0.75));logo(&c,a.provider,13.0,14.0,20.0);}
                         ui.label(egui::RichText::new(if a.provider.relay(){"中转站"}else{a.provider.name()}).strong());
                         if !a.alias.is_empty(){ui.label(egui::RichText::new(format!("· {}",a.alias)).color(ui.visuals().weak_text_color()));}
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
@@ -973,10 +973,10 @@ mod tests {
         let ctx=egui::Context::default();
         for provider in [Provider::NewApi,Provider::OneApi,Provider::Sub2Api]{
             let texture=logo_texture(&ctx,provider,24).unwrap();
-            for palette in [crate::skin_paint::CREAM,crate::skin_paint::GLASS_LIGHT]{
+            for palette in [crate::render::skin_paint::CREAM,crate::render::skin_paint::GLASS_LIGHT]{
                 let mut mesh=egui::Mesh::with_texture(texture.id());
                 mesh.add_rect_with_uv(egui::Rect::from_min_size(egui::Pos2::ZERO,egui::vec2(24.0,24.0)),egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);
-                let mut shape=egui::Shape::mesh(mesh);crate::skin_paint::recolor(&mut shape,&palette);
+                let mut shape=egui::Shape::mesh(mesh);crate::render::skin_paint::recolor(&mut shape,&palette);
                 if let egui::Shape::Mesh(mesh)=shape{assert!(mesh.vertices.iter().all(|v|v.color.r()<80),"浅色皮肤上的钥匙应跟随文字变深");}else{panic!("应绘制钥匙纹理");}
             }
         }
@@ -986,9 +986,9 @@ mod tests {
         for skin in [Skin::Classic,Skin::Cream,Skin::GlassLight,Skin::GlassDark]{
             let image=egui_extras::image::load_svg_bytes_with_size(deepseek_badge_svg(skin).as_bytes(),Some(egui::load::SizeHint::Size(100,100))).unwrap();
             assert!(image.pixels.iter().any(|p|*p==Color32::from_rgb(77,107,254)));
-            let id=egui::TextureId::User(0xDEE5);crate::skin_paint::mark_monochrome(id);crate::skin_paint::mark_colored(id);
+            let id=egui::TextureId::User(0xDEE5);crate::render::skin_paint::mark_monochrome(id);crate::render::skin_paint::mark_colored(id);
             let mut mesh=egui::Mesh::with_texture(id);mesh.add_rect_with_uv(egui::Rect::from_min_size(egui::Pos2::ZERO,egui::vec2(24.0,24.0)),egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);
-            let mut shape=egui::Shape::mesh(mesh);crate::skin_paint::recolor(&mut shape,&crate::skin_paint::CREAM);
+            let mut shape=egui::Shape::mesh(mesh);crate::render::skin_paint::recolor(&mut shape,&crate::render::skin_paint::CREAM);
             if let egui::Shape::Mesh(mesh)=shape{assert!(mesh.vertices.iter().all(|v|v.color==Color32::WHITE));}else{panic!("徽标应保留纹理");}
         }
     }
@@ -1130,7 +1130,7 @@ impl App {
                 summary=format!("{} {text}",if a.provider.relay(){"额度"}else{"余额"});
             }else if loading{
                 let active=(self.t*3.0) as usize%3;
-                for dot in 0..3{c.circle(cx-5.0+dot as f32*5.0,mid+11.0,1.5,theme::GRAY.gamma_multiply(if dot==active{1.0}else{0.35}));}
+                for dot in 0..3{c.circle(cx-5.0+dot as f32*5.0,mid+11.0,1.5,render::theme::GRAY.gamma_multiply(if dot==active{1.0}else{0.35}));}
                 c.ui.ctx().request_repaint_after(std::time::Duration::from_millis(160));
                 summary="正在更新".into();
             }else{summary="余额暂不可用".into();}

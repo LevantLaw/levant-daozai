@@ -1,5 +1,5 @@
 //! 消息客户端的统一身份、通知策略和账号归属记录。
-use crate::{model::Settings,paint::Card};
+use crate::{model::Settings,render::paint::Card};
 use eframe::egui;
 use std::collections::HashMap;
 

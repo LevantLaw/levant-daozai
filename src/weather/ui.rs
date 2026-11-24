@@ -1,7 +1,7 @@
 //! 天气页与天气设置：实况、七日预报与日照时段，图标全部用面板矢量绘制。
 use crate::app::{App, Cmd, Env, WEATHER_PAGE, WEATHER_H};
-use crate::paint::{self, Card, H};
-use crate::theme::{self, W};
+use crate::render::paint::{self, Card, H};
+use crate::render::theme::{self, W};
 use crate::weather::{self, Kind};
 use eframe::egui::{self, Color32};
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
@@ -44,26 +44,26 @@ const LIGHT_TONES: [(Color32, Color32); 14] = [
 
 /// 天气图标的换肤函数：浅色皮肤按 `LIGHT_TONES` 换成浅色版，保留原透明度；
 /// 表外颜色与深色皮肤仍走通用换色。
-pub(crate) fn light_tone(color: Color32, p: &crate::skin_paint::Palette) -> Color32 {
+pub(crate) fn light_tone(color: Color32, p: &crate::render::skin_paint::Palette) -> Color32 {
     let a = color.a();
     let light = p.paper.iter().map(|&v| v as u32).sum::<u32>() > 3 * 128;
-    if a == 0 || !light { return crate::skin_paint::map_color(color, p); }
+    if a == 0 || !light { return crate::render::skin_paint::map_color(color, p); }
     let af = a as f32 / 255.0;
     let c = [color.r(), color.g(), color.b()].map(|v| (v as f32 / af).min(255.0));
     let near = |t: Color32| (c[0] - t.r() as f32).abs() <= 6.0 && (c[1] - t.g() as f32).abs() <= 6.0 && (c[2] - t.b() as f32).abs() <= 6.0;
     match LIGHT_TONES.iter().find(|(dark, _)| near(*dark)) {
         Some(&(_, to)) => Color32::from_rgba_premultiplied(
             (to.r() as f32 * af).round() as u8, (to.g() as f32 * af).round() as u8, (to.b() as f32 * af).round() as u8, a),
-        None => crate::skin_paint::map_color(color, p),
+        None => crate::render::skin_paint::map_color(color, p),
     }
 }
 
 /// 把 `paint` 画出的图形登记为天气图标配色，浅色皮肤下不被通用换色压暗。
 fn toned(c: &Card, paint: impl FnOnce()) {
     let (ctx, layer) = (c.ui.ctx(), c.painter.layer_id());
-    let from = crate::skin_paint::shape_count(ctx, layer);
+    let from = crate::render::skin_paint::shape_count(ctx, layer);
     paint();
-    crate::skin_paint::tone_since(ctx, layer, from, light_tone);
+    crate::render::skin_paint::tone_since(ctx, layer, from, light_tone);
 }
 
 /// 常驻胶囊上迷你天气图标的边长。
@@ -1222,7 +1222,7 @@ pub(crate) fn city_row(ui: &mut egui::Ui, selected: bool, removable: bool, title
         None => canvas.circle(48.0, 24.0, 2.5, weak),
     }
     let end = canvas.painter.add(egui::Shape::Noop).0;
-    if !ui.visuals().dark_mode { crate::skin_paint::recolor_layer(&ctx, canvas.painter.layer_id(), &[(first, end)], &crate::skin_paint::GLASS_LIGHT); }
+    if !ui.visuals().dark_mode { crate::render::skin_paint::recolor_layer(&ctx, canvas.painter.layer_id(), &[(first, end)], &crate::render::skin_paint::GLASS_LIGHT); }
     let right = rect.right() - if removable { 40.0 } else { 16.0 };
     let painter = ui.painter();
     let temp_w = cached.map(|s| {

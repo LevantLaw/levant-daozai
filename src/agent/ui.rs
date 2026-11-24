@@ -5,8 +5,8 @@ use crate::agent::store::{Decision, Notice, NoticeKind, NotifyConfig, PendingKin
 use crate::agent::{AgentId, Session};
 use crate::app::{App, AI_PAGE};
 use crate::extras::{setting_row, setting_row_nested, settings_card, settings_control_row_right, settings_group_fold, settings_hint, settings_label, settings_segmented};
-use crate::paint::{Card, H};
-use crate::theme::{self, W};
+use crate::render::paint::{Card, H};
+use crate::render::theme::{self, W};
 use eframe::egui::{self, Color32};
 
 /// 横幅对应的 AI 事件身份：会话键 + 事件类型，用于去重和失效判断。
@@ -195,7 +195,7 @@ impl App {
     pub(crate) fn draw_agent_light(&self, c: &Card, x: f32, y: f32) {
         let active = self.agent.store.active();
         if active.is_empty() {
-            c.ring(x, y, 4.3, 1.5, crate::paint::alpha(theme::GRAY, 0.55));
+            c.ring(x, y, 4.3, 1.5, crate::render::paint::alpha(theme::GRAY, 0.55));
             return;
         }
         let waiting = active.iter().filter(|session| session.waiting()).count();
@@ -272,7 +272,7 @@ impl App {
         if sessions.is_empty() {
             c.text(209.5, 84.0, "还没有活跃会话", 13.0, W::Bold, theme::WHITE, H::Center);
             c.text(209.5, 102.0, "勾选 Agent 并安装 Hook 后，会话会出现在这里", 10.0, W::Regular, theme::GRAY, H::Center);
-            let (response, body) = crate::paint::capsule(c, 162.0, 114.0, 94.0, 24.0, "agent-setup", theme::BTN, theme::BTN_HOVER);
+            let (response, body) = crate::render::paint::capsule(c, 162.0, 114.0, 94.0, 24.0, "agent-setup", theme::BTN, theme::BTN_HOVER);
             body.text(209.0, 130.0, "去接入 Agent", 10.0, W::Semibold, theme::WHITE, H::Center);
             if response.clicked() { self.settings_tab = 15; self.open_settings(); }
             return;
@@ -303,9 +303,9 @@ impl App {
             list.fill(40.0, top, 320.0, height, 10.0, fill);
             let accent = state_color(session);
             let alpha = if waiting { 0.55 + 0.45 * ((self.t * 4.0).sin() * 0.5 + 0.5) as f32 } else { 0.9 };
-            list.fill(47.0, top + (height - 16.0) / 2.0, 3.0, 16.0, 1.5, crate::paint::alpha(accent, alpha));
+            list.fill(47.0, top + (height - 16.0) / 2.0, 3.0, 16.0, 1.5, crate::render::paint::alpha(accent, alpha));
             if waiting || session.stale() || matches!(session.state, SessionState::Failed | SessionState::Interrupted) {
-                list.stroke(40.0, top, 320.0, height, 10.0, 1.0, crate::paint::alpha(accent, 0.65));
+                list.stroke(40.0, top, 320.0, height, 10.0, 1.0, crate::render::paint::alpha(accent, 0.65));
             } else if hover > 0.01 {
                 list.stroke(40.0, top, 320.0, height, 10.0, 1.0, Color32::from_white_alpha((20.0 * hover) as u8));
             }
@@ -349,7 +349,7 @@ impl App {
             if waiting {
                 agent_icon(&list, session.agent, 300.0, top + height / 2.0, 14.0);
                 let handle_id = format!("agent-handle-{key}");
-                let (handle, body) = crate::paint::capsule(&list, 312.0, top + (height - 18.0) / 2.0, 44.0, 18.0, &handle_id, theme::BTN, theme::BTN_HOVER);
+                let (handle, body) = crate::render::paint::capsule(&list, 312.0, top + (height - 18.0) / 2.0, 44.0, 18.0, &handle_id, theme::BTN, theme::BTN_HOVER);
                 body.centered_text(334.0, top + height / 2.0, "处理", 9.0, W::Semibold, theme::WHITE, H::Center);
                 if handle.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("在岛上处理").clicked() {
                     handled = Some(key.clone());
@@ -672,7 +672,7 @@ impl crate::agent::AgentState {
 }
 
 fn button<'a>(c: &Card<'a>, x: f32, y: f32, w: f32, label: &str, color: Color32) -> egui::Response {
-    let (response, body) = crate::paint::capsule(c, x, y, w, 24.0, label, color, crate::paint::mix(color, Color32::WHITE, 0.12));
+    let (response, body) = crate::render::paint::capsule(c, x, y, w, 24.0, label, color, crate::render::paint::mix(color, Color32::WHITE, 0.12));
     body.text(x + w / 2.0, y + 16.0, label, 10.0, W::Semibold, theme::WHITE, H::Center);
     response
 }

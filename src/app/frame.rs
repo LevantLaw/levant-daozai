@@ -276,9 +276,9 @@ impl App {
             self.fluid_origin=body.min;
             let art=self.music_artwork.as_ref().map(|(_,texture)|texture.id());
             if art!=self.fluid_art || self.media.title!=self.fluid_title {
-                let tint=if self.media.title.is_empty(){crate::fluid::Fluid::neutral()}
-                    else if let Some((image,_))=&self.music_artwork{crate::fluid::Fluid::tint_from_image(image)}
-                    else{crate::fluid::Fluid::tint_from_title(&self.media.title)};
+                let tint=if self.media.title.is_empty(){crate::render::fluid::Fluid::neutral()}
+                    else if let Some((image,_))=&self.music_artwork{crate::render::fluid::Fluid::tint_from_image(image)}
+                    else{crate::render::fluid::Fluid::tint_from_title(&self.media.title)};
                 self.fluid.set_tint(tint);
                 self.fluid_art=art;
                 self.fluid_title.clone_from(&self.media.title);
@@ -290,7 +290,7 @@ impl App {
         self.paint_body(&painter, body, flare, flare_h, radius, feather, shell_edge);
         if lifted > 0.01 {self.paint_lift_halo(&painter, body, flare, flare_h, radius, lifted.min(1.0));}
         let center_guide=self.paint_center_rim(&painter, body, panel, flare, flare_h, radius, env.screen);
-        let content_from=crate::skin_paint::shape_count(&ctx,layer);
+        let content_from=crate::render::skin_paint::shape_count(&ctx,layer);
 
         // 内容只随形体「揭开」：不缩放，按面板裁剪；淡入由时间驱动，不跟尺寸走。
         let reveal = self.content_reveal();
@@ -340,7 +340,7 @@ impl App {
             }
         }
         if let Some(rect)=messenger_rect {
-            let from=crate::skin_paint::shape_count(&ctx,layer);
+            let from=crate::render::skin_paint::shape_count(&ctx,layer);
             let c=Card::new(ui,rect.min,rect.intersect(ui.max_rect()));
             if outside_badge.is_some() {
                 let c=c.scaled(0.0,0.0,appear);
@@ -350,18 +350,18 @@ impl App {
                 let scale=self.messenger_stack_appear();
                 self.draw_unread_stack(&c.scaled(0.0,0.0,scale).faded(scale),horizontal,&mut cmds);
             }
-            keep_colors.push((from,crate::skin_paint::shape_count(&ctx,layer)));
+            keep_colors.push((from,crate::render::skin_paint::shape_count(&ctx,layer)));
         }
         let notice_details=self.notice_details_rect(cx,top);
         if let Some(rect)=notice_details {
             let radius=if self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()){14.0}else{10.0};
-            let from=crate::skin_paint::shape_count(&ctx,layer);
+            let from=crate::render::skin_paint::shape_count(&ctx,layer);
             shape::shadow(&painter,rect,0.0,0.0,radius,0.5*shadow_k);
             painter.rect_filled(rect,radius,self.glass_fill());
             if glass_skin {
                 painter.rect_stroke(rect,radius,egui::Stroke::new(1.0_f32,self.glass_rim()),egui::StrokeKind::Inside);
             }
-            keep_colors.push((from,crate::skin_paint::shape_count(&ctx,layer)));
+            keep_colors.push((from,crate::render::skin_paint::shape_count(&ctx,layer)));
             self.draw_notice(&Card::new(ui,rect.min,rect.intersect(ui.max_rect())),rect,&self.hud_notice.clone().unwrap(),&mut cmds);
             if ctx.input(|i|i.pointer.any_pressed()&&i.pointer.interact_pos().is_some_and(|p|!rect.contains(p)&&!notice_rect.is_some_and(|r|r.contains(p)))){self.notice_details=false;}
         }
@@ -429,12 +429,12 @@ impl App {
         if pill && !side {region.min.y=region.min.y.min(win.top());}
         // 浅色皮肤：把这一帧岛体内容统一换成皮肤配色。
         if let Some(palette)=palette {
-            let end=crate::skin_paint::shape_count(&ctx,layer);
+            let end=crate::render::skin_paint::shape_count(&ctx,layer);
             let mut ranges=Vec::new();let mut at=content_from;
             keep_colors.sort();
             for (from,to) in keep_colors {if from>at {ranges.push((at,from));} at=at.max(to);}
             if end>at {ranges.push((at,end));}
-            crate::skin_paint::recolor_layer(&ctx,layer,&ranges,&palette);
+            crate::render::skin_paint::recolor_layer(&ctx,layer,&ranges,&palette);
         }
         // 原生裁剪还需包含悬停提示；只扩大绘制区域，保持桌面点击穿透。
         let mut tooltips=Vec::new();

@@ -8,7 +8,7 @@
 use std::path::{Path,PathBuf};
 
 pub const ARG:&str="--collect-diagnostics";
-const SCRIPT:&[u8]=include_bytes!("../scripts/collect-diagnostics.ps1");
+const SCRIPT:&[u8]=include_bytes!("../../scripts/collect-diagnostics.ps1");
 
 /// 命令行里是否要求收集诊断。
 pub fn requested(mut args:impl Iterator<Item=String>)->bool {args.any(|arg|arg==ARG)}

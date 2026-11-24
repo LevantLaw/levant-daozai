@@ -3,7 +3,7 @@
 //! `Card` 把「面板局部逻辑点」映射到屏幕，并自带裁剪、整体透明度与可交互开关：
 //! 切页时旧页用 `live = false` 的画布绘制，只画不响应点击，也不会和新页抢 id。
 
-use crate::theme::{self, font, W};
+use crate::render::theme::{self, font, W};
 use eframe::egui::{self, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Vec2};
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
@@ -78,7 +78,7 @@ impl<'a> Card<'a> {
     /// 测量、绘制、截断、折行都经过这里：维语等从右往左的文字在这里做连写和方向转换（#200）。
     /// 截断（`fit`）按阅读顺序截、再转换，省略号自然落在从右往左阅读的末尾（最左边）。
     pub fn galley(&self, t: &str, size: f32, w: W, color: Color32) -> std::sync::Arc<egui::Galley> {
-        self.painter.layout_no_wrap(crate::rtl_text::display(t).into_owned(), self.font(size, w), color)
+        self.painter.layout_no_wrap(crate::render::rtl_text::display(t).into_owned(), self.font(size, w), color)
     }
     pub fn text_w(&self, t: &str, size: f32, w: W) -> f32 {
         self.galley(t, size, w, Color32::WHITE).size().x / self.s

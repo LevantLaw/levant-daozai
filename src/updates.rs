@@ -161,7 +161,7 @@ impl State {
     }
 
     pub(crate) fn dialog_ui(&mut self, ctx: &egui::Context) {
-        use crate::theme::{self, W};
+        use crate::render::theme::{self, W};
         if !self.dialog_open { return; }
         let Some(Ok(Some(release))) = self.result.clone() else { return; };
         let focus = std::mem::take(&mut self.focus_requested);

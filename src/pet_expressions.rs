@@ -1,8 +1,8 @@
 //! 岛仔表情：按场景播放，隐藏时暂停，日常动作之间留出安静时间。
 //! 每个表情单独一张 144×1440 的序列图（16 帧 × 3 倍密度），只解码、上传正在播放的那一张，播完即释放。
 use crate::pet::PetState;
-use crate::paint::Card;
-use crate::skin_paint::Palette;
+use crate::render::paint::Card;
+use crate::render::skin_paint::Palette;
 use eframe::egui::{self, Color32, Rect, TextureHandle};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,11 +96,11 @@ impl Expressions {
             let decoded=image::load_from_memory(expression.sheet()).expect("内置表情序列图").into_rgba8();
             let mut image=egui::ColorImage::from_rgba_unmultiplied([decoded.width() as usize,decoded.height() as usize],decoded.as_raw());
             drop(decoded);
-            if let Some(palette)=palette {for pixel in &mut image.pixels {if pixel.a()>0 {*pixel=crate::skin_paint::map_color(*pixel,&palette);}}}
+            if let Some(palette)=palette {for pixel in &mut image.pixels {if pixel.a()>0 {*pixel=crate::render::skin_paint::map_color(*pixel,&palette);}}}
             if let Some((previous,previous_palette,texture))=&mut self.sheet {*previous=expression;*previous_palette=palette;texture.set(image,egui::TextureOptions::LINEAR);}
             else {
                 let texture=c.ui.ctx().load_texture("daozai-expressions",image,egui::TextureOptions::LINEAR);
-                crate::skin_paint::mark_colored(texture.id());self.sheet=Some((expression,palette,texture));
+                crate::render::skin_paint::mark_colored(texture.id());self.sheet=Some((expression,palette,texture));
             }
         }
         let frame=if crate::bar_layout::animations_enabled(){expression.frame(time)}else{7};
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(image.size,[144,1440],"只上传正在播放的表情，不上传整张图集");
         let white=image.pixels.iter().position(|p|p.a()>250&&p.r()>240&&p.g()>240&&p.b()>240).unwrap();
         assert!(!frame(&mut expressions,None).textures_delta.set.iter().any(|(texture,_)|*texture==id),"同一表情、同一皮肤不能重复解码或上传");
-        for palette in [crate::skin_paint::CREAM,crate::skin_paint::GLASS_LIGHT] {
+        for palette in [crate::render::skin_paint::CREAM,crate::render::skin_paint::GLASS_LIGHT] {
             let output=frame(&mut expressions,Some(palette));assert_eq!(expressions.sheet.as_ref().unwrap().2.id(),id);
             let delta=&output.textures_delta.set.iter().find(|(texture,_)|*texture==id).unwrap().1;
             let egui::ImageData::Color(image)=&delta.image else{unreachable!()};

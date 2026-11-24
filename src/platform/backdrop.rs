@@ -29,7 +29,7 @@ impl Sampler {
             while !flag.load(Ordering::Relaxed) {
                 let points = state.lock().map(|s| s.points.clone()).unwrap_or_default();
                 if !points.is_empty() {
-                    let color = crate::glass::backdrop_estimate(&sample(&points));
+                    let color = crate::render::glass::backdrop_estimate(&sample(&points));
                     if let (Some(color), Ok(mut s)) = (color, state.lock()) {
                         s.color = Some(color);
                     }

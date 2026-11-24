@@ -2,7 +2,7 @@
 #[cfg(windows)]
 fn main(){
     let ctx=eframe::egui::Context::default();
-    let observations=daozai::system::observe(ctx.clone(),Default::default(),None);
+    let observations=daozai::platform::system::observe(ctx.clone(),Default::default(),None);
     let bluetooth=daozai::bt::spawn();
     let media=daozai::smtc::shared();
     let _enabled=daozai::smtc::spawn_poller(media.clone(),ctx);

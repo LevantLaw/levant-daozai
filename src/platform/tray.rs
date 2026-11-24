@@ -108,7 +108,7 @@ fn load_resource_icon() -> Option<HICON> {
 
 /// 图标取不到时，直接解析内嵌的岛仔 ICO。
 fn load_embedded_icon() -> Option<HICON> {
-    let ico: &[u8] = include_bytes!("../assets/daozai.ico");
+    let ico: &[u8] = include_bytes!("../../assets/daozai.ico");
     if ico.len() < 6 {
         return None;
     }
@@ -504,10 +504,10 @@ pub fn play_notification_sound(sound: crate::app::NotificationSound) {
     // 异步播放期间 Windows 仍会读取这段内嵌的 WAV。
     let wav: &[u8] = match sound {
         NotificationSound::Silent => return,
-        NotificationSound::Complete => include_bytes!("../assets/notification-sounds/complete.wav"),
-        NotificationSound::Reminder => include_bytes!("../assets/notification-sounds/reminder.wav"),
-        NotificationSound::Email => include_bytes!("../assets/notification-sounds/email.wav"),
-        NotificationSound::Sonar => include_bytes!("../assets/notification-sounds/sonar.wav"),
+        NotificationSound::Complete => include_bytes!("../../assets/notification-sounds/complete.wav"),
+        NotificationSound::Reminder => include_bytes!("../../assets/notification-sounds/reminder.wav"),
+        NotificationSound::Email => include_bytes!("../../assets/notification-sounds/email.wav"),
+        NotificationSound::Sonar => include_bytes!("../../assets/notification-sounds/sonar.wav"),
     };
     unsafe { let _ = PlaySoundW(PCWSTR(wav.as_ptr().cast()), None, SND_MEMORY | SND_ASYNC | SND_NODEFAULT | SND_NOSTOP); }
 }
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn embedded_icon_still_parsable_as_fallback() {
-        let ico: &[u8] = include_bytes!("../assets/daozai.ico");
+        let ico: &[u8] = include_bytes!("../../assets/daozai.ico");
         assert_eq!(&ico[..4], &[0, 0, 1, 0]);
         assert!(load_embedded_icon().is_some());
     }

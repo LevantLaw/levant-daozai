@@ -3,7 +3,7 @@
 fn main()->eframe::Result<()> {
     use daozai::app::{App,Env,Options,WIN_W,WIN_H};
     use eframe::egui;
-    struct Probe {app:App,native:daozai::native::Window,start:std::time::Instant,frame_at:std::time::Instant,textures:Option<usize>,frames:u64,min_width:f32,max_width:f32}
+    struct Probe {app:App,native:daozai::platform::native::Window,start:std::time::Instant,frame_at:std::time::Instant,textures:Option<usize>,frames:u64,min_width:f32,max_width:f32}
     impl eframe::App for Probe {
         fn clear_color(&self,_:&egui::Visuals)->[f32;4]{[0.0;4]}
         fn update(&mut self,ctx:&egui::Context,_:&mut eframe::Frame){
@@ -38,7 +38,7 @@ fn main()->eframe::Result<()> {
         cc.egui_ctx.set_pixels_per_point(1.0);
         if let Some(gl)=&cc.gl{use eframe::glow::HasContext;println!("renderer={}",unsafe{gl.get_parameter_string(eframe::glow::RENDERER)});}
         let app=App::new(&cc.egui_ctx,Options{fetch_lyrics:false,pet_idle:1e9});
-        let native=daozai::native::Window::new(cc).unwrap();
+        let native=daozai::platform::native::Window::new(cc).unwrap();
         Ok(Box::new(Probe{app,native,start:std::time::Instant::now(),frame_at:std::time::Instant::now(),textures:None,frames:0,min_width:f32::INFINITY,max_width:0.0}))
     }))
 }

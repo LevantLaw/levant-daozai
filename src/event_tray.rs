@@ -1,8 +1,8 @@
 //! 事件容器：数据变化时短暂出现；邮件、健康、待办、日程持续到条件解除。
 use crate::app::App;
 use crate::bar_layout;
-use crate::paint::Card;
-use crate::theme;
+use crate::render::paint::Card;
+use crate::render::theme;
 use eframe::egui;
 use std::hash::{Hash, Hasher};
 
@@ -258,12 +258,12 @@ impl App {
 
     fn tray_item_alpha(&self, item: Item) -> f32 {
         let age = self.t - self.event_tray.last[item as usize];
-        let fade_in = crate::anim::smoothstep(0.0, 0.15, age as f32);
+        let fade_in = crate::render::anim::smoothstep(0.0, 0.15, age as f32);
         // 需要用户处理的事件持续到条件解除，不受 10 秒窗口的淡出影响。
         if matches!(item, Item::Mail | Item::Health | Item::Todo | Item::Calendar) {
             fade_in
         } else {
-            fade_in * crate::anim::smoothstep(0.0, 0.3, (HOLD - age) as f32)
+            fade_in * crate::render::anim::smoothstep(0.0, 0.3, (HOLD - age) as f32)
         }
     }
 
@@ -295,13 +295,13 @@ impl App {
                     }
                     Item::Music => {
                         let faded=c.faded(alpha);
-                        crate::paint::playback_bars_box(&faded, item_x, 15.0, self.t, self.media.playing, theme::WHITE, bar_layout::GLYPH, bar_layout::MUSIC_H);
+                        crate::render::paint::playback_bars_box(&faded, item_x, 15.0, self.t, self.media.playing, theme::WHITE, bar_layout::GLYPH, bar_layout::MUSIC_H);
                         if crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-music"), "音乐 · 点击打开".into()).clicked() {
                             self.show_page(crate::app::MUSIC_PAGE);
                         }
                     }
                     Item::Battery => {
-                        crate::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, bar_layout::BATTERY_SCALE);
+                        crate::render::paint::battery(&c.faded(alpha), item_x, 15.0, self.resident_power.0, self.resident_power.1, bar_layout::BATTERY_SCALE);
                         let level = self.resident_power.0.map(|pct| format!("{pct}%")).unwrap_or_else(|| "电量不可用".into());
                         crate::quota::ui::bar_tooltip(c.hit(item_x - width / 2.0, 1.0, width, 28.0, "tray-battery"), format!("电量 · {level} · 只读"));
                     }

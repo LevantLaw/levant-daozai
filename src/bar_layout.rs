@@ -1,5 +1,5 @@
 //! 常驻组件按实际占位排布，并在开关变化时连续补位。
-use crate::anim::{smoothstep, Spring};
+use crate::render::anim::{smoothstep, Spring};
 
 pub(crate) const CLOCK: usize = 0;
 pub(crate) const BATTERY: usize = 1;

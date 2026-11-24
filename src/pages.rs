@@ -1,12 +1,12 @@
 //! 五个页面：音乐 → 专注 → 饮水 → 置物 → 待办。
 //! 坐标全部是面板局部逻辑点（419×140），文字 y 是基线。
 
-use crate::anim::{self, lerp, smoothstep, Spring};
+use crate::render::anim::{self, lerp, smoothstep, Spring};
 use crate::app::{App, Cmd, Env, Phase};
 use crate::mail;
-use crate::paint::{self, capsule, mix, Card, H};
+use crate::render::paint::{self, capsule, mix, Card, H};
 use crate::smtc::Transport;
-use crate::theme::{self, size, W};
+use crate::render::theme::{self, size, W};
 use eframe::egui::{self, Color32, Pos2, Rect};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
@@ -244,7 +244,7 @@ impl App {
                 let row=col.faded((1.0-distance.abs()*0.35).clamp(0.0,1.0));
                 let font=row.font(if active {12.0}else{10.0},if active {W::Semibold}else{W::Regular});
                 // 维语等从右往左的歌词：先按阅读顺序分行再逐行转换（#200）。
-                let text=crate::rtl_text::display_wrapped(&line.text,132.0*c.s,|s|row.painter.layout_no_wrap(s.to_owned(),font.clone(),ink).size().x).into_owned();
+                let text=crate::render::rtl_text::display_wrapped(&line.text,132.0*c.s,|s|row.painter.layout_no_wrap(s.to_owned(),font.clone(),ink).size().x).into_owned();
                 let mut job=egui::text::LayoutJob::simple(text,font,ink,132.0*c.s);
                 job.wrap.max_rows=if active {3}else{1};
                 job.wrap.break_anywhere=true;

@@ -14,8 +14,8 @@ pub(crate) use crate::app::settings::{
     SETTINGS_TAB_APPEARANCE, SETTINGS_TAB_BEHAVIOR, SETTINGS_TAB_BODY, SETTINGS_TAB_CLIPBOARD,
     SETTINGS_TAB_PAGES, SETTINGS_TAB_REMINDERS, SETTINGS_TAB_WINDOWS,
 };
-use crate::paint::{Card, H};
-use crate::theme::{self, size, W};
+use crate::render::paint::{Card, H};
+use crate::render::theme::{self, size, W};
 use eframe::egui::{self, Color32, Rect};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,7 +38,7 @@ impl HealthReminder {
                 c.path(&[(x+6.5,y-6.0),(x+10.5,y-6.0),(x+11.5,y-3.0),(x+10.0,y+2.0),(x+5.5,y+3.0)],1.6,theme::CYAN);
                 c.seg((x-5.0,y-6.5),(x-4.2,y-2.5),1.0,Color32::from_white_alpha(170));
             },
-            Self::Sit=>crate::paint::chair(c,x,y,0.6,theme::SOFT_GREEN),
+            Self::Sit=>crate::render::paint::chair(c,x,y,0.6,theme::SOFT_GREEN),
         }
     }
 }
@@ -137,7 +137,7 @@ fn app_icon_badge(c:&Card,x:f32,y:f32,size:f32,name:&str,texture:Option<&egui::T
 fn app_initial(name:&str)->String{name.chars().next().map(|ch|ch.to_uppercase().to_string()).unwrap_or_default()}
 
 fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
-    if a.source!=AlertSource::Internal{crate::paint::bell(c,x,y,theme::WHITE,0.0);return;}
+    if a.source!=AlertSource::Internal{crate::render::paint::bell(c,x,y,theme::WHITE,0.0);return;}
     match a.title.as_str() {
         "系统音量"=>{
             c.poly(&[(x-9.0,y-3.0),(x-5.0,y-3.0),(x,y-7.0),(x,y+7.0),(x-5.0,y+3.0),(x-9.0,y+3.0)],theme::WHITE);
@@ -182,14 +182,14 @@ fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
         "新邮件"|"收到新邮件"|"邮件验证码"=>crate::calendar::ui::source_icon(c,crate::calendar::ui::Source::Mail(""),x-14.0,y-14.0,28.0),
         "喝水时间到了"|"今日饮水目标达成"=>HealthReminder::Water.icon(c,x,y,1.0),
         crate::app::SIT_TITLE=>HealthReminder::Sit.icon(c,x,y,1.0),
-        "待办到时间了"=>crate::paint::checklist(c,x,y,23.0,Color32::from_rgb(190,180,255),Color32::from_rgb(43,35,66)),
+        "待办到时间了"=>crate::render::paint::checklist(c,x,y,23.0,Color32::from_rgb(190,180,255),Color32::from_rgb(43,35,66)),
         "会议提醒"=>{
             let label=a.meeting.as_ref().map(|(_,source)|source.as_str()).unwrap_or("");
             let source=if label=="本机日程"{crate::calendar::ui::Source::Local}else if label.starts_with("邮件"){crate::calendar::ui::Source::Mail("")}
                 else{crate::calendar::ui::Source::Calendar(crate::calendar::Provider::ALL.into_iter().find(|provider|provider.label()==label))};
             crate::calendar::ui::source_icon(c,source,x-14.0,y-14.0,28.0);
         },
-        "专注计时"=>crate::paint::stopwatch(&c.scaled(x,y,0.65),x,y,8.0,0.0,theme::RED_TOP),
+        "专注计时"=>crate::render::paint::stopwatch(&c.scaled(x,y,0.65),x,y,8.0,0.0,theme::RED_TOP),
         "岛仔已暂停音乐功能"=>page_icon(c,crate::app::MUSIC_PAGE,x,y,24.0),
         _=>page_icon(c,a.page,x,y,24.0),
     }
@@ -484,7 +484,7 @@ impl App {
     fn app_icon(&mut self,ctx:&egui::Context,id:&str)->Option<egui::TextureHandle>{
         if let Some(icon)=self.app_icons.get(id){return icon.clone();}
         if self.app_icons.len()>=32{self.app_icons.clear();}
-        let icon=crate::icons::app_icon(id).map(|image|ctx.load_texture(format!("app-icon:{id}"),image,egui::TextureOptions::LINEAR));
+        let icon=crate::platform::icons::app_icon(id).map(|image|ctx.load_texture(format!("app-icon:{id}"),image,egui::TextureOptions::LINEAR));
         self.app_icons.insert(id.to_string(),icon.clone());
         icon
     }
@@ -501,7 +501,7 @@ impl App {
             c.text(209.5,102.0,"连接系统通知后，即时通讯以外的通知会汇总在这里",10.0,W::Regular,theme::GRAY,H::Center);
             return;
         }
-        let (clear,body)=crate::paint::capsule(c,337.0,33.0,52.0,20.0,"windows-clear",theme::BTN,theme::BTN_HOVER);
+        let (clear,body)=crate::render::paint::capsule(c,337.0,33.0,52.0,20.0,"windows-clear",theme::BTN,theme::BTN_HOVER);
         body.text(363.0,47.0,"清空",10.0,W::Semibold,theme::WHITE,H::Center);
         if clear.clicked(){self.windows_notices.clear();self.windows_first=0;return;}
         let max=count.saturating_sub(crate::app::WINDOWS_ROWS);
@@ -588,7 +588,7 @@ impl App {
             return;
         }
         if a.source!=AlertSource::Internal {
-            crate::paint::bell(&nc,322.0,22.0,theme::GRAY,crate::paint::bell_swing(self.t-a.at));
+            crate::render::paint::bell(&nc,322.0,22.0,theme::GRAY,crate::render::paint::bell_swing(self.t-a.at));
             nc.circle(326.0,17.5,2.0,Color32::from_rgb(255,72,72));
             nc.centered_text(16.0,14.0,&nc.fit(&a.title,11.0,W::Semibold,198.0),11.0,W::Semibold,theme::WHITE,H::Left);
             nc.centered_text(16.0,30.0,&nc.fit(&a.body,10.5,W::Regular,198.0),10.5,W::Regular,theme::GRAY,H::Left);
@@ -619,13 +619,13 @@ impl App {
             nc.seg((16.0,84.0),(344.0,84.0),0.6,Color32::from_gray(36));
             let date=format!("{}{}",if start.date_naive()==now.date_naive(){"今天 · "}else{""},start.format("%-m月%-d日"));
             nc.centered_text(16.0,110.0,&date,11.0,W::Regular,secondary,H::Left);
-            let (dismiss,dc)=crate::paint::capsule(&nc,188.0,98.0,72.0,24.0,"meeting-dismiss",Color32::from_gray(32),Color32::from_gray(48));
+            let (dismiss,dc)=crate::render::paint::capsule(&nc,188.0,98.0,72.0,24.0,"meeting-dismiss",Color32::from_gray(32),Color32::from_gray(48));
             dc.centered_text(224.0,110.0,"关闭",10.5,W::Semibold,theme::WHITE,H::Center);
             if dismiss.on_hover_text("关闭本次提醒，日程仍保留").clicked(){
                 self.notice=None;
                 return;
             }
-            let (button,bc)=crate::paint::capsule(&nc,272.0,98.0,72.0,24.0,"meeting-action",Color32::from_gray(42),Color32::from_gray(56));
+            let (button,bc)=crate::render::paint::capsule(&nc,272.0,98.0,72.0,24.0,"meeting-action",Color32::from_gray(42),Color32::from_gray(56));
             bc.centered_text(308.0,110.0,"查看",10.5,W::Semibold,theme::WHITE,H::Center);
             if button.clicked() {
                 self.notice=None;
@@ -740,7 +740,7 @@ impl App {
         let (v, muted) = self.volume_ui.unwrap_or((v, muted));
         let pressed = track.dragged() || track.is_pointer_button_down_on() || icon.is_pointer_button_down_on();
         let target = if muted { 0.0 } else { v as f32 / 100.0 };
-        self.volume_a = crate::anim::approach(self.volume_a, target, if pressed { 34.0 } else { 13.0 }, self.dt);
+        self.volume_a = crate::render::anim::approach(self.volume_a, target, if pressed { 34.0 } else { 13.0 }, self.dt);
         let h = if pressed { 7.0 } else { 5.0 };
         let y = 19.0 - h / 2.0;
         nc.fill(HUD_TRACK_X, y, HUD_TRACK_W, h, h / 2.0, Color32::from_white_alpha(if pressed { 46 } else { 34 }));
@@ -1025,7 +1025,7 @@ impl App {
         for (day,name) in crate::model::WEEKDAY_NAMES.iter().enumerate() {
             let on=repeat&(1<<day)!=0;
             let cx=x+day as f32*step;
-            let (r,b)=crate::paint::capsule(c,cx,y,w,h,&format!("task-repeat-{day}"),if on{Color32::from_rgb(39,94,150)}else{theme::BTN},theme::BTN_HOVER);
+            let (r,b)=crate::render::paint::capsule(c,cx,y,w,h,&format!("task-repeat-{day}"),if on{Color32::from_rgb(39,94,150)}else{theme::BTN},theme::BTN_HOVER);
             b.centered_text(cx+w/2.0,y+h/2.0,name,if h<18.0{9.5}else{10.5},W::Semibold,if on{theme::WHITE}else{theme::GRAY},H::Center);
             if r.on_hover_text(format!("每周{name}")).clicked(){
                 if let Some(d)=self.task_dialog.as_mut(){d.repeat^=1<<day;d.error.clear();}
@@ -1071,12 +1071,12 @@ impl App {
 }
 
 fn notice_button(c:&Card,x:f32,y:f32,w:f32,text:&str,id:&str)->bool {
-    let (r,b)=crate::paint::capsule(c,x,y,w,20.0,id,Color32::from_gray(35),theme::BTN_HOVER);
+    let (r,b)=crate::render::paint::capsule(c,x,y,w,20.0,id,Color32::from_gray(35),theme::BTN_HOVER);
     b.centered_text(x+w/2.0,y+10.0,text,10.5,W::Semibold,theme::WHITE,H::Center);
     r.clicked()
 }
 fn setting_button(c:&Card,x:f32,y:f32,w:f32,text:&str,on:bool,id:&str)->bool {
-    let (r,b)=crate::paint::capsule(c,x,y,w,19.0,id,if on{Color32::from_rgb(39,94,150)}else{theme::BTN},theme::BTN_HOVER);
+    let (r,b)=crate::render::paint::capsule(c,x,y,w,19.0,id,if on{Color32::from_rgb(39,94,150)}else{theme::BTN},theme::BTN_HOVER);
     b.text(x+w/2.0,y+13.3,text,10.5,W::Semibold,theme::WHITE,H::Center);
     r.clicked()
 }
@@ -1086,7 +1086,7 @@ fn island_switch(c:&Card,x:f32,y:f32,on:bool,id:&str)->bool{
     let r=c.hit(x-2.0,y-2.0,38.0,24.0,id);
     let (hv,_)=c.hover_t(&r);
     let track=if on{theme::SIT_GREEN}else{Color32::from_rgb(58,58,62)};
-    c.fill(x,y,34.0,20.0,10.0,crate::paint::mix(track,theme::WHITE,hv*0.08));
+    c.fill(x,y,34.0,20.0,10.0,crate::render::paint::mix(track,theme::WHITE,hv*0.08));
     c.circle(if on{x+24.0}else{x+10.0},y+10.0,8.0,theme::WHITE);
     r.clicked()
 }

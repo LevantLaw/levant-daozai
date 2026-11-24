@@ -377,7 +377,7 @@ fn surface_needs_outline_clip(backend:Option<eframe::wgpu::Backend>,vendor:&str,
 }
 
 /// 只识别同屏顶部的宽条窗口，普通弹窗、全屏窗口和其他屏幕不触发抬高。
-unsafe fn top_bar_above(hwnd:HWND,bounds:crate::display_layout::Bounds)->bool {
+unsafe fn top_bar_above(hwnd:HWND,bounds:crate::platform::display_layout::Bounds)->bool {
     let mut island=RECT::default();
     if !IsWindowVisible(hwnd).as_bool() || GetWindowRect(hwnd,&mut island).is_err(){return false;}
     let mut current=hwnd;
@@ -403,7 +403,7 @@ enum Layering {
     /// 不需要（透明合成正常）或还没收到第一帧。
     #[default]
     Pending,
-    Active(crate::layered::Layered),
+    Active(crate::platform::layered::Layered),
     /// 读不到 alpha 或系统拒绝：一直用轮廓裁剪。
     Unavailable,
 }
@@ -429,7 +429,7 @@ pub struct Window {
     drag_capture: DragCapture,
     /// 当前生效的贴合轮廓（物理像素键）、毛玻璃的合成模糊层与其状态。
     glass: Option<Vec<i32>>,
-    backdrop: Option<crate::composition::Backdrop>,
+    backdrop: Option<crate::platform::composition::Backdrop>,
     blur: bool,
     blur_unavailable: bool,
     opaque_surface: bool,
@@ -459,10 +459,10 @@ impl ShapeAlpha {
     /// 把读回的画面套上轮廓 alpha，返回交给分层窗口的画面。
     fn apply(&mut self, size: [usize; 2], rgba: &[u8]) -> &[u8] {
         if !self.mask.as_ref().is_some_and(|(s, k, _)| *s == size && *k == self.key) {
-            self.mask = Some((size, self.key.clone(), crate::layered::coverage_mask(size, &self.polygons)));
+            self.mask = Some((size, self.key.clone(), crate::platform::layered::coverage_mask(size, &self.polygons)));
         }
         let (_, _, mask) = self.mask.as_ref().unwrap();
-        crate::layered::apply_mask(rgba, mask, &mut self.frame);
+        crate::platform::layered::apply_mask(rgba, mask, &mut self.frame);
         &self.frame
     }
 }
@@ -501,7 +501,7 @@ impl Window {
     }
 
     /// 顶栏重新置顶后恢复岛体层级；没有遮挡时不修改窗口顺序，也不激活窗口。
-    pub fn keep_above_top_bar(&mut self,bounds:crate::display_layout::Bounds) {
+    pub fn keep_above_top_bar(&mut self,bounds:crate::platform::display_layout::Bounds) {
         let display=match &self.layering {Layering::Active(layered)=>layered.display(),_=>self.hwnd};
         if unsafe{top_bar_above(display,bounds)} {
             unsafe{let _=SetWindowPos(self.hwnd,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);}
@@ -544,16 +544,16 @@ impl Window {
     /// 使用目标屏幕的物理坐标定位，并在缩放、岛体大小、水平位置或屏幕连接变化后重新校正。
     /// `scale` 是主窗口的实际像素比（系统 DPI × 岛体大小），画布按它同步调整物理尺寸。
     /// `shift` 是 OLED 像素偏移的位移（物理像素），按展开面板的屏幕余量收窄后叠加在不贴边的一轴上。
-    pub fn place_on_display(&self, scale:f32, bounds:crate::display_layout::Bounds, offset:f32, dock:crate::model::Dock, shift:(i32,i32))->bool {
+    pub fn place_on_display(&self, scale:f32, bounds:crate::platform::display_layout::Bounds, offset:f32, dock:crate::model::Dock, shift:(i32,i32))->bool {
         unsafe {
             // 顶部：水平居中 + 水平偏移；左右：贴边 + 竖直偏移，画布换成竖向的大小。
             let origin=if dock.is_side() {
-                crate::display_layout::side_origin(bounds,dock,(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H),crate::side_dock::SIDE_HALF_EXTENT,scale,offset)
-            } else {crate::display_layout::island_origin_offset(bounds,crate::app::WIN_W,scale,offset)};
+                crate::platform::display_layout::side_origin(bounds,dock,(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H),crate::side_dock::SIDE_HALF_EXTENT,scale,offset)
+            } else {crate::platform::display_layout::island_origin_offset(bounds,crate::app::WIN_W,scale,offset)};
             let Some((x,y))=origin else{return false;};
             // OLED 像素偏移：只沿不贴边的一轴让开，并按展开面板的余量收窄——位置拉满或屏幕太窄时少挪、不挪，
             // 贴边的一侧也保持严丝合缝，刘海不会和屏幕边缘裂开。
-            let (back,forth)=crate::display_layout::shift_slack(bounds,scale,if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {crate::display_layout::ISLAND_HALF_EXTENT},offset,dock);
+            let (back,forth)=crate::platform::display_layout::shift_slack(bounds,scale,if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {crate::platform::display_layout::ISLAND_HALF_EXTENT},offset,dock);
             let (dx,dy)=(shift.0.clamp(-back,forth),shift.1.clamp(-back,forth));
             let (x,y)=if dock.is_side() {(x,y+dy)} else {(x+dx,y)};
             let (canvas_w,canvas_h)=if dock.is_side() {(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,crate::app::WIN_H)};
@@ -583,10 +583,10 @@ impl Window {
     pub fn present_frame(&mut self,size:[usize;2],rgba:&[u8])->bool {
         if !self.wants_frames(){return false;}
         if matches!(self.layering,Layering::Pending) {
-            let real=crate::layered::has_real_alpha(size,rgba) && outline_test()!=Some(true);
+            let real=crate::platform::layered::has_real_alpha(size,rgba) && outline_test()!=Some(true);
             // 还没收到过岛体轮廓时无从补 alpha，先保持轮廓裁剪，等下一帧。
             if !real && self.outline.polygons.is_empty() {return false;}
-            match crate::layered::Layered::new() {
+            match crate::platform::layered::Layered::new() {
                 Ok(layered)=>{
                     self.outline.active=!real;
                     glass_diagnostic(if real {"渲染兼容：已切换为分层窗口逐像素透明（边缘抗锯齿）"}
@@ -628,7 +628,7 @@ impl Window {
 
     pub fn browser_at_top(&mut self,settings:&crate::model::Settings)->Option<bool> {
         if self.browser_state.1.ready(Duration::from_millis(100)) {
-            self.browser_state=(crate::system::browser_at_top(self.hwnd,settings),PollClock::now());
+            self.browser_state=(crate::platform::system::browser_at_top(self.hwnd,settings),PollClock::now());
         }
         self.browser_state.0
     }
@@ -674,7 +674,7 @@ impl Window {
         match glass.filter(|g|!passive && !g.is_empty() && !self.blur_unavailable && (!self.opaque_surface || layered_alpha) && compositor_blur_allowed()) {
             Some(shapes) => {
                 if self.backdrop.is_none() {
-                    match crate::composition::Backdrop::new() {
+                    match crate::platform::composition::Backdrop::new() {
                         Ok(backdrop) => {
                             glass_diagnostic("合成引擎模糊底板已创建");
                             self.backdrop = Some(backdrop);
@@ -852,7 +852,7 @@ mod tests {
             let saved=hit().lock().unwrap_or_else(|e|e.into_inner()).clone();
             {
                 let mut native=Window{hwnd,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),page_wheel_hook:None,browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable:false,opaque_surface:true,outline:ShapeAlpha::default()};
-                let island=crate::shape::outline(Rect::from_min_max(pos2(80.0,0.0),pos2(320.0,60.0)),12.0,10.0,20.0);
+                let island=crate::render::shape::outline(Rect::from_min_max(pos2(80.0,0.0),pos2(320.0,60.0)),12.0,10.0,20.0);
                 let shapes=[GlassShape::Outline(island)];
                 // 读回的画面：岛体黑色、画布也是黑色，alpha 全部 255——和 AMD OpenGL 读回的一样。
                 let opaque=[0u8,0,0,255].repeat(w*h);
@@ -896,7 +896,7 @@ mod tests {
         use crate::app::GlassShape;
         use eframe::egui::{pos2,Rect};
         use windows::Win32::Graphics::Gdi::PtInRegion;
-        let outline=crate::shape::outline(Rect::from_min_max(pos2(100.0,0.0),pos2(300.0,60.0)),5.0,8.0,20.0);
+        let outline=crate::render::shape::outline(Rect::from_min_max(pos2(100.0,0.0),pos2(300.0,60.0)),5.0,8.0,20.0);
         let shapes=[GlassShape::Outline(outline),GlassShape::Round(Rect::from_min_max(pos2(320.0,0.0),pos2(360.0,30.0)),10.0)];
         let key=glass_key(&shapes,1.5);
         assert_eq!(key,glass_key(&shapes,1.5),"同一帧轮廓的键必须稳定，避免每帧重设区域");
@@ -953,14 +953,14 @@ mod tests {
             false
         }
         unsafe {
-            let bounds=crate::display_layout::Bounds{left:-10480,top:-10000,right:-8560,bottom:-8920};
+            let bounds=crate::platform::display_layout::Bounds{left:-10480,top:-10000,right:-8560,bottom:-8920};
             let flags=SWP_NOACTIVATE|SWP_SHOWWINDOW;
             let create=||TestWindow(CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW|WS_EX_TOPMOST,windows::core::w!("STATIC"),windows::core::w!(""),WS_POPUP|WS_VISIBLE,-10000,-10000,416,140,None,None,None,None).unwrap());
             for layered in [false,true] {
                 let island=create();let cover=create();
                 let mut native=Window{hwnd:island.0,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),page_wheel_hook:None,browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable:false,opaque_surface:false,outline:ShapeAlpha::default()};
                 if layered {
-                    let mut display=crate::layered::Layered::new().unwrap();
+                    let mut display=crate::platform::layered::Layered::new().unwrap();
                     display.present(island.0,[416,140],&vec![0;416*140*4]).unwrap();
                     native.layering=Layering::Active(display);
                 }

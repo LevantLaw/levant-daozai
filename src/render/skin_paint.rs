@@ -64,8 +64,8 @@ fn theme_blue(c: [f32; 3]) -> Option<bool> {
     };
     use eframe::egui::Color32 as C;
     // 界面里实际用到的蓝：按钮、选中态、链接、进度、饮水；不含 AI 账号可选的品牌蓝。
-    const BRIGHT: [C; 8] = [crate::theme::BLUE, crate::theme::CYAN, C::from_rgb(82, 162, 255), C::from_rgb(10, 132, 255), C::from_rgb(70, 150, 255), C::from_rgb(64, 156, 255), C::from_rgb(86, 204, 242), C::from_rgb(77, 192, 242)];
-    const DEEP: [C; 4] = [crate::theme::BLUE_DEEP, crate::theme::WATER_TRACK, C::from_rgb(45, 105, 165), C::from_rgb(28, 65, 100)];
+    const BRIGHT: [C; 8] = [crate::render::theme::BLUE, crate::render::theme::CYAN, C::from_rgb(82, 162, 255), C::from_rgb(10, 132, 255), C::from_rgb(70, 150, 255), C::from_rgb(64, 156, 255), C::from_rgb(86, 204, 242), C::from_rgb(77, 192, 242)];
+    const DEEP: [C; 4] = [crate::render::theme::BLUE_DEEP, crate::render::theme::WATER_TRACK, C::from_rgb(45, 105, 165), C::from_rgb(28, 65, 100)];
     if BRIGHT.iter().any(|t| near(*t)) {
         Some(true)
     } else if DEEP.iter().any(|t| near(*t)) {
@@ -80,7 +80,7 @@ fn light_paper(p: &Palette) -> bool {
 }
 
 fn contrast(a: [f32; 3], b: [f32; 3]) -> f32 {
-    crate::glass::contrast(a, b)
+    crate::render::glass::contrast(a, b)
 }
 
 fn luma(c: [f32; 3]) -> f32 {
@@ -328,19 +328,19 @@ mod tests {
         let paper = [255.0 / 255.0, 243.0 / 255.0, 228.0 / 255.0];
         for bright in [Color32::from_rgb(253, 104, 92), Color32::from_rgb(255, 196, 61), Color32::from_rgb(118, 196, 151), Color32::from_rgb(48, 209, 88)] {
             let m = map_color(bright, &CREAM).to_srgba_unmultiplied();
-            assert!(crate::glass::contrast(f(m), paper) >= 2.95, "浅亮彩色在浅底上要加深到可读：{bright:?} -> {m:?}");
+            assert!(crate::render::glass::contrast(f(m), paper) >= 2.95, "浅亮彩色在浅底上要加深到可读：{bright:?} -> {m:?}");
         }
         let save = map_color(Color32::from_rgb(82, 162, 255), &CREAM);
         assert_eq!(save, Color32::from_rgb(240, 138, 36), "界面按钮蓝跟随奶油主题色");
         let faded_red = map_color(Color32::from_rgb(253, 104, 92).gamma_multiply(0.6), &CREAM).to_srgba_unmultiplied();
         let fr = [faded_red[0] as f32 / 255.0, faded_red[1] as f32 / 255.0, faded_red[2] as f32 / 255.0];
         let seen = [paper[0] + (fr[0] - paper[0]) * faded_red[3] as f32 / 255.0, paper[1] + (fr[1] - paper[1]) * faded_red[3] as f32 / 255.0, paper[2] + (fr[2] - paper[2]) * faded_red[3] as f32 / 255.0];
-        assert!(crate::glass::contrast(seen, paper) >= 2.9, "半透明的彩色字也要可读：{faded_red:?}");
+        assert!(crate::render::glass::contrast(seen, paper) >= 2.9, "半透明的彩色字也要可读：{faded_red:?}");
         // 深色彩色底块（选中态）变成浅色淡彩，墨色文字压在上面清晰可读
         let chip = map_color(Color32::from_rgb(30, 58, 110), &GLASS_LIGHT).to_srgba_unmultiplied();
         assert!(chip[0] > 180 && chip[2] > chip[0], "深色选中底块变为浅淡蓝：{chip:?}");
         let ink = [22.0 / 255.0, 22.0 / 255.0, 26.0 / 255.0];
-        assert!(crate::glass::contrast(f(chip), ink) >= 7.0);
+        assert!(crate::render::glass::contrast(f(chip), ink) >= 7.0);
     }
 
     #[test]

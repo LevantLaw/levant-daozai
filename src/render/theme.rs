@@ -225,7 +225,7 @@ fn build_fonts()->FontDefinitions {
 pub fn app_icon()->std::sync::Arc<eframe::egui::IconData>{
     static ICON:std::sync::OnceLock<std::sync::Arc<eframe::egui::IconData>>=std::sync::OnceLock::new();
     ICON.get_or_init(||{
-        let image=image::load_from_memory(include_bytes!("../assets/daozai-logo.png")).expect("岛仔图标资源应有效").thumbnail(128,128).to_rgba8();
+        let image=image::load_from_memory(include_bytes!("../../assets/daozai-logo.png")).expect("岛仔图标资源应有效").thumbnail(128,128).to_rgba8();
         std::sync::Arc::new(eframe::egui::IconData{width:image.width(),height:image.height(),rgba:image.into_raw()})
     }).clone()
 }
@@ -255,7 +255,7 @@ mod tests {
         super::load_fonts(&ctx);
         // 覆盖维语全部字母：每个字母在词首、词中、词尾、独立各出现一次。
         let uyghur="سوي گۈ دىگەن شۇنداق بولامدۇ يايرىم سېنى سېغىندىم شۇنچە ئا ئە ب پ ت ج چ خ د ر ز ژ س ش غ ف ق ك گ ڭ ل م ن ھ و ۇ ۆ ۈ ۋ ې ى ي ئ لا بلا بەبە بۆبۆ بڭب بھب بېب بىب";
-        let shown=crate::rtl_text::display(uyghur).into_owned();
+        let shown=crate::render::rtl_text::display(uyghur).into_owned();
         let tibetan="བཀྲ་ཤིས་བདེ་ལེགས། སྐྱིད་པོ། གྲོགས་པོ། ཁྱེད་རང་།";
         let _=ctx.run(Default::default(),|ctx|{
             for weight in [super::W::Regular,super::W::Semibold,super::W::Bold]{

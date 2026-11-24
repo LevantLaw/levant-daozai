@@ -7,8 +7,8 @@
 
 use crate::app::{App, Env, Phase, BAR_H_MIN, BAR_W_MIN, PILL_GAP, PW};
 use crate::model::{Dock, IslandShape};
-use crate::paint::{self, Card, H};
-use crate::theme::{self, size, W};
+use crate::render::paint::{self, Card, H};
+use crate::render::theme::{self, size, W};
 use eframe::egui::{Color32, CursorIcon, Pos2, Rect, Vec2};
 
 /// 侧边停靠时的透明画布（窗口）大小，逻辑点。
