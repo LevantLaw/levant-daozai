@@ -3,7 +3,8 @@
 //!
 //! 时间一律来自 `Env::t`（秒），不直接读系统时钟，所以录屏可逐帧复现。
 
-use crate::island::extras::{Alert, HealthReminder, PetState};
+use crate::island::banner::Alert;
+use crate::island::extras::{HealthReminder, PetState};
 use crate::visuals::anim::{self, lerp, smoothstep, Spring};
 use crate::island::bar_layout::{self as bar, Layout};
 use crate::calendar;
@@ -24,6 +25,7 @@ use std::path::PathBuf;
 mod frame;
 pub(crate) mod settings;
 pub(crate) mod pages;
+pub(crate) mod banner;
 pub(crate) mod extras;
 pub(crate) mod event_tray;
 pub(crate) mod focus_bar;
@@ -1261,7 +1263,7 @@ impl App {
         let old = self.calendar.config.take();
         if let Some(config)=&old {
             self.calendar.feeds.retain(|feed|feed.config!=*config);
-            let is_old=|alert:&crate::island::extras::Alert|alert.meeting.as_ref().is_some_and(|(_,source)|source==config.provider.label());
+            let is_old=|alert:&crate::island::banner::Alert|alert.meeting.as_ref().is_some_and(|(_,source)|source==config.provider.label());
             self.alerts.retain(|alert|!is_old(alert));
             if self.notice.as_ref().is_some_and(is_old){self.notice=None;}
         }
@@ -1464,8 +1466,8 @@ impl App {
         if !self.settings.bluetooth_notifications {
             self.bt_shown.clear();
             self.bt_initialized=false;
-            self.alerts.retain(|a|a.source!=crate::island::extras::AlertSource::Internal || a.title!="蓝牙设备");
-            if self.notice.as_ref().is_some_and(|a|a.source==crate::island::extras::AlertSource::Internal && a.title=="蓝牙设备") {self.notice=None;}
+            self.alerts.retain(|a|a.source!=crate::island::banner::AlertSource::Internal || a.title!="蓝牙设备");
+            if self.notice.as_ref().is_some_and(|a|a.source==crate::island::banner::AlertSource::Internal && a.title=="蓝牙设备") {self.notice=None;}
             return;
         }
         if !env.bt_ready { return; }
@@ -1690,7 +1692,7 @@ impl App {
         self.settings.island_lyrics && self.settings.visible_pages[0] && self.media.is_music() && self.media.playing
             && !self.browser_minimal_active
     }
-    pub(crate) fn compact_notices(&self)->bool {self.island_lyrics_active()&&!self.open&&!self.notice.as_ref().is_some_and(|a|a.meeting.is_some()||self.settings.notification_preview&&matches!(a.source,crate::island::extras::AlertSource::External(_)))}
+    pub(crate) fn compact_notices(&self)->bool {self.island_lyrics_active()&&!self.open&&!self.notice.as_ref().is_some_and(|a|a.meeting.is_some()||self.settings.notification_preview&&matches!(a.source,crate::island::banner::AlertSource::External(_)))}
 
     /// 换句、分段和展开高亮共用时间调整；正数延后，负数提前。
     pub(crate) fn lyric_position(&self)->f32 {(self.media.position-self.settings.lyric_delay_ms as f64/1000.0)as f32}
@@ -1747,7 +1749,7 @@ impl App {
     fn lyric_focus_space(&self)->f32 {if self.pomo.running && self.settings.show_focus{crate::island::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
     fn lyric_bar_width(&self)->f32 {LYRIC_BAR_W+if self.pet_enabled(){48.0}else{0.0}+self.lyric_focus_space()}
     fn notice_size(&self,a:&Alert)->(f32,f32) {
-        let (width,height)=if a.meeting.is_some(){(360.0,136.0)}else if a.source==crate::island::extras::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
+        let (width,height)=if a.meeting.is_some(){(360.0,136.0)}else if a.source==crate::island::banner::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
         (width,height)
     }
     pub fn set_pet(&mut self,enabled:bool) {
@@ -1934,7 +1936,7 @@ impl App {
             let cy=2.0+slot*(i as f32+0.5)-self.messenger_scroll;
             if cy< -slot || cy>height+slot {continue;}
             let scale=u.source.adapter().icon_scale;
-            crate::island::extras::messenger_icon(&inner.scaled(x,cy,scale),x,cy,u.source);
+            crate::island::banner::messenger_icon(&inner.scaled(x,cy,scale),x,cy,u.source);
             inner.circle(x+10.0,cy-9.0,2.6,Color32::from_rgb(255,72,72));
             let tag=self.unread_tag(i).map(|tag|tag.to_string()).or_else(||(u.unidentified()).then(||"?".to_string()));
             if let Some(tag)=tag{
@@ -1964,7 +1966,7 @@ impl App {
         for k in 0..sources.len() {
             let (x,y)=at(k);
             let scale=sources[k].adapter().collapsed_icon_scale;
-            crate::island::extras::messenger_icon(&c.scaled(x,y,scale),x,y,sources[k]);
+            crate::island::banner::messenger_icon(&c.scaled(x,y,scale),x,y,sources[k]);
         }
         // 每个来源图标右上角一个小红点，不显示数字。
         for k in 0..icons {let (x,y)=at(k);c.circle(x+8.0,y-7.0,2.6,Color32::from_rgb(255,59,48));}

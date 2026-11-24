@@ -16,6 +16,8 @@ pub mod layered;
 #[cfg(windows)]
 pub mod native;
 #[cfg(windows)]
+pub mod status;
+#[cfg(windows)]
 pub mod system;
 #[cfg(windows)]
 pub mod tray;

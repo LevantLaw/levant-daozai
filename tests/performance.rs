@@ -34,7 +34,7 @@ fn background_service_sample(){
     match service.as_str(){
         "media"=>{daozai::music::spawn_poller(media.clone(),context);},
         "bluetooth"=>bluetooth=Some(daozai::os::bt::spawn()),
-        "system"=>system=Some(daozai::os::system::observe(context,Default::default(),None)),
+        "system"=>system=Some(daozai::os::status::observe(context,Default::default(),None)),
         "notifications"=>notifications=Some(daozai::os::system::connect(context,daozai::messenger::NotificationFilter::All).expect("已有通知权限")),
         "mail"=>{
             let accounts=daozai::mail::load_accounts().into_iter().filter(|a|a.enabled).take(1).collect::<Vec<_>>();

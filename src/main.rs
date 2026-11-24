@@ -40,11 +40,11 @@ struct Shell {
     win_x: f32,
     sys: (Option<u8>, bool, PollClock),
     #[cfg(windows)]
-    system_state: daozai::os::system::Snapshot,
+    system_state: daozai::os::status::Snapshot,
     #[cfg(windows)]
     system_ready: bool,
     #[cfg(windows)]
-    system_rx: std::sync::mpsc::Receiver<daozai::os::system::Observation>,
+    system_rx: std::sync::mpsc::Receiver<daozai::os::status::Observation>,
     fullscreen: Option<daozai::os::display_layout::Bounds>,
     input_state:daozai::os::input::Monitor,
     #[cfg(windows)]
@@ -170,8 +170,8 @@ impl Shell {
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
         startup::report::startup("创建后台采样与窗口");
         let initial_input=None;
-        #[cfg(windows)] let system_state=daozai::os::system::Snapshot::default();
-        #[cfg(windows)] let system_rx=daozai::os::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
+        #[cfg(windows)] let system_state=daozai::os::status::Snapshot::default();
+        #[cfg(windows)] let system_rx=daozai::os::status::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
         // 岛体大小只作用于主窗口，在首帧之前生效，避免启动时先按 100% 闪一下。
         #[cfg(windows)] eframe::set_root_viewport_scale(app.settings.island_scale());
         Self {
@@ -308,11 +308,11 @@ impl Shell {
             network: Some(self.system_state.network),
             cursor,
             idle_seconds: {
-                #[cfg(windows)] {Some(daozai::os::system::idle_seconds())}
+                #[cfg(windows)] {Some(daozai::os::status::idle_seconds())}
                 #[cfg(not(windows))] {None}
             },
             screen_locked: {
-                #[cfg(windows)] {daozai::os::system::screen_locked()}
+                #[cfg(windows)] {daozai::os::status::screen_locked()}
                 #[cfg(not(windows))] {false}
             },
             fullscreen_hidden: {
@@ -762,11 +762,11 @@ impl eframe::App for Shell {
                     #[cfg(windows)] {let want=!self.autostart;match daozai::os::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
                 },
                 Cmd::SetVolume(v)=>{
-                    #[cfg(windows)] daozai::os::system::set_volume(v);
+                    #[cfg(windows)] daozai::os::status::set_volume(v);
                     self.volume_quiet=PollClock::now();
                 },
                 Cmd::ToggleMute=>{
-                    #[cfg(windows)] daozai::os::system::toggle_mute();
+                    #[cfg(windows)] daozai::os::status::toggle_mute();
                     self.volume_quiet=PollClock::now();
                 },
                 Cmd::Copy(text)=>{ctx.copy_text(text);self.app.say("已复制");},
