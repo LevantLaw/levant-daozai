@@ -24,7 +24,7 @@ fn fit(saved:Placement,areas:&[Area],frame:Vec2)->Option<Fit>{
 }
 
 #[derive(Default)]
-pub(crate) struct State {path:Option<PathBuf>,saved:Option<Placement>,current:Option<Placement>,opened:bool}
+pub(crate) struct State {path:Option<PathBuf>,saved:Option<Placement>,current:Option<Placement>,opened:bool,last_theme:Option<bool>}
 impl State {
     pub(crate) fn load()->Self{
         if cfg!(test){return Self::default();}
@@ -35,9 +35,15 @@ impl State {
         let saved=(||{let mut bytes=Vec::new();std::fs::File::open(&path).ok()?.take(4097).read_to_end(&mut bytes).ok()?;
             if bytes.len()>4096{return None;}
             serde_json::from_slice::<Placement>(&bytes).ok().filter(|p|p.valid())})();
-        Self{path:Some(path),saved,current:saved,opened:false}
+        Self{path:Some(path),saved,current:saved,opened:false,last_theme:None}
     }
     pub(crate) fn open(&mut self)->bool{let first=!self.opened;self.opened=true;first}
+    /// 原生窗口主题只在首次创建或实际变化时发送，避免每帧命令触发新的重绘。
+    pub(crate) fn theme_command(&mut self,dark:bool,force:bool)->Option<egui::SystemTheme>{
+        if !force && self.last_theme==Some(dark) {return None;}
+        self.last_theme=Some(dark);
+        Some(if dark {egui::SystemTheme::Dark} else {egui::SystemTheme::Light})
+    }
     pub(crate) fn restore(&self,ctx:&egui::Context)->bool{
         if self.current.or(self.saved).is_none() || ctx.viewport_id()==egui::ViewportId::ROOT{return false;}
         let mut areas=work_areas();for area in &mut areas{area.scale*=ctx.zoom_factor();}
@@ -61,7 +67,7 @@ impl State {
             Some(Placement{position:(v.outer_rect?.min*ppp).into(),size:v.inner_rect?.size().into()})});
         if let Some(placement)=placement.filter(|p|p.valid()){self.current=Some(placement);}
     }
-    pub(crate) fn close(&mut self){if self.opened{self.opened=false;self.persist();}}
+    pub(crate) fn close(&mut self){if self.opened{self.opened=false;self.last_theme=None;self.persist();}}
     fn persist(&mut self){
         if self.current==self.saved{return;}
         let (Some(path),Some(current))=(&self.path,self.current)else{return;};
@@ -143,5 +149,16 @@ mod tests {
             assert_eq!(std::fs::read(&path).unwrap(),bytes);
         }
         std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn theme_command_only_emits_on_change_or_recreate(){
+        let mut state=State::default();
+        assert_eq!(state.theme_command(true,false),Some(egui::SystemTheme::Dark));
+        assert_eq!(state.theme_command(true,false),None,"主题未变化时不能重复发送窗口命令");
+        assert_eq!(state.theme_command(false,false),Some(egui::SystemTheme::Light));
+        assert_eq!(state.theme_command(false,true),Some(egui::SystemTheme::Light),"重建窗口后必须重新同步主题");
+        assert!(state.open());
+        state.close();
+        assert_eq!(state.theme_command(false,false),Some(egui::SystemTheme::Light),"关闭后重新打开应重新同步");
     }
 }

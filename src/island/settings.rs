@@ -550,7 +550,10 @@ impl App {
             // 侧栏边框已去掉，这里是唯一的一条：浅色模式一条淡线，深色模式不画线，靠两块底色区分。
             style.visuals.widgets.noninteractive.bg_stroke=if dark{egui::Stroke::NONE}else{egui::Stroke::new(1.0,Color32::from_rgb(226,229,234))};
             ctx.set_style(style);
-            ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(if dark{egui::SystemTheme::Dark}else{egui::SystemTheme::Light}));
+            let theme={let mut layout=self.window_layout();layout.theme_command(dark,opening)};
+            if let Some(theme)=theme {
+                ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(theme));
+            }
             if self.settings.settings_theme==crate::island::settings_theme::SettingsTheme::System {
                 ctx.request_repaint_after(std::time::Duration::from_secs(1));
             }

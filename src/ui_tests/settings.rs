@@ -208,7 +208,6 @@ fn settings_opening_restores_focus_once_without_becoming_topmost() {
         raw.viewports.insert(id,egui::ViewportInfo{focused:Some(focused),..Default::default()});
         let mut output=h.ctx.run(raw,|ctx|h.app.settings_ui(ctx,false));
         let viewport=output.viewport_output.remove(&id).unwrap();
-        assert!(viewport.commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark))),"浅色系统下窗口标题栏和边框也应使用深色");
         (viewport.builder,viewport.commands)
     };
     h.app.open_mail_settings();
@@ -217,7 +216,7 @@ fn settings_opening_restores_focus_once_without_becoming_topmost() {
     assert_eq!(builder.active,Some(false),"隐藏窗口不能提前激活");
     let show=commands.iter().position(|cmd|matches!(cmd,egui::ViewportCommand::Visible(true))).expect("首帧绘制后应显示设置窗口");
     let focus=commands.iter().position(|cmd|matches!(cmd,egui::ViewportCommand::Focus)).unwrap();
-    let theme=commands.iter().position(|cmd|matches!(cmd,egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark))).unwrap();
+    let theme=commands.iter().position(|cmd|matches!(cmd,egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark))).expect("浅色系统下窗口标题栏和边框也应使用深色");
     assert!(theme<show,"显示窗口前应设置深色边框，避免白边闪现");
     assert!(show<focus,"应先显示已绘制的窗口，再获取焦点");
     assert_eq!(builder.window_level,Some(egui::WindowLevel::Normal),"打开设置时应保持普通窗口层级");
@@ -227,9 +226,11 @@ fn settings_opening_restores_focus_once_without_becoming_topmost() {
     assert!(!commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::Visible(_))),"正常重绘不应重复显示窗口，避免打断最小化");
     assert_eq!(builder.window_level,Some(egui::WindowLevel::Normal),"操作设置时也不能切换到置顶层");
     assert!(!commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::Focus)),"正常绘制不应反复抢焦点");
+    assert!(!commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::SetTheme(_))),"主题未变化时不能每帧发送窗口命令");
     let (builder,commands)=frame(&mut h,false);
     assert_eq!(builder.window_level,Some(egui::WindowLevel::Normal),"切回其他程序后应解除设置置顶");
     assert!(!commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::Focus)));
+    assert!(!commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::SetTheme(_))));
     h.app.open_mail_settings();
     let (builder,commands)=frame(&mut h,false);
     assert_eq!(builder.window_level,Some(egui::WindowLevel::Normal),"再次唤起设置仍须保持普通窗口层级");
@@ -241,6 +242,7 @@ fn settings_opening_restores_focus_once_without_becoming_topmost() {
     let (builder,commands)=frame(&mut h,false);
     assert_eq!(builder.visible,Some(false),"关闭后重新创建也应隐藏到首帧完成");
     assert!(commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::Visible(true))),"重开设置应正常显示");
+    assert!(commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark))),"重开设置应重新同步主题");
 }
 
 #[test]
@@ -583,7 +585,11 @@ fn settings_theme_follows_system_and_preserves_island_style() {
                 let root=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));
                 assert!(h.ctx.style().visuals.dark_mode,"设置页主题不能泄漏到岛体");
                 let commands=&root.viewport_output[&egui::ViewportId::from_hash_of("daozai-settings")].commands;
-                assert!(commands.iter().any(|c|matches!(c,egui::ViewportCommand::SetTheme(t) if *t==if dark{egui::SystemTheme::Dark}else{egui::SystemTheme::Light})),"原生边框必须与页面一致");
+                if tab==0 && frame==0 {
+                    assert!(commands.iter().any(|c|matches!(c,egui::ViewportCommand::SetTheme(t) if *t==if dark{egui::SystemTheme::Dark}else{egui::SystemTheme::Light})),"原生边框必须与页面一致");
+                } else {
+                    assert!(!commands.iter().any(|c|matches!(c,egui::ViewportCommand::SetTheme(_))),"主题未变化时不能重复发送窗口命令");
+                }
                 let child=output.lock().unwrap().take().unwrap();
                 if frame==2 {
                     let pairs:&[(&str,&str)]=match tab {
