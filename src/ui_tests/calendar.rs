@@ -24,8 +24,8 @@ fn complex_script_lyrics_preview(){
                 let media=crate::music::NowPlaying{source:"cloudmusic.exe".into(),title:title.into(),artist:artist.into(),duration:215.0,playing:true,position:7.0,
                     playback_type:crate::music::MediaKind::Music,..Default::default()};
                 h.media=media.clone();h.frame(vec![]);
-                h.app.ly=crate::island::LyricsState{key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
-                    song:Some(crate::island::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:None}),
+                h.app.ly=crate::music::LyricsState{key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
+                    song:Some(crate::music::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:None}),
                     lyrics:Some(crate::music::lyrics::parse_lrc(lrc)),..Default::default()};
                 if open {h.app.show_page(0);}
                 let (w,hgt)=(crate::island::CANVAS_W,WIN_H);
@@ -164,7 +164,7 @@ fn ics_import_preserves_recurring_overnight_and_all_day_events_on_reimport() {
 fn local_calendar_editor_makes_storage_scope_visible_with_connected_accounts() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let cfg=crate::calendar::Config{provider:crate::calendar::Provider::Feishu,username:"test".into(),href:None,server:None};
-    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::island::CalendarState::load();
+    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::calendar::CalendarState::load();
     let remote=crate::mail::Meeting{all_day:false,title:"飞书会议".into(),start:chrono::Local::now().timestamp()+3600,end:None,at:String::new(),uid:"remote-event".into()};
     h.app.calendar.events.push(remote.clone());
     h.app.open_calendar(None);h.hover(H::local(300.0,40.0),1.0);
@@ -215,7 +215,7 @@ fn local_calendar_can_create_edit_reload_and_remind_without_accounts() {
 fn calendar_month_errors_remain_visible_until_retry_or_month_change(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     let cfg=crate::calendar::Config{provider:crate::calendar::Provider::WeCom,username:"test".into(),href:None,server:None};
-    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::island::CalendarState::load();
+    crate::calendar::save_config(&cfg).unwrap();h.app.calendar=crate::calendar::CalendarState::load();
     h.app.request_calendar_month(true);h.app.pending.clear();
     let month=h.app.calendar.view.month;
     h.app.calendar_event(crate::calendar::Event::MonthLoaded{config:cfg,month,result:Err("日程时间无法解析".into())});
@@ -233,7 +233,7 @@ fn calendar_combines_platforms_and_settings_tabs_do_not_filter_events() {
     let feishu=crate::calendar::Config{provider:crate::calendar::Provider::Feishu,username:"飞书账号".into(),href:None,server:None};
     let ding=crate::calendar::Config{provider:crate::calendar::Provider::DingTalk,username:"钉钉账号".into(),..feishu.clone()};
     crate::calendar::save_config(&feishu).unwrap();crate::calendar::save_config(&ding).unwrap();
-    h.app.calendar=crate::island::CalendarState::load();
+    h.app.calendar=crate::calendar::CalendarState::load();
     let day=chrono::Local::now().date_naive();
     let event=|uid:&str|crate::mail::Meeting{all_day:false,end:None,title:uid.into(),start:chrono::Local::now().timestamp()+60,at:"18:00".into(),uid:uid.into()};
     for (cfg,uid) in [(&feishu,"飞书会议"),(&ding,"钉钉会议")] {

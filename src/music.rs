@@ -4,6 +4,7 @@ pub(crate) mod cover;
 #[cfg(windows)]
 pub(crate) mod diagnostics;
 pub mod lyrics;
+pub(crate) mod lyrics_state;
 pub(crate) mod page;
 pub(crate) mod playback;
 pub(crate) mod players;
@@ -14,5 +15,8 @@ pub use playback::{
     POLL_BACKGROUND, POLL_FAST, POLL_LYRICS,
 };
 pub use playback::seek;
+pub(crate) use lyrics_state::LyricsState;
+#[cfg(test)]
+pub(crate) use lyrics_state::LyricSong;
 #[cfg(test)]
 pub(crate) use playback::is_qqmusic;

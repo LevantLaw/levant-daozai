@@ -16,6 +16,9 @@ pub(crate) mod manage;
 pub(crate) mod manage_ui;
 pub(crate) mod privacy;
 pub(crate) mod otp;
+pub(crate) mod state;
+
+pub(crate) use state::MailState;
 
 pub const SERVICE: &str = "Daozai.Mail";
 pub const MICROSOFT_UNSUPPORTED: &str = "Outlook、Hotmail、Live 和 Microsoft 365 云邮箱需要 OAuth 授权，岛仔暂不支持密码直连。";

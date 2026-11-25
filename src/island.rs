@@ -9,7 +9,6 @@ use crate::visuals::anim::{self, lerp, smoothstep, Spring};
 use crate::island::layout::bar::{self as bar, Layout};
 use crate::calendar;
 use crate::visuals::glass;
-use crate::music::lyrics;
 use crate::mail;
 use crate::model;
 pub use crate::model::{NotificationSound, BAR_H, CANVAS_W, PH, PW, WIN_H, WIN_W};
@@ -247,29 +246,6 @@ mod blur_piece_tests {
     }
 }
 
-/// 与 `format!("{title}|{artist}|{duration:.0}")` 等价，但不分配内存：界面每帧要比较好几次。
-fn lyric_key_matches(key:&str,media:&NowPlaying)->bool {
-    use std::io::Write;
-    let Some(rest)=key.strip_prefix(media.title.as_str()).and_then(|rest|rest.strip_prefix('|')) else{return false;};
-    let Some(rest)=rest.strip_prefix(media.artist.as_str()).and_then(|rest|rest.strip_prefix('|')) else{return false;};
-    let mut buffer=[0u8;32];
-    let mut cursor=std::io::Cursor::new(&mut buffer[..]);
-    if write!(cursor,"{:.0}",media.duration).is_err(){return rest==format!("{:.0}",media.duration);}
-    let written=cursor.position() as usize;
-    rest.as_bytes()==&buffer[..written]
-}
-
-#[test]
-fn lyric_key_matches_the_formatted_key_without_allocating(){
-    for (title,artist,duration) in [("歌","手",120.4),("A|B","C",0.0),("歌","",239.5),("歌","手",240.5),("","",f64::NAN),("t","a",1e30)] {
-        let media=NowPlaying{title:title.into(),artist:artist.into(),duration,..Default::default()};
-        let key=format!("{}|{}|{:.0}",title,artist,duration);
-        assert!(lyric_key_matches(&key,&media),"{key}");
-        assert!(!lyric_key_matches(&format!("{key}0"),&media));
-        assert!(!lyric_key_matches(&format!("x{key}"),&media));
-    }
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct PositionDrag {
     start: Vec2,
@@ -303,6 +279,4 @@ const CENTER_SWEEP: f64 = 0.55;
 const CENTER_TINT: (f32, f32, f32) = (88.0, 222.0, 140.0);
 
 pub use app::{App, Cmd, Env, FrameOut, Options};
-#[cfg(test)]
-pub(crate) use app::{CalendarState, LyricSong, LyricsState};
 pub(crate) use app::Phase;

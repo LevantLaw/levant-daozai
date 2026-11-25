@@ -10,11 +10,14 @@
 mod exchange;
 pub(crate) mod editor;
 pub(crate) mod local;
+pub(crate) mod state;
 pub(crate) mod ui;
 #[cfg(test)]
 mod compatibility_tests;
 #[cfg(test)]
 mod transport_tests;
+
+pub(crate) use state::CalendarState;
 
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};

@@ -4,6 +4,7 @@ pub(crate) mod bar;
 pub mod dock;
 
 use super::*;
+use crate::music::lyrics_state::lyric_key_matches;
 
 impl App {
     #[cfg(test)]
