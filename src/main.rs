@@ -288,8 +288,8 @@ impl Shell {
         // 所在屏幕换算到窗口逻辑坐标，供通知详情等浮层避开屏幕边缘。
         #[cfg(windows)]
         let screen=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|{
-            // 与岛体摆放用同一范围：避开顶栏后，拖动换边和浮层都以顶栏下沿为顶边。
-            let b=daozai::os::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar());
+            // 与岛体摆放用同一范围：避开顶部任务栏后，拖动换边和浮层都以任务栏下沿为顶边。
+            let b=daozai::os::display_layout::placement_bounds(d,self.app.settings.dock,self.app.settings.avoids_top_bar());
             egui::Rect::from_min_max(Pos2::new(b.left as f32/ppp-origin.x,b.top as f32/ppp-origin.y),Pos2::new(b.right as f32/ppp-origin.x,b.bottom as f32/ppp-origin.y))
         });
         #[cfg(not(windows))]
@@ -405,7 +405,7 @@ impl eframe::App for Shell {
             self.placement_scale=ctx.pixels_per_point();
             self.placement_key=placement_key;
             let display=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
-            if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(self.placement_scale,daozai::os::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),offset,self.app.settings.dock,shift))) {
+            if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(self.placement_scale,daozai::os::display_layout::placement_bounds(d,self.app.settings.dock,self.app.settings.avoids_top_bar()),offset,self.app.settings.dock,shift))) {
                 if !self.placed {startup::report::startup("目标屏幕物理坐标定位完成，已请求显示");}
                 self.placed=true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -619,7 +619,7 @@ impl eframe::App for Shell {
             if shift!=self.oled_shift {
                 self.oled_shift=shift;
                 let display=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
-                if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(ctx.pixels_per_point(),daozai::os::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),self.app.placement_offset(),self.app.settings.dock,shift))) {
+                if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(ctx.pixels_per_point(),daozai::os::display_layout::placement_bounds(d,self.app.settings.dock,self.app.settings.avoids_top_bar()),self.app.placement_offset(),self.app.settings.dock,shift))) {
                     self.placement_key.4=shift;
                 }
                 ctx.request_repaint();
@@ -659,7 +659,7 @@ impl eframe::App for Shell {
             let hit=if self.hidden || out.click_through && out.notice_hit.is_none() {(0.0,0.0,0.0,0.0)} else {r(out.hit)};
             native.set_page_scroll_area(out.page_scroll_area.filter(|_|!self.hidden && out.expanded),ctx.pixels_per_point());
             native.update(region, hit, if self.hidden{None}else{out.notice_hit.map(r)},if self.hidden{None}else{out.file_drop_zone.map(r)},if self.hidden{None}else{out.glass.as_deref()},ctx.pixels_per_point(), out.editing, !self.hidden && out.expanded);
-            if !self.hidden && self.app.settings.avoids_top_bar() && self.app.settings.top_bar_on_top && !self.app.settings.dock.is_side() {
+            if !self.hidden && self.app.settings.top_bar_mode()==daozai::model::TopBarMode::OnTop && !self.app.settings.dock.is_side() {
                 if let Some(display)=daozai::os::display_layout::selected(&self.app.displays,&self.app.settings.display_id) {
                     native.keep_above_top_bar(display.bounds);
                 }

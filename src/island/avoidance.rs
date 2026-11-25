@@ -1,6 +1,6 @@
-//! 自动避让设置与正在运行的应用选择。
+//! 避让设置与正在运行的应用选择。
 use eframe::egui::{self,Color32,Rect,Vec2};
-use crate::{island::extras::setting_row,model::{Candidate,Settings,contains_app,same_app}};
+use crate::{island::extras::{setting_row,setting_row_nested,settings_group_fold_switch},model::{Candidate,Settings,contains_app,same_app}};
 use std::sync::mpsc::{self,Receiver};
 
 #[derive(Default)]
@@ -34,46 +34,59 @@ impl Picker {
             ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,name.chars().next().unwrap_or('▦'),crate::visuals::theme::font(17.0,crate::visuals::theme::W::Semibold),ui.visuals().text_color());
         }
     }
-    /// 渲染「避让」卡片里的自动避让部分；外层的卡片和分区标题由调用方提供。
-    pub(crate) fn rows(&mut self,ui:&mut egui::Ui,settings:&mut Settings) {
-        setting_row(ui,"自动避让","下列应用遮住岛时，岛会收成细线",&mut settings.browser_minimal);
-        ui.add_enabled_ui(settings.browser_minimal,|ui|{
-                ui.separator();
-                setting_row(ui,"常用浏览器","前台浏览器窗口遮住岛时避让",&mut settings.avoid_browsers);
-                ui.separator();
-                crate::island::extras::settings_control_row(ui,"自定义应用",100.0,|ui|{
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-                        if ui.button("＋ 添加应用").clicked(){self.open=true;self.query.clear();self.refresh(ui.ctx());}
-                    }).response
+    /// 渲染「避让」卡片：全屏时隐藏，以及带总开关的窗口最大化避让折叠区。
+    pub(crate) fn section(&mut self,ui:&mut egui::Ui,settings:&mut Settings) {
+        setting_row(ui,"全屏时隐藏","窗口盖住整块屏幕时整岛隐藏，期间不弹提醒、不抢焦点",&mut settings.hide_fullscreen);
+        ui.add_space(6.0);
+        ui.separator();
+        ui.add_space(2.0);
+        let mut picker=false;
+        settings_group_fold_switch(ui,"avoidance-maximized","窗口最大化避让",&mut settings.browser_minimal,
+            |ui,on|{
+                let mut used=false;
+                if ui.add_enabled(on,egui::Button::new("＋ 添加应用")).clicked(){picker=true;used=true;}
+                used
+            },
+            |ui,on|{
+                ui.add_enabled_ui(on,|ui|{
+                    ui.horizontal(|ui|{
+                        ui.add_space(12.0);
+                        ui.vertical(|ui|{
+                            ui.set_width(ui.available_width());
+                            setting_row_nested(ui,"常用浏览器","浏览器最大化时避让",&mut settings.avoid_browsers);
+                            ui.separator();
+                            self.custom_apps(ui,&mut settings.avoid_apps);
+                        });
+                    });
                 });
-                ui.add_space(6.0);
-                let mut remove=None;
-                let icon_width=ui.available_width();
-                ui.scope(|ui|{
-                ui.style_mut().always_scroll_the_only_direction=true;
-                egui::ScrollArea::horizontal().id_salt("avoidance-icon-grid").max_height(52.0).min_scrolled_height(0.0).auto_shrink([false,true]).show(ui,|ui|{
-                ui.horizontal(|ui|{
-                    ui.spacing_mut().item_spacing=Vec2::splat(8.0);
-                    for (index,(path,name)) in settings.avoid_apps.iter().enumerate() {
-                        let (rect,response)=ui.allocate_exact_size(egui::vec2(52.0,52.0),egui::Sense::hover());
-                        ui.painter().rect_filled(rect,9.0,ui.visuals().faint_bg_color);
-                        self.icon(ui,Rect::from_center_size(rect.center(),Vec2::splat(32.0)),path,name);
-                        response.on_hover_text(format!("{name}\n所有窗口\n{path}"));
-                        let center=rect.right_top()+egui::vec2(-8.0,8.0);
-                        let remove_button=ui.interact(Rect::from_center_size(center,Vec2::splat(20.0)),ui.id().with(("avoidance-remove",index)),egui::Sense::click());
-                        let fill=if remove_button.hovered(){ui.visuals().widgets.hovered.bg_fill}else{ui.visuals().widgets.inactive.bg_fill};
-                        ui.painter().circle_filled(center,7.0,fill);
-                        ui.painter().text(center,egui::Align2::CENTER_CENTER,"×",crate::visuals::theme::font(9.0,crate::visuals::theme::W::Regular),ui.visuals().text_color());
-                        if remove_button.on_hover_text(format!("移除 {name}")).clicked(){remove=Some(index);}
-                    }
-                    if settings.avoid_apps.is_empty(){ui.add_sized([icon_width,44.0],egui::Label::new(egui::RichText::new("添加需要自动避让的其他应用").size(11.5).weak()));}
+            });
+        if picker{self.open_picker(ui.ctx());}
+    }
+    /// 从折叠标题行打开应用选择。
+    pub(crate) fn open_picker(&mut self,ctx:&egui::Context) {
+        self.open=true;self.query.clear();self.refresh(ctx);
+    }
+    /// 自定义应用名单：每行一个应用，删除键靠右。
+    fn custom_apps(&mut self,ui:&mut egui::Ui,apps:&mut Vec<(String,String)>) {
+        if apps.is_empty(){ui.label(egui::RichText::new("还没有自定义应用。点「＋ 添加应用」从正在运行的应用里选择。").size(11.5).weak());}
+        let mut remove=None;
+        for index in 0..apps.len() {
+            let (path,name)=apps[index].clone();
+            if index>0{ui.separator();}
+            ui.horizontal(|ui|{
+                let (rect,_)=ui.allocate_exact_size(Vec2::splat(28.0),egui::Sense::hover());
+                self.icon(ui,rect,&path,&name);
+                let width=(ui.available_width()-76.0).max(80.0);
+                ui.allocate_ui_with_layout(egui::vec2(width,38.0),egui::Layout::top_down(egui::Align::LEFT),|ui|{
+                    ui.add(egui::Label::new(egui::RichText::new(&name).size(13.0)).truncate());
+                    ui.add(egui::Label::new(egui::RichText::new(&path).size(11.0).weak()).truncate());
                 });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
+                    if ui.button("删除").clicked(){remove=Some(index);}
                 });
-                });
-                if let Some(index)=remove{settings.avoid_apps.remove(index);}
-                ui.add_space(5.0);
-                ui.label(egui::RichText::new("切到插件浮窗时，宿主窗口仍遮住岛就会继续避让。").size(11.0).weak());
-        });
+            }).response.on_hover_text(format!("{name}\n{path}"));
+        }
+        if let Some(index)=remove{apps.remove(index);}
     }
     fn reason(app:&Candidate,settings:&Settings)->Option<&'static str> {
         if settings.avoid_browsers && app.browser {Some("浏览器规则已覆盖")}
@@ -133,7 +146,7 @@ impl Picker {
                 ui.add_space(8.0);
                 egui::Frame::new().fill(crate::island::settings_theme::color(ctx,Color32::from_rgb(51,41,26),Color32::from_rgb(255,246,230))).corner_radius(8.0).inner_margin(egui::Margin::symmetric(12,10)).show(ui,|ui|{
                     ui.set_width(ui.available_width());
-                    ui.label(egui::RichText::new(format!("将把当前列表中 {addable} 个应用全部加入自动避让，确定吗？")).size(12.5));
+                    ui.label(egui::RichText::new(format!("将把当前列表中 {addable} 个应用全部加入避让，确定吗？")).size(12.5));
                     ui.add_space(6.0);
                     ui.horizontal(|ui|{
                         if ui.add_sized([88.0,28.0],egui::Button::new("确定添加")).clicked(){

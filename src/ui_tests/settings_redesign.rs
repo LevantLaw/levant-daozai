@@ -145,11 +145,11 @@ fn body_page_has_appearance_residents_and_feature_pages(){
     assert!(!body.iter().any(|text|text.starts_with("组件开关")),"分组标题下不应再套一层折叠区");
     assert!(!body.iter().any(|text|text=="基础组件"),"岛上显示已改为两个分组");
     assert!(!body.iter().any(|text|text=="岛体的外观、常驻内容与功能页排布。行为相关设置在「行为」。"),"页标题下不放说明文字");
-    for label in ["展开与收起","自动避让","极简刘海","全屏时隐藏"] {
+    for label in ["展开与收起","窗口最大化避让","极简刘海","全屏时隐藏"] {
         assert!(!body.iter().any(|text|text==label),"岛体页不应显示行为项「{label}」");
     }
     let behavior=settings_text(crate::island::extras::SETTINGS_TAB_BEHAVIOR);
-    for label in ["岛体组件","横幅提醒","系统提醒","展开与收起","避让","动画速度","展开后停留","提醒总开关","横幅停留","全屏时隐藏","顶栏适配","自动避让","常用浏览器"] {
+    for label in ["岛体组件","横幅提醒","系统提醒","展开与收起","顶部任务栏","显示方式","下移","岛仔在上","避让","动画速度","展开后停留","提醒总开关","横幅停留","全屏时隐藏","窗口最大化避让","常用浏览器","＋ 添加应用"] {
         assert!(behavior.iter().any(|text|text==label),"行为页缺少「{label}」");
     }
     for label in ["通知","提醒方式"] {
@@ -159,7 +159,7 @@ fn body_page_has_appearance_residents_and_feature_pages(){
     assert!(!behavior.iter().any(|text|text=="位置"),"位置已并入岛体外观");
     assert!(!behavior.iter().any(|text|text=="极简刘海"),"极简刘海已移除");
     let general=settings_text(0);
-    for label in ["自动避让","岛体外观","岛上显示"] {
+    for label in ["窗口最大化避让","岛体外观","岛上显示"] {
         assert!(!general.iter().any(|text|text==label),"通用页不应显示「{label}」");
     }
     assert!(general.iter().any(|text|text=="OLED 像素偏移"),"OLED 像素偏移应在通用-高级");

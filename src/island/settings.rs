@@ -3,8 +3,9 @@ use super::*;
 use crate::island::settings_theme::color as settings_color;
 
 mod reminders;
+mod top_bar;
 
-fn switch(ui:&mut egui::Ui,value:&mut bool)->bool {
+pub(crate) fn switch(ui:&mut egui::Ui,value:&mut bool)->bool {
     let (rect,response)=ui.allocate_exact_size(egui::vec2(34.0,20.0),egui::Sense::click());
     if response.clicked(){*value=!*value;}
     let fill=if *value{Color32::from_rgb(48,184,92)}else{settings_color(&ui.ctx().clone(),Color32::from_rgb(82,82,87),Color32::from_rgb(203,207,214))};
@@ -146,6 +147,30 @@ pub(crate) fn settings_group_fold(ui:&mut egui::Ui,id:&str,title:&str,add:impl F
     if open {
         ui.spacing_mut().item_spacing.y=8.0;
         add(ui);
+    }
+}
+/// 折叠标题行右侧带开关和操作按钮的版本；行高 30 以容纳按钮。
+pub(crate) fn settings_group_fold_switch(ui:&mut egui::Ui,id:&str,title:&str,value:&mut bool,extra:impl FnOnce(&mut egui::Ui,bool)->bool,add:impl FnOnce(&mut egui::Ui,bool)){
+    let ctx=ui.ctx().clone();
+    let state=egui::Id::new(("settings-group-fold",id));
+    let mut open=ctx.data(|d|d.get_temp::<bool>(state)).unwrap_or(true);
+    ui.add_space(2.0);
+    let (rect,response)=ui.allocate_exact_size(egui::vec2(ui.available_width(),30.0),egui::Sense::click());
+    if response.hovered(){ui.painter().rect_filled(rect.expand2(egui::vec2(6.0,0.0)),7.0,settings_color(&ctx,Color32::from_rgb(44,44,48),Color32::from_rgb(242,244,247)));}
+    let fg=settings_color(&ctx,Color32::WHITE,Color32::from_rgb(30,34,41));
+    ui.painter().text(egui::pos2(rect.left(),rect.center().y),egui::Align2::LEFT_CENTER,title,egui::FontId::proportional(13.0),fg);
+    let c=egui::pos2(rect.right()-10.0,rect.center().y);
+    let pts=if open{vec![c+egui::vec2(-4.5,-2.0),c+egui::vec2(0.0,2.5),c+egui::vec2(4.5,-2.0)]}else{vec![c+egui::vec2(-2.0,-4.5),c+egui::vec2(2.5,0.0),c+egui::vec2(-2.0,4.5)]};
+    ui.painter().add(egui::Shape::line(pts,egui::Stroke::new(1.6,fg)));
+    let mut child=ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(rect.min,egui::pos2(rect.right()-24.0,rect.max.y))).layout(egui::Layout::right_to_left(egui::Align::Center)));
+    let mut used=switch(&mut child,value);
+    child.add_space(6.0);
+    used|=extra(&mut child,*value);
+    let response=response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    if response.clicked() && !used {open=!open;ctx.data_mut(|d|d.insert_temp(state,open));}
+    if open {
+        ui.spacing_mut().item_spacing.y=8.0;
+        add(ui,*value);
     }
 }
 /// 卡片底部的「高级」折叠区：只放内容多的页面里不常改的项，默认收起。
@@ -823,27 +848,12 @@ impl App {
                             setting_seconds(ui,"展开后停留",&mut self.settings.page_hold_secs);
                             settings_hint(ui,"同时作用于打开功能页和展开未读胶囊。");
                         });
+                        if self.settings.dock == crate::model::Dock::Top {
+                            settings_label(ui,"顶部任务栏");
+                            settings_card(ui,|ui| self.top_bar_settings(ui));
+                        }
                         settings_label(ui,"避让");
-                        settings_card(ui,|ui|{
-                            setting_row(ui,"全屏时隐藏","全屏隐藏岛仔，健康提醒静默保留",&mut self.settings.hide_fullscreen);
-                            ui.separator();
-                            setting_row(ui,"顶栏适配","顶部有菜单栏或任务栏时使用",&mut self.settings.avoid_top_bar);
-                            if self.settings.avoid_top_bar {
-                                settings_control_row_right(ui,"显示方式",|ui|{
-                                    settings_segmented(ui,&mut self.settings.top_bar_on_top,&[(false,"避开顶栏"),(true,"岛仔置顶")],90.0);
-                                });
-                                if self.settings.top_bar_on_top {
-                                    settings_hint(ui,"岛体显示在顶栏上方。");
-                                } else {
-                                    let reserved=crate::os::display_layout::selected(&self.displays,&self.settings.display_id).map_or(0,|d|{
-                                        let b=crate::os::display_layout::placement_bounds(d,true);(b.top-d.bounds.top).max(0)
-                                    });
-                                    settings_hint(ui,&if reserved>0 {format!("已检测到顶栏，岛体下移 {reserved} 像素。")}else{"未检测到顶栏；没有向系统登记的顶栏可尝试“岛仔置顶”。".to_string()});
-                                }
-                            }
-                            ui.separator();
-                            self.avoidance.rows(ui,&mut self.settings);
-                        });
+                        settings_card(ui,|ui| self.avoidance.section(ui,&mut self.settings));
                     }
                     1=>self.music_settings(ui),
                     2=>self.focus_settings(ui),

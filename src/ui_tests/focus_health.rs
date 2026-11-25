@@ -72,8 +72,8 @@ fn island_position_drag_below_a_top_bar_switches_edges_like_the_bare_screen(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::model::{Dock,Settings};
     let monitor=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
-    let display=crate::os::display_layout::Display{id:"d".into(),label:"d".into(),bounds:monitor,work_top:28,primary:true};
-    let bounds=crate::os::display_layout::placement_bounds(&display,true);
+    let display=crate::os::display_layout::Display{id:"d".into(),label:"d".into(),bounds:monitor,work_top:28,work_left:monitor.left,work_right:monitor.right,primary:true};
+    let bounds=crate::os::display_layout::placement_bounds(&display,Dock::Top,true);
     for to in [Dock::Left,Dock::Right] {
         let mut h=H::new();h.app.settings.save();
         let start=island_drag_header(&mut h,bounds,1.0);
@@ -87,7 +87,7 @@ fn island_position_drag_below_a_top_bar_switches_edges_like_the_bare_screen(){
         assert_eq!(h.app.settings.dock,Dock::Top,"拖回顶栏下沿应能回到顶部");
         island_drag_frame(&mut h,bounds,1.0,Some(back),Some(false));
         assert_eq!(Settings::load().dock,Dock::Top);
-        assert!(Settings::load().avoid_top_bar,"拖动不改变避开顶栏设置");
+        assert!(Settings::load().avoid_top_bar,"拖动不改变顶部任务栏设置");
     }
 }
 
@@ -229,7 +229,7 @@ fn browser_minimal_preserves_preferences_and_restores_after_leaving_the_browser(
     h.app.set_lyrics("Track","Artist",120.0,crate::music::lyrics::parse_lrc("[00:05]当前歌词"));
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.hit.height()<10.0,"浏览器顶部受遮挡时应收为细刘海，歌词和吉祥物不能撑大它");
-    assert!(h.app.settings.pet,"自动避让不能修改吉祥物设置");
+    assert!(h.app.settings.pet,"窗口最大化避让不能修改吉祥物设置");
     let saved=crate::model::Settings::load();
     assert!(saved.browser_minimal && saved.pet,"应只持久化开关，保留吉祥物设置");
     h.browser_at_top=None;for _ in 0..30 {h.frame(vec![]);}

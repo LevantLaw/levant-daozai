@@ -199,6 +199,15 @@ impl Dock {
     pub fn is_side(self) -> bool { self != Self::Top }
 }
 
+/// 顶部任务栏处理方式：不处理、下移避开，或保持在任务栏上方。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TopBarMode {
+    #[default]
+    Off,
+    Avoid,
+    OnTop,
+}
+
 /// 岛体大小（百分比）的范围与步进。
 pub const ISLAND_SIZE_MIN: u32 = 80;
 pub const ISLAND_SIZE_MAX: u32 = 140;
@@ -251,7 +260,7 @@ impl MotionSpeed {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotificationSound { Silent, Complete, Reminder, Email, Sonar }
 
-/// 自动避让：正在运行的应用候选。
+/// 窗口最大化避让：正在运行的应用候选。
 #[derive(Clone, Debug)]
 pub(crate) struct Candidate { pub path: String, pub name: String, pub title: String, pub browser: bool }
 
@@ -345,7 +354,7 @@ pub struct Settings {
     pub island_lyrics:bool,
     pub lyric_delay_ms:i32,
     pub hide_fullscreen: bool,
-    /// 启用顶栏适配，按显示方式避让顶栏或保持岛体在顶栏上方。
+    /// 顶部任务栏处理方式的持久化字段：不处理 / 下移 / 岛仔在上（两者组合）。
     pub avoid_top_bar: bool,
     pub top_bar_on_top: bool,
     pub focus_minutes: u32,
@@ -394,7 +403,22 @@ impl Default for Settings {
 }
 
 impl Settings {
-    pub fn avoids_top_bar(&self) -> bool { self.avoid_top_bar && !self.top_bar_on_top }
+    /// 顶栏处理方式。旧配置仍以两个布尔键保存，读取时归一到三档。
+    pub fn top_bar_mode(&self) -> TopBarMode {
+        if !self.avoid_top_bar { TopBarMode::Off }
+        else if self.top_bar_on_top { TopBarMode::OnTop }
+        else { TopBarMode::Avoid }
+    }
+
+    pub fn set_top_bar_mode(&mut self, mode: TopBarMode) {
+        self.avoid_top_bar = mode != TopBarMode::Off;
+        self.top_bar_on_top = mode == TopBarMode::OnTop;
+    }
+
+    /// 顶部停靠时是否按工作区顶边下移。左右停靠自动避开对应侧边工作区，不套用顶部任务栏。
+    pub fn avoids_top_bar(&self) -> bool {
+        self.dock == Dock::Top && self.top_bar_mode() == TopBarMode::Avoid
+    }
 
     /// 主窗口（灵动岛）的界面缩放倍率。
     pub fn island_scale(&self) -> f32 {
@@ -759,6 +783,22 @@ mod tests {
         assert_eq!(human_size(1024), "1.0 KB");
         assert_eq!(human_size(1536 * 1024), "1.5 MB");
         assert_eq!(human_size(2 * 1024 * 1024 * 1024), "2.0 GB");
+    }
+
+    #[test]
+    fn top_bar_mode_round_trips_and_only_applies_to_top_dock() {
+        let mut settings=Settings::default();
+        assert_eq!(settings.top_bar_mode(),TopBarMode::Avoid);
+        assert!(settings.avoids_top_bar());
+        settings.set_top_bar_mode(TopBarMode::OnTop);
+        assert!(settings.avoid_top_bar&&settings.top_bar_on_top);
+        assert!(!settings.avoids_top_bar(),"置顶时不按工作区下移");
+        settings.dock=Dock::Left;
+        assert!(!settings.avoids_top_bar(),"左右停靠不套用顶部任务栏");
+        settings.dock=Dock::Top;
+        settings.set_top_bar_mode(TopBarMode::Off);
+        assert_eq!(settings.top_bar_mode(),TopBarMode::Off);
+        assert!(!settings.avoids_top_bar());
     }
 
 }

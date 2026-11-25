@@ -542,7 +542,7 @@ fn avoidance_picker_add_remove_and_save() {
         h.ctx.run(egui::RawInput{time:Some(h.t),screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(600.0,560.0))),events,..Default::default()},|ctx|{
             egui::CentralPanel::default().show(ctx,|ui|{
                 ui.heading("常规");
-                h.app.avoidance.rows(ui,&mut h.app.settings);
+                h.app.avoidance.section(ui,&mut h.app.settings);
             });
             h.app.avoidance.dialog(ctx,&mut h.app.settings);
         })
@@ -575,12 +575,12 @@ fn avoidance_picker_add_remove_and_save() {
     assert_eq!(loaded.avoid_apps,h.app.settings.avoid_apps);
     let mut out=draw(&mut h,vec![]);raster.update_textures(&out.textures_delta);
     for _ in 0..40{std::thread::sleep(std::time::Duration::from_millis(20));out=draw(&mut h,vec![]);raster.update_textures(&out.textures_delta);}
-    assert!(!out.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="记事本")),"图标区不应常驻显示应用名称");
+    assert!(out.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="记事本")),"应用列表应常驻显示应用名称");
     if let Some(dest)=std::env::var_os("DAOZAI_AVOID_PREVIEW_DIR") {
         raster.buf.fill([0.0,0.0,0.0,1.0]);raster.draw(&h.ctx.tessellate(out.shapes.clone(),out.pixels_per_point),out.pixels_per_point);
-        let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(std::path::Path::new(&dest).join("图标区域.png"),&rgba,600,560,image::ColorType::Rgba8).unwrap();
+        let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(std::path::Path::new(&dest).join("应用列表.png"),&rgba,600,560,image::ColorType::Rgba8).unwrap();
     }
-    click(&mut h,point(&out,"×"));assert!(h.app.settings.avoid_apps.is_empty());
+    click(&mut h,point(&out,"删除"));assert!(h.app.settings.avoid_apps.is_empty());
     h.app.settings.save();assert!(crate::model::Settings::load().avoid_apps.is_empty());
 
     h.app.settings.avoid_browsers=true;
@@ -606,31 +606,32 @@ fn avoidance_picker_add_remove_and_save() {
 }
 
 #[test]
-fn avoidance_icon_area_stays_one_row_and_scrolls() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.ctx.set_visuals(egui::Visuals::dark());h.app.settings.browser_minimal=true;
+fn avoidance_fold_header_controls_do_not_toggle_the_fold() {
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();
+    h.ctx.set_visuals(egui::Visuals::dark());
+    h.app.settings.browser_minimal=true;
     fn draw(h:&mut H,events:Vec<egui::Event>)->egui::FullOutput {
         h.t+=1.0/60.0;
-        h.ctx.run(egui::RawInput{time:Some(h.t),screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(420.0,560.0))),events,..Default::default()},|ctx|{
-            egui::CentralPanel::default().show(ctx,|ui|{h.app.avoidance.rows(ui,&mut h.app.settings);});
+        h.ctx.run(egui::RawInput{time:Some(h.t),screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(600.0,560.0))),events,..Default::default()},|ctx|{
+            egui::CentralPanel::default().show(ctx,|ui|{h.app.avoidance.section(ui,&mut h.app.settings);});
         })
     }
-    fn text(out:&egui::FullOutput,label:&str)->Rect {
-        out.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t) if t.galley.text()==label=>Some(t.visual_bounding_rect()),_=>None}).unwrap()
+    fn point(out:&egui::FullOutput,label:&str)->Pos2 {
+        out.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t) if t.galley.text()==label=>Some(t.visual_bounding_rect().center()),_=>None}).unwrap_or_else(||panic!("未找到 {label}"))
     }
-    let footer="切到插件浮窗时，宿主窗口仍遮住岛就会继续避让。";
-    h.app.settings.avoid_apps=vec![("D:/sample/A.exe".into(),"A应用".into())];
-    draw(&mut h,vec![]);let one=draw(&mut h,vec![]);let baseline=text(&one,footer).top();
-    let cross=text(&one,"×").center();
-    assert!(one.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Circle(c) if c.radius<=7.1 && c.center.distance(cross)<3.0)),"移除角标应为小圆点，不能被按钮最小尺寸撑大");
-    h.app.settings.avoid_apps=(0..30).map(|i|(format!("D:/sample/{i}.exe"),format!("{}应用",char::from_u32(65+i).unwrap()))).collect();
-    draw(&mut h,vec![]);let many=draw(&mut h,vec![]);
-    assert!((text(&many,footer).top()-baseline).abs()<1.0,"应用增多时始终保持单行高度");
-    let first=text(&many,"A");let pointer=first.center();
-    draw(&mut h,vec![egui::Event::PointerMoved(pointer),egui::Event::MouseWheel{unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,-150.0),modifiers:Default::default()}]);
-    let mut scrolled=draw(&mut h,vec![]);for _ in 0..30{scrolled=draw(&mut h,vec![]);}
-    assert!((text(&scrolled,footer).top()-text(&many,footer).top()).abs()<1.0,"滚动图标不能移动区域下方内容");
-    assert!(scrolled.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="A" && t.visual_bounding_rect().left()<first.left()-10.0)) || !scrolled.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="A")),"应能滚动查看后续应用");
+    fn click(h:&mut H,point:Pos2){
+        draw(h,vec![egui::Event::PointerMoved(point),egui::Event::PointerButton{pos:point,button:egui::PointerButton::Primary,pressed:true,modifiers:Default::default()}]);
+        draw(h,vec![egui::Event::PointerMoved(point),egui::Event::PointerButton{pos:point,button:egui::PointerButton::Primary,pressed:false,modifiers:Default::default()}]);
+    }
+    let out=draw(&mut h,vec![]);
+    click(&mut h,point(&out,"＋ 添加应用"));
+    assert!(h.app.avoidance.open,"点「＋ 添加应用」应打开选择窗口");
+    assert!(draw(&mut h,vec![]).shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="常用浏览器")),"点标题行按钮不应收起折叠区");
+    h.app.avoidance.open=false;
+    let out=draw(&mut h,vec![]);
+    click(&mut h,point(&out,"窗口最大化避让"));
+    assert!(!draw(&mut h,vec![]).shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="常用浏览器")),"点标题应收起折叠区");
 }
 
 #[test]

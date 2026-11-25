@@ -4,15 +4,27 @@ pub struct Bounds { pub left:i32, pub top:i32, pub right:i32, pub bottom:i32 }
 
 #[derive(Clone, Debug)]
 pub struct Display { pub id:String, pub label:String, pub bounds:Bounds,
-    /// 工作区顶边：顶栏类软件或置顶的任务栏登记后会比 `bounds.top` 更靠下。
-    pub work_top:i32, pub primary:bool }
+    /// 工作区四边：任务栏或 AppBar 登记后会比屏幕范围更靠内。
+    pub work_top:i32, pub work_left:i32, pub work_right:i32, pub primary:bool }
 
-/// 岛体摆放用的屏幕范围：开启「避开顶栏」时顶边换成工作区顶边。
-/// 只认屏幕上方三分之一以内的占用，异常的工作区不会把岛推到屏幕中间。
-pub fn placement_bounds(display:&Display, avoid_top_bar:bool)->Bounds {
+/// 岛体摆放用的屏幕范围：顶部停靠按设置避开顶部工作区；左右停靠自动避开左 / 右工作区。
+/// 只认对应边缘三分之一以内的占用，异常的工作区不会把岛推到屏幕中间。
+pub fn placement_bounds(display:&Display, dock:crate::model::Dock, avoid_top_bar:bool)->Bounds {
     let mut b=display.bounds;
-    let reserved=display.work_top-b.top;
-    if avoid_top_bar && reserved>0 && reserved<=(b.bottom-b.top)/3 {b.top=display.work_top;}
+    match dock {
+        crate::model::Dock::Top => {
+            let reserved=display.work_top-b.top;
+            if avoid_top_bar && reserved>0 && reserved<=(b.bottom-b.top)/3 {b.top=display.work_top;}
+        }
+        crate::model::Dock::Left => {
+            let reserved=display.work_left-b.left;
+            if reserved>0 && reserved<=(b.right-b.left)/3 {b.left=display.work_left;}
+        }
+        crate::model::Dock::Right => {
+            let reserved=b.right-display.work_right;
+            if reserved>0 && reserved<=(b.right-b.left)/3 {b.right=display.work_right;}
+        }
+    }
     b
 }
 
@@ -37,7 +49,7 @@ pub fn connected()->Vec<Display>{
             let primary=info.monitorInfo.dwFlags&1!=0;
             let label=format!("显示器 {number}{} · {} × {}{}",if name.is_empty(){String::new()}else{format!(" · {name}")},r.right-r.left,r.bottom-r.top,if primary{" · 主屏"}else{""});
             let displays=&mut *(data.0 as *mut Vec<Display>);
-            displays.push(Display{id:if stable_id.is_empty(){device}else{stable_id},label,bounds:Bounds{left:r.left,top:r.top,right:r.right,bottom:r.bottom},work_top:info.monitorInfo.rcWork.top,primary});
+            displays.push(Display{id:if stable_id.is_empty(){device}else{stable_id},label,bounds:Bounds{left:r.left,top:r.top,right:r.right,bottom:r.bottom},work_top:info.monitorInfo.rcWork.top,work_left:info.monitorInfo.rcWork.left,work_right:info.monitorInfo.rcWork.right,primary});
         }
         BOOL(1)
     }
@@ -185,22 +197,35 @@ mod shift_slack_tests {
 #[cfg(test)]
 mod top_bar_tests {
     use super::*;
-    fn display(bounds:Bounds,work_top:i32)->Display {Display{id:"d".into(),label:"d".into(),bounds,work_top,primary:true}}
+    use crate::model::Dock;
+    fn display(bounds:Bounds,work_top:i32)->Display {Display{id:"d".into(),label:"d".into(),bounds,work_top,work_left:bounds.left,work_right:bounds.right,primary:true}}
     #[test]
     fn avoiding_the_top_bar_starts_below_it_and_keeps_other_edges(){
         for (m,bar) in [(Bounds{left:0,top:0,right:1920,bottom:1080},28),(Bounds{left:-2560,top:-400,right:0,bottom:1040},42)] {
             let d=display(m,m.top+bar);
-            assert_eq!(placement_bounds(&d,true),Bounds{top:m.top+bar,..m});
-            assert_eq!(placement_bounds(&d,false),m,"关闭后回到屏幕顶边");
-            let (x,y)=island_origin_offset(placement_bounds(&d,true),640.0,1.5,0.3).unwrap();
+            assert_eq!(placement_bounds(&d,Dock::Top,true),Bounds{top:m.top+bar,..m});
+            assert_eq!(placement_bounds(&d,Dock::Top,false),m,"关闭后回到屏幕顶边");
+            let (x,y)=island_origin_offset(placement_bounds(&d,Dock::Top,true),640.0,1.5,0.3).unwrap();
             assert_eq!((x,y-bar),island_origin_offset(m,640.0,1.5,0.3).unwrap(),"只下移，不改变水平位置");
         }
     }
     #[test]
     fn missing_or_unreasonable_work_areas_are_ignored(){
         let m=Bounds{left:0,top:0,right:1920,bottom:1080};
-        for work_top in [0,-20,361,1080,2000] {assert_eq!(placement_bounds(&display(m,work_top),true),m,"{work_top}");}
-        assert_eq!(placement_bounds(&display(m,360),true).top,360);
+        for work_top in [0,-20,361,1080,2000] {assert_eq!(placement_bounds(&display(m,work_top),Dock::Top,true),m,"{work_top}");}
+        assert_eq!(placement_bounds(&display(m,360),Dock::Top,true).top,360);
+    }
+    #[test]
+    fn side_docks_follow_their_own_work_area_edge_and_ignore_the_top_bar(){
+        let m=Bounds{left:0,top:0,right:1920,bottom:1080};
+        let d=Display{id:"d".into(),label:"d".into(),bounds:m,work_top:48,work_left:60,work_right:1880,primary:true};
+        assert_eq!(placement_bounds(&d,Dock::Top,false),m,"顶部停靠不因左右工作区改变");
+        assert_eq!(placement_bounds(&d,Dock::Left,false),Bounds{left:60,..m},"左停靠自动避开左侧任务栏");
+        assert_eq!(placement_bounds(&d,Dock::Right,false),Bounds{right:1880,..m},"右停靠自动避开右侧任务栏");
+        assert_eq!(placement_bounds(&d,Dock::Left,true).top,m.top,"顶部任务栏不影响左右停靠");
+        let bad=Display{work_left:700,work_right:1200,..d};
+        assert_eq!(placement_bounds(&bad,Dock::Left,false),m,"超过屏幕三分之一的占用忽略");
+        assert_eq!(placement_bounds(&bad,Dock::Right,false),m);
     }
 }
 
@@ -278,8 +303,8 @@ mod tests {
         if !displays.is_empty(){assert_eq!(displays.iter().filter(|d|d.primary).count(),1);}
     }
     #[test] fn display_selection_survives_reordering_disconnect_and_reconnect(){
-        let primary=Display{id:"internal".into(),label:"内屏".into(),bounds:Bounds{left:0,top:0,right:1920,bottom:1080},work_top:0,primary:true};
-        let external=Display{id:"external".into(),label:"外屏".into(),bounds:Bounds{left:-2560,top:-400,right:0,bottom:1040},work_top:-400,primary:false};
+        let primary=Display{id:"internal".into(),label:"内屏".into(),bounds:Bounds{left:0,top:0,right:1920,bottom:1080},work_top:0,work_left:0,work_right:1920,primary:true};
+        let external=Display{id:"external".into(),label:"外屏".into(),bounds:Bounds{left:-2560,top:-400,right:0,bottom:1040},work_top:-400,work_left:-2560,work_right:0,primary:false};
         for displays in [vec![primary.clone(),external.clone()],vec![external.clone(),primary.clone()]] {
             assert_eq!(selected(&displays,"").unwrap().id,"internal");
             let target=selected(&displays,"external").unwrap();assert_eq!(target.id,"external");

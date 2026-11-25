@@ -4,7 +4,7 @@ use crate::island::{App, Cmd, Phase};
 pub(crate) use crate::island::settings::{
     setting_row, setting_row_nested, settings_action_row, settings_apply_style,
     settings_card, settings_control_row, settings_control_row_right, settings_danger_button,
-    settings_group_fold, settings_hint, settings_label, settings_modal_frame, settings_modal_title,
+    settings_group_fold, settings_group_fold_switch, settings_hint, settings_label, settings_modal_frame, settings_modal_title,
     settings_primary_button, settings_segmented,
 };
 #[cfg(test)]

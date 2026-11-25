@@ -102,7 +102,7 @@ fn top_bar_modes_preserve_legacy_settings_and_save_the_selected_display_mode(){
     use crate::model::Settings;
     let path=crate::model::config_dir().join("settings.txt");std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let bounds=crate::os::display_layout::Bounds{left:-1920,top:-400,right:0,bottom:680};
-    let display=crate::os::display_layout::Display{id:"test".into(),label:"测试屏".into(),bounds,work_top:-368,primary:true};
+    let display=crate::os::display_layout::Display{id:"test".into(),label:"测试屏".into(),bounds,work_top:-368,work_left:bounds.left,work_right:bounds.right,primary:true};
     for enabled in [false,true] {
         std::fs::write(&path,format!("avoid_top_bar={}\n",enabled as u8)).unwrap();
         let mut settings=Settings::load();
@@ -110,13 +110,13 @@ fn top_bar_modes_preserve_legacy_settings_and_save_the_selected_display_mode(){
         for on_top in [false,true] {
             settings.top_bar_on_top=on_top;settings.save();let saved=Settings::load();
             assert_eq!((saved.avoid_top_bar,saved.top_bar_on_top),(enabled,on_top));
-            assert_eq!(crate::os::display_layout::placement_bounds(&display,saved.avoids_top_bar()).top,if enabled&&!on_top{-368}else{-400},"置顶方式应回到屏幕顶边；关闭适配后不避让");
+            assert_eq!(crate::os::display_layout::placement_bounds(&display,saved.dock,saved.avoids_top_bar()).top,if enabled&&!on_top{-368}else{-400},"置顶方式应回到屏幕顶边；关闭适配后不避让");
         }
     }
 }
 
 #[test]
-fn top_bar_settings_switch_modes_and_respect_the_master_switch(){
+fn top_bar_settings_switch_between_three_modes(){
     fn draw(h:&mut H,events:Vec<egui::Event>,raster:&mut crate::preview_raster::Raster)->egui::FullOutput {
         h.t+=0.1;let time=h.t;
         let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
@@ -129,28 +129,30 @@ fn top_bar_settings_switch_modes_and_respect_the_master_switch(){
         let child=output.lock().unwrap().take().unwrap();raster.update_textures(&child.textures_delta);child
     }
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    use crate::model::TopBarMode;
     for dark in [true,false] {
         let mut h=H::new();h.app.open_settings();h.app.settings_tab=crate::island::extras::SETTINGS_TAB_BEHAVIOR;h.ctx.set_embed_viewports(false);
         h.app.settings.settings_theme=if dark{crate::island::settings_theme::SettingsTheme::Dark}else{crate::island::settings_theme::SettingsTheme::Light};
         let mut raster=crate::preview_raster::Raster::new(690,1800);
         for _ in 0..3{let _=draw(&mut h,vec![],&mut raster);}
-        for (on_top,label) in [(true,"岛仔置顶"),(false,"避开顶栏")] {
+        for (mode,label) in [(TopBarMode::OnTop,"岛仔在上"),(TopBarMode::Avoid,"下移"),(TopBarMode::Off,"不处理")] {
             let output=draw(&mut h,vec![],&mut raster);
             let position=output.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==label=>{
-                assert!(s.clip_rect.contains_rect(t.visual_bounding_rect()),"显示方式按钮不能裁切");Some(t.visual_bounding_rect().center())
-            },_=>None}).expect("显示方式应提供避让和置顶两个选项");
+                assert!(s.clip_rect.contains_rect(t.visual_bounding_rect()),"顶部任务栏显示方式按钮不能裁切");Some(t.visual_bounding_rect().center())
+            },_=>None}).expect("顶部任务栏应提供三档选项");
             for pressed in [true,false] {let _=draw(&mut h,vec![egui::Event::PointerMoved(position),egui::Event::PointerButton{pos:position,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()}],&mut raster);}
-            assert_eq!(h.app.settings.top_bar_on_top,on_top);assert_eq!(crate::model::Settings::load().top_bar_on_top,on_top,"切换后立即保存");
+            assert_eq!(h.app.settings.top_bar_mode(),mode);assert_eq!(crate::model::Settings::load().top_bar_mode(),mode,"切换后立即保存");
             if let Some(dest)=std::env::var_os("DAOZAI_TOP_BAR_PREVIEW_DIR") {
                 let output=draw(&mut h,vec![],&mut raster);raster.buf.fill(if dark{[0.08,0.08,0.09,1.0]}else{[0.96,0.96,0.97,1.0]});
                 raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
                 let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);let dest=std::path::PathBuf::from(dest);std::fs::create_dir_all(&dest).unwrap();
-                image::save_buffer(dest.join(format!("top-bar-{}-{}.png",if dark{"dark"}else{"light"},if on_top{"on-top"}else{"avoid"})),&rgba,690,1800,image::ColorType::Rgba8).unwrap();
+                image::save_buffer(dest.join(format!("top-bar-{}-{:?}.png",if dark{"dark"}else{"light"},mode)),&rgba,690,1800,image::ColorType::Rgba8).unwrap();
             }
         }
-        h.app.settings.avoid_top_bar=false;
         let output=draw(&mut h,vec![],&mut raster);
-        assert!(!output.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="岛仔置顶")),"关闭适配后收起显示方式选项");
+        assert!(output.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="不处理")),"三档控件始终可见");
+        assert!(output.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="未检测到")),"没有任务栏时显示未检测到");
+        assert!(output.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains("三档当前效果相同"))),"没有任务栏时说明三档相同");
     }
 }
 
@@ -369,8 +371,8 @@ fn display_choice_saves_and_keeps_disconnected_selection(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings_open=true;h.app.settings_tab=crate::island::extras::SETTINGS_TAB_BODY;h.ctx.set_embed_viewports(false);
     let bounds=crate::os::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
     h.app.displays=vec![
-        crate::os::display_layout::Display{id:"internal".into(),label:"显示器 1 · 主屏".into(),bounds,work_top:0,primary:true},
-        crate::os::display_layout::Display{id:r"\\?\DISPLAY#external".into(),label:"显示器 2 · 外接屏".into(),bounds,work_top:0,primary:false},
+        crate::os::display_layout::Display{id:"internal".into(),label:"显示器 1 · 主屏".into(),bounds,work_top:0,work_left:bounds.left,work_right:bounds.right,primary:true},
+        crate::os::display_layout::Display{id:r"\\?\DISPLAY#external".into(),label:"显示器 2 · 外接屏".into(),bounds,work_top:0,work_left:bounds.left,work_right:bounds.right,primary:false},
     ];
     let mut raster=crate::preview_raster::Raster::new(690,560);
     fn frame(h:&mut H,raster:&mut crate::preview_raster::Raster,events:Vec<egui::Event>){
@@ -529,7 +531,7 @@ fn general_settings_controls_fit_when_resizing_to_minimum_width() {
             *capture.lock().unwrap()=Some(ctx.run(input,|ctx|(viewport.viewport_ui_cb)(ctx)));
         });
         // 皮肤、大小与位置在「岛体」，展开时长与避让在「行为」。
-        for (tab,labels) in [(crate::island::extras::SETTINGS_TAB_BODY,vec!["经典","奶油","毛玻璃·浅","毛玻璃·深","悬浮云","恢复默认","恢复居中"]),(crate::island::extras::SETTINGS_TAB_BEHAVIOR,vec!["慢","标准","快","展开后停留","自动避让"])] {
+        for (tab,labels) in [(crate::island::extras::SETTINGS_TAB_BODY,vec!["经典","奶油","毛玻璃·浅","毛玻璃·深","悬浮云","恢复默认","恢复居中"]),(crate::island::extras::SETTINGS_TAB_BEHAVIOR,vec!["慢","标准","快","展开后停留","显示方式","下移","岛仔在上","窗口最大化避让"])] {
         h.app.settings_tab=tab;
         for _ in 0..3 {let _=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));}
         let frame=output.lock().unwrap().take().unwrap();

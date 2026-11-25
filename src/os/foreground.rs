@@ -1,4 +1,4 @@
-//! 前台窗口、全屏判定与浏览器避让。
+//! 前台窗口、全屏判定与名单应用避让。
 
 use windows::core::PWSTR;
 use windows::Win32::Foundation::{CloseHandle, HWND, RECT};
@@ -46,8 +46,24 @@ unsafe fn foreground_info(hwnd: HWND) -> Foreground {
     Foreground { hwnd: hwnd.0 as isize, pid, root_owner, app_window }
 }
 
+/// 全屏判定允许的边框 / 舍入误差，物理像素。
+const FULLSCREEN_TOLERANCE:i32=8;
+
+/// 系统是否报告前台处于全屏或演示状态。
+fn system_fullscreen()->bool {
+    use windows::Win32::UI::Shell::{
+        SHQueryUserNotificationState,QUNS_BUSY,QUNS_PRESENTATION_MODE,QUNS_RUNNING_D3D_FULL_SCREEN,
+    };
+    unsafe {SHQueryUserNotificationState()}.is_ok_and(|state|state==QUNS_BUSY||state==QUNS_RUNNING_D3D_FULL_SCREEN||state==QUNS_PRESENTATION_MODE)
+}
+
 /// 窗口盖满它所在的整块屏幕时返回该屏幕范围。
 unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::os::display_layout::Bounds> {
+    covering_monitor_with(hwnd,system_fullscreen)
+}
+
+/// `system_fullscreen` 由调用方注入，测试可以固定系统全屏状态。
+unsafe fn covering_monitor_with(hwnd:HWND,system_fullscreen:impl Fn()->bool) -> Option<crate::os::display_layout::Bounds> {
     if !IsWindow(hwnd).as_bool() || !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
         return None;
     }
@@ -63,18 +79,32 @@ unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::os::display_layout::Boun
     {
         return None;
     }
-    let covers=r.left <= info.rcMonitor.left
-        && r.top <= info.rcMonitor.top
-        && r.right >= info.rcMonitor.right
-        && r.bottom >= info.rcMonitor.bottom;
-    // 任务栏自动隐藏时，普通最大化窗口的外框也可能覆盖整屏，但标题栏占掉了客户区顶部。
-    // 以客户区是否盖满整屏为准，不看样式位：有的游戏全屏时保留标题栏样式和最大化标志、
-    // 实际并不画标题栏，按样式位判断会把它们当成普通最大化（0.6.65 的无畏契约回归）。
-    if covers && IsZoomed(hwnd).as_bool() && !client_covers(hwnd, &info.rcMonitor) {
-        #[cfg(not(test))] log_maximized_exclusion(hwnd, r, info.rcMonitor);
+    let monitor=info.rcMonitor;
+    let covers=r.left <= monitor.left
+        && r.top <= monitor.top
+        && r.right >= monitor.right
+        && r.bottom >= monitor.bottom;
+    // 边框和 DPI 舍入可能让无边框全屏差 1–2 像素；系统报告全屏时允许少量容差。
+    let near=r.left <= monitor.left+FULLSCREEN_TOLERANCE
+        && r.top <= monitor.top+FULLSCREEN_TOLERANCE
+        && r.right >= monitor.right-FULLSCREEN_TOLERANCE
+        && r.bottom >= monitor.bottom-FULLSCREEN_TOLERANCE;
+    if !covers && !near {
         return None;
     }
-    covers.then_some(crate::os::display_layout::Bounds {left:info.rcMonitor.left,top:info.rcMonitor.top,right:info.rcMonitor.right,bottom:info.rcMonitor.bottom})
+    let zoomed=IsZoomed(hwnd).as_bool();
+    // 任务栏自动隐藏时，普通最大化窗口的外框也可能覆盖整屏，但标题栏占掉了客户区顶部。
+    // 客户区没有盖满、或系统没有报告全屏状态时，按普通最大化处理。
+    // 有的游戏全屏时保留标题栏样式和最大化标志、实际并不画标题栏，此时客户区盖满整屏，
+    // 且系统报告全屏状态，仍应隐藏岛仔（0.6.65 的无畏契约回归）。
+    if covers && zoomed && (!client_covers(hwnd,&monitor) || !system_fullscreen()) {
+        #[cfg(not(test))] log_maximized_exclusion(hwnd, r, monitor);
+        return None;
+    }
+    if !covers && !system_fullscreen() {
+        return None;
+    }
+    Some(crate::os::display_layout::Bounds {left:monitor.left,top:monitor.top,right:monitor.right,bottom:monitor.bottom})
 }
 
 /// 客户区（不含标题栏和边框）是否盖满整块屏幕。
@@ -164,12 +194,12 @@ mod fullscreen_follow_tests {
                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED).unwrap();
             cover();
             assert!(IsZoomed(hwnd).as_bool());
-            let maximized = covering_monitor(hwnd);
+            let maximized = covering_monitor_with(hwnd, || false);
             // Chromium 进入 F11 时移除标题栏和可调整大小的边框，仍可能保留最大化标志。
             let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
             SetWindowLongPtrW(hwnd, GWL_STYLE, style & !((WS_CAPTION | WS_THICKFRAME).0 as isize));
             cover();
-            let fullscreen = covering_monitor(hwnd);
+            let fullscreen = covering_monitor_with(hwnd, || true);
             DestroyWindow(hwnd).unwrap();
             assert!(fullscreen.is_some(), "无边框全屏仍应隐藏岛仔");
             assert!(maximized.is_none(), "普通最大化即使盖满屏幕也应显示岛仔");
@@ -197,10 +227,12 @@ mod fullscreen_follow_tests {
                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED).unwrap();
             let zoomed = IsZoomed(hwnd).as_bool();
             let captioned = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0;
-            let result = covering_monitor(hwnd);
+            let result = covering_monitor_with(hwnd, || true);
+            let maximized = covering_monitor_with(hwnd, || false);
             DestroyWindow(hwnd).unwrap();
             assert!(zoomed && captioned, "复现条件：最大化且保留标题栏样式");
             assert!(result.is_some(), "客户区盖满整屏的全屏游戏应隐藏岛仔");
+            assert!(maximized.is_none(), "系统没有报告全屏时，无边框最大化不能隐藏岛仔");
         }
     }
 
@@ -263,6 +295,11 @@ fn window_covers_side(window:RECT,island:RECT,dock:crate::model::Dock)->bool {
     vertical && horizontal
 }
 
+/// 窗口是否盖住整块工作区（最大化或全屏）。
+fn covers_work_area(window:RECT,work:RECT)->bool {
+    window.left<=work.left && window.top<=work.top && window.right>=work.right && window.bottom>=work.bottom
+}
+
 pub fn browser_at_top(island:HWND,settings:&crate::model::Settings)->Option<bool> {
     unsafe {
         let foreground=GetForegroundWindow();
@@ -272,8 +309,10 @@ pub fn browser_at_top(island:HWND,settings:&crate::model::Settings)->Option<bool
         // 设置、托盘和岛内输入沿用此前的避让状态，避免自身窗口引起反复切换。
         if pid==GetCurrentProcessId(){return None;}
         if pid==0{return Some(false);}
+        let mut info=MONITORINFO{cbSize:std::mem::size_of::<MONITORINFO>() as u32,..Default::default()};
+        if !GetMonitorInfoW(MonitorFromWindow(island,MONITOR_DEFAULTTONEAREST),&mut info).as_bool(){return Some(false);}
         thread_local! { static LAST_MAIN: std::cell::Cell<Option<(HWND,u32)>> = const { std::cell::Cell::new(None) }; }
-        LAST_MAIN.with(|last| avoidance_for_window(foreground,island,pid,settings,last))
+        LAST_MAIN.with(|last| avoidance_for_window(foreground,island,pid,settings,info.rcWork,last))
     }
 }
 
@@ -314,17 +353,19 @@ unsafe fn unique_main_window(pid:u32)->Option<HWND> {
     search.main
 }
 
-unsafe fn avoidance_for_window(foreground:HWND,island:HWND,pid:u32,settings:&crate::model::Settings,last:&std::cell::Cell<Option<(HWND,u32)>>)->Option<bool> {
+unsafe fn avoidance_for_window(foreground:HWND,island:HWND,pid:u32,settings:&crate::model::Settings,work:RECT,last:&std::cell::Cell<Option<(HWND,u32)>>)->Option<bool> {
     if !settings.browser_minimal || IsIconic(GetAncestor(foreground,GA_ROOTOWNER)).as_bool(){return Some(false);}
     let Some(rect)=visible_avoidance_rect(foreground) else{return Some(false)};
     let mut island_rect=RECT::default();GetWindowRect(island,&mut island_rect).ok()?;
     let overlaps=|rect|browser_overlaps_island(rect,island_rect,settings.dock);
+    // 名单应用只有最大化（盖住整块工作区）才避让；普通窗口只是压到岛仔时不收缩。
+    let covers=|rect|overlaps(rect) && covers_work_area(rect,work);
     let owner=GetWindow(foreground,GW_OWNER).ok();
     let info=foreground_info(foreground);
     if owner.is_none() && info.app_window {last.set(Some((foreground,pid)));}
     else if last.get().is_some_and(|(_,prev)|prev!=pid){last.set(None);}
     let path=std::cell::LazyCell::new(||process_image_path(pid));
-    if overlaps(rect) && path.as_deref().is_some_and(|p|avoidance_matches(p,settings)){return Some(true);}
+    if covers(rect) && path.as_deref().is_some_and(|p|avoidance_matches(p,settings)){return Some(true);}
     if settings.avoid_apps.is_empty(){return Some(false);}
 
     // 所有者关系可以跨进程，嵌套对话框也沿这条链找到实际遮挡岛的名单窗口。
@@ -332,7 +373,7 @@ unsafe fn avoidance_for_window(foreground:HWND,island:HWND,pid:u32,settings:&cra
     let mut parent=owner;
     while let Some(hwnd)=parent {
         if IsIconic(hwnd).as_bool(){return Some(false);}
-        if visible_avoidance_rect(hwnd).is_some_and(overlaps) {
+        if visible_avoidance_rect(hwnd).is_some_and(covers) {
             let mut owner_pid=0;GetWindowThreadProcessId(hwnd,Some(&mut owner_pid));
             let registered=if owner_pid==pid {path.as_deref().is_some_and(listed)}
                 else {process_image_path(owner_pid).as_deref().is_some_and(listed)};
@@ -349,7 +390,7 @@ unsafe fn avoidance_for_window(foreground:HWND,island:HWND,pid:u32,settings:&cra
         Some((hwnd,prev)) if prev==pid && foreground_info(hwnd).pid==pid=>Some(hwnd),
         _=>unique_main_window(pid),
     };
-    Some(host.and_then(|hwnd|visible_avoidance_rect(hwnd)).is_some_and(overlaps))
+    Some(host.and_then(|hwnd|visible_avoidance_rect(hwnd)).is_some_and(covers))
 }
 
 
@@ -445,6 +486,13 @@ fn executable_description(path:&str)->Option<String> {
 mod avoidance_tests {
     use super::*;
     #[test]
+    fn work_area_coverage_requires_the_whole_work_area() {
+        let work=RECT{left:0,top:0,right:1920,bottom:1040};
+        assert!(covers_work_area(RECT{left:-8,top:-8,right:1928,bottom:1048},work));
+        assert!(!covers_work_area(RECT{left:0,top:0,right:1920,bottom:1000},work),"贴顶的普通窗口不算最大化");
+        assert!(!covers_work_area(RECT{left:0,top:0,right:960,bottom:1040},work),"半屏不算最大化");
+    }
+    #[test]
     fn registered_app_keeps_avoidance_when_its_plugin_panel_takes_focus() {
         unsafe {
             let create=|x,y,width,height,owner,ex| CreateWindowExW(WS_EX_NOACTIVATE|ex,windows::core::w!("STATIC"),
@@ -457,26 +505,27 @@ mod avoidance_tests {
             settings.browser_minimal=true;
             settings.avoid_apps.push((path.to_string_lossy().into_owned(),"测试宿主".into()));
             let last=std::cell::Cell::new(None);
-            let poll=|window,settings:&crate::model::Settings| avoidance_for_window(window,island,GetCurrentProcessId(),settings,&last);
+            let work=RECT{left:-10000,top:-10000,right:-8080,bottom:-8920};
+            let poll=|window,settings:&crate::model::Settings| avoidance_for_window(window,island,GetCurrentProcessId(),settings,work,&last);
             let results=[poll(host,&settings),poll(panel,&settings),poll(host,&settings)];
             let detached=create(600,300,300,200,None,WS_EX_TOOLWINDOW);
             let nested=create(700,400,100,100,Some(&panel),WS_EX_TOOLWINDOW);
             assert_eq!(poll(detached,&settings),Some(true),"无 owner 的同进程工具窗沿用刚获得焦点的主窗口");
             assert_eq!(poll(nested,&settings),Some(true),"嵌套插件对话框应找到宿主");
-            assert_eq!(avoidance_for_window(panel,island,0,&settings,&last),Some(true),"面板进程不可识别时仍可通过所有者识别宿主");
+            assert_eq!(avoidance_for_window(panel,island,0,&settings,work,&last),Some(true),"面板进程不可识别时仍可通过所有者识别宿主");
             let independent=create(600,300,300,200,None,WS_EX_APPWINDOW);
             last.set(None);
             assert_eq!(poll(detached,&settings),Some(false),"两个可见主窗且无法确定宿主时，不借用后台窗口");
             let small=poll(independent,&settings);
             assert_eq!(poll(detached,&settings),Some(false),"当前主窗不遮岛时不能借用同进程另一个大窗");
             SetWindowPos(independent,HWND_BOTTOM,-9700,-9995,96,80,SWP_NOACTIVATE).unwrap();
-            assert_eq!(poll(independent,&settings),Some(true),"小窗确实遮住岛时也要避让");
+            assert_eq!(poll(independent,&settings),Some(false),"小窗只是遮住岛，不是最大化，不避让");
             assert_eq!(poll(host,&settings),Some(true));
 
             SetWindowPos(host,HWND_BOTTOM,-8000,-10000,1920,1080,SWP_NOACTIVATE).unwrap();
             let other_screen=[poll(host,&settings),poll(panel,&settings)];
             SetWindowPos(panel,HWND_TOP,-9700,-9995,96,80,SWP_NOACTIVATE).unwrap();
-            assert_eq!(poll(panel,&settings),Some(true),"宿主在副屏时，浮窗自身遮住岛也应避让");
+            assert_eq!(poll(panel,&settings),Some(false),"宿主不在工作区时，小浮窗自身不触发最大化避让");
             SetWindowPos(panel,HWND_TOP,-9400,-9700,300,200,SWP_NOACTIVATE).unwrap();
             SetWindowPos(host,HWND_BOTTOM,-10000,-10000,1920,1080,SWP_NOACTIVATE).unwrap();
             let _=ShowWindow(host,SW_SHOWMINNOACTIVE);

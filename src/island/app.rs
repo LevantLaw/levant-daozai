@@ -39,7 +39,7 @@ pub struct Env {
     pub screen_locked: bool,
     /// 因「全屏时隐藏」而隐藏岛体，沿用外壳对设置和所在屏幕的判断。
     pub fullscreen_hidden: bool,
-    /// 前台浏览器的顶部是否与岛重叠；岛仔自身窗口或暂不可读时为 None。
+    /// 名单应用最大化后是否盖住岛；岛仔自身窗口或暂不可读时为 None。
     pub browser_at_top: Option<bool>,
     pub media: NowPlaying,
     /// 系统主音量（0..100, 是否静音）；v0.5.4 音量条与系统双向同步。

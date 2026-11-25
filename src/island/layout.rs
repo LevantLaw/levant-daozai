@@ -58,7 +58,7 @@ impl App {
     pub fn set_pet(&mut self,enabled:bool) {
         self.settings.pet=enabled;self.settings.save();
     }
-    /// 直接进入或退出自动避让的细线状态，不需要模拟浏览器窗口。
+    /// 直接进入或退出窗口最大化避让的细线状态，不需要模拟浏览器窗口。
     pub fn set_minimal(&mut self,on:bool) {
         self.settings.browser_minimal=on;
         self.browser_at_top=on;
@@ -202,7 +202,7 @@ impl App {
             let x=if left {panel.left()-UNREAD_GAP*appear-width}else{panel.right()+UNREAD_GAP*appear};
             return Some(Rect::from_min_size(Pos2::new(x,panel.top()+inset),Vec2::new(width,height*appear)));
         }
-        // 自动避让的细线：横幅照常弹出，收起后只留细线，未读不常挂在线条上；展开岛体时在面板旁出现。
+        // 窗口最大化避让的细线：横幅照常弹出，收起后只留细线，未读不常挂在线条上；展开岛体时在面板旁出现。
         if self.browser_minimal_active{return None;}
         let scale=self.messenger_stack_appear();
         if scale<0.02 || self.open && (self.calendar.draft.is_some() || self.task_dialog.is_some()){return None;}

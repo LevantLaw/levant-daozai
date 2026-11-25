@@ -973,7 +973,7 @@ mod tests {
                 assert_eq!(GetForegroundWindow(),foreground,"置顶不能抢走输入焦点");
                 for (x,y,w,h) in [(-10000,-10000,400,140),(-10480,-10000,1920,300),(-10480,-10000,1920,1080),(-10480,-9600,1920,32),(-12400,-10000,1920,32)] {
                     SetWindowPos(cover.0,HWND_TOPMOST,x,y,w,h,flags).unwrap();
-                    assert!(!top_bar_above(display,bounds),"普通弹窗、全屏窗口和其他屏幕不触发顶栏适配");
+                    assert!(!top_bar_above(display,bounds),"普通弹窗、全屏窗口和其他屏幕不触发顶栏置顶");
                     native.keep_above_top_bar(bounds);
                     assert!(above(cover.0,display),"不应越过无关弹窗争抢置顶");
                 }
