@@ -8,6 +8,14 @@
 
 二改全部验证通过后，覆盖安装目录的 `D:\Program Files\Daozai\daozai.exe`（桌面「岛仔」快捷方式指向此处）。交付前核对快捷方式目标、文件哈希和运行中的进程路径。
 
+# 源码结构
+
+- 模块写法：`src/foo.rs` 是模块入口（声明子模块、导出 API），实现放 `src/foo/`；不新建 `foo/mod.rs`。
+- `src/` 顶层只放 `lib.rs`、`main.rs`、功能根（`ai_session`、`calendar`、`clipboard`、`focus`、`health`、`instant_messaging`、`mail`、`music`、`quota`、`shelf`、`todo`、`weather`、`windows_toasts`）、技术层根（`island`、`visuals`、`os`、`support`）、共享模型 `model.rs` 与测试入口 `ui_tests.rs`；`startup/` 只由二进制声明。
+- 新功能放自己的功能根；跨功能的进程、时钟、资源与测试辅助放 `support/`；Windows 系统接入放 `os/`；岛体界面与动效放 `island/`；只被二进制使用的启动诊断与图形后端放 `startup/`。
+- `os` 与 `visuals` 不得依赖 `island`。
+- crate 内测试放 `src/ui_tests/`（按功能分文件）或模块内 `#[cfg(test)] mod tests`；`tests/` 只放独立 crate 的集成测试。
+
 # 设置页布局规范
 
 - 层级固定为：左侧栏分组 → 具体页 → 页同名标题 → 分组 → 子项。

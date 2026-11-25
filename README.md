@@ -75,4 +75,4 @@ cargo test --locked --all-targets --features record -- --test-threads=1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
 ```
 
-测试按单线程运行，以隔离使用进程环境变量的数据目录测试。打包需要 NSIS 3。项目结构与贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+测试按单线程运行，以隔离使用进程环境变量的数据目录测试。打包需要 NSIS 3。源码遵循 Rust 2021 模块写法：`src/foo.rs` 是模块入口，实现放在 `src/foo/`，不使用 `mod.rs`。项目结构与贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。

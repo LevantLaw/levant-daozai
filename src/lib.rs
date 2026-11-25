@@ -6,6 +6,9 @@
 //! - `model`：数据与设置
 //! - `os`：仅 Windows 的窗口区域、命中穿透、托盘与系统数据
 //! - `support`：跨功能的进程、时钟、资源与测试辅助
+//! - 其余顶层模块按功能划分：`ai_session`、`calendar`、`clipboard`、`focus`、
+//!   `health`、`instant_messaging`、`mail`、`quota`、`shelf`、`todo`、`weather`、
+//!   `windows_toasts`
 
 pub mod os;
 pub mod visuals;

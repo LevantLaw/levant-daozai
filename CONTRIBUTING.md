@@ -20,17 +20,28 @@ cargo run --locked --bin daozai
 
 常规测试使用合成数据。带 `#[ignore]` 的真实账号测试或截图导出测试须按需要显式运行；不要在公共 CI 中连接私人账号。
 
+## 模块布局
+
+`src/foo.rs` 是模块入口，声明子模块并导出 API；实现放在 `src/foo/`。不新建 `foo/mod.rs`。
+
+- `src/` 顶层只放 `lib.rs`、`main.rs`、功能根目录、技术层根目录（`island`、`visuals`、`os`、`support`）、`model.rs` 和测试入口 `ui_tests.rs`；`startup/` 只由二进制声明。
+- 新代码按归属放进对应功能根或技术层；跨功能复用的进程、时钟与资源工具放 `support/`。
+- `os` 与 `visuals` 不依赖 `island`。
+
 ## 代码导航
 
 | 目录／文件 | 内容 |
 | --- | --- |
-| `src/main.rs` | Windows 外壳、系统状态和后台服务衔接 |
-| `src/app.rs`、`src/pages.rs` | 状态与主界面 |
-| `src/calendar.rs`、`src/calendar_ui.rs` | CalDAV、重复日程、月历与列表 |
-| `src/mail.rs`、`src/mail_reader.rs` | IMAP、MIME、验证码与邮件阅读 |
-| `src/quota*.rs` 及 provider 模块 | AI 额度与连接 |
-| `src/native.rs`、`src/system.rs` | 原生窗口、输入、拖放和系统事件 |
-| `src/ui_tests.rs` | 无窗口交互与布局回归测试 |
+| `src/lib.rs`、`src/main.rs` | crate 入口；Windows 外壳、系统状态和后台服务衔接 |
+| `src/island/` | 与平台无关的岛体界面、设置页与动效 |
+| `src/visuals/` | 弹簧、矢量绘制、面板轮廓、配色字体 |
+| `src/os/` | 仅 Windows 的窗口、输入、托盘与系统数据 |
+| `src/support/` | 跨功能的进程、时钟、资源与测试辅助 |
+| `src/startup/` | 启动诊断、单实例与图形后端（仅二进制使用） |
+| `src/ai_session/`、`src/calendar/`、`src/clipboard/`、`src/focus/`、`src/health/`、`src/instant_messaging/`、`src/mail/`、`src/music/`、`src/quota/`、`src/shelf/`、`src/todo/`、`src/weather/`、`src/windows_toasts/` | 各功能模块 |
+| `src/model.rs` | 共享数据模型与常量 |
+| `src/ui_tests/` | 无窗口交互与布局回归测试，按功能分文件 |
+| `tests/` | 以独立 crate 运行的集成测试 |
 | `src/bin/daozai-record` | 合成数据演示与软件渲染器 |
 | `vendor/` | 少量必要的上游补丁，见依赖说明 |
 | `installer/`、`scripts/` | 安装、卸载与打包 |
