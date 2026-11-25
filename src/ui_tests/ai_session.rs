@@ -2,6 +2,22 @@
 use super::*;
 
 #[test]
+fn ai_finished_events_show_banner_instead_of_opening_page(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=H::new();
+    h.app.settings.notifications=true;
+    h.app.agent.config.notify.done=true;
+    let notice=|kind|crate::ai_session::store::Notice{kind,agent:crate::ai_session::AgentId::Claude,key:"claude:banner".into(),title:"Claude · 测试会话".into(),body:"已完成".into()};
+    h.app.agent_notices(vec![notice(crate::ai_session::store::NoticeKind::Done)]);
+    assert!(!h.app.open,"完成事件不应直接展开");
+    assert!(h.app.alerts.iter().any(|a|a.title=="会话完成"),"完成事件应进入横幅队列");
+    h.app.agent.config.notify.done=false;
+    h.app.alerts.clear();
+    h.app.agent_notices(vec![notice(crate::ai_session::store::NoticeKind::Done)]);
+    assert!(h.app.alerts.is_empty(),"关闭开关后不再显示横幅");
+}
+
+#[test]
 fn ai_stale_hides_without_expanding(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.notifications=true;

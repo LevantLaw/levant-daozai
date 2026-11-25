@@ -191,6 +191,21 @@ impl App {
         };
         self.enqueue_alert(a, system);
     }
+    /// AI 会话完成类事件的横幅：点击打开 AI 会话页，不弹系统通知。
+    pub(crate) fn agent_alert(&mut self, title: impl Into<String>, body: impl Into<String>) {
+        self.enqueue_alert(Alert {
+            source: AlertSource::Internal,
+            title: title.into(),
+            body: body.into(),
+            page: crate::island::AI_PAGE,
+            at: self.t,
+            duration: self.settings.notice_hold_secs,
+            bluetooth: None,
+            meeting: None,
+            unread: None,
+            banner_at: self.t,
+        }, false);
+    }
     pub(crate) fn meeting_alert(&mut self, meeting: crate::mail::Meeting, source: String, page: usize) {
         let left=meeting.start-chrono::Local::now().timestamp();
         self.calendar_badge_until=self.t+if left>0 {left as f64}else{crate::island::page_badges::HOLD};

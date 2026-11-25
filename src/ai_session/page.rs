@@ -117,12 +117,12 @@ impl App {
         }
     }
 
-    /// 处理本轮 AI 通知：等待类进详情，完成/失败/中断进列表；闲置只更新状态灯。
-    fn agent_notices(&mut self, notices: Vec<Notice>) {
+    /// 处理本轮 AI 通知：等待类展开详情，完成/失败/中断进横幅；闲置只更新状态灯。
+    pub(crate) fn agent_notices(&mut self, notices: Vec<Notice>) {
         // 等待类优先，避免同批完成事件覆盖待处理详情。
         let (waiting, finished): (Vec<_>, Vec<_>) = notices.into_iter()
             .partition(|notice| matches!(notice.kind, NoticeKind::Approval | NoticeKind::Question));
-        for notice in waiting.into_iter().chain(finished) {
+        for notice in waiting {
             if !self.agent.config.notify.enabled(notice.kind) { continue; }
             let alert = AgentAlert { key: notice.key, kind: notice.kind };
             let pending = self.agent.detail
@@ -130,13 +130,21 @@ impl App {
             // 输入、其他通知或已有待处理详情时排队。
             let busy = self.is_editing() || self.notice.is_some() || pending;
             if busy {
-                // 排队时等待类优先，完成类不覆盖排队中的等待事件。
-                let keep_waiting = self.agent_open_after_notice.as_ref()
-                    .is_some_and(|queued| queued.waiting() && !alert.waiting());
-                if !keep_waiting { self.agent_open_after_notice = Some(alert); }
+                self.agent_open_after_notice = Some(alert);
             } else {
                 self.agent_open_event(alert);
             }
+        }
+        for notice in finished {
+            if !self.agent.config.notify.enabled(notice.kind) { continue; }
+            let title = match notice.kind {
+                NoticeKind::Done => "会话完成",
+                NoticeKind::Failed => "会话失败",
+                NoticeKind::Interrupted => "会话中断",
+                NoticeKind::Stale => "可能已中断",
+                NoticeKind::Approval | NoticeKind::Question => continue,
+            };
+            self.agent_alert(title, format!("{} · {}", notice.title, notice.body));
         }
     }
 
@@ -571,21 +579,25 @@ impl App {
                 let mut approval = self.agent.config.notify.approval();
                 setting_row_nested(ui, "审批", "等待审批时直接展开审批页", &mut approval);
                 if approval != self.agent.config.notify.approval() { self.agent.config.notify.approval = Some(approval); self.agent.config.save(); }
-                ui.separator();
+            });
+            ui.add_space(6.0);
+            ui.separator();
+            ui.add_space(2.0);
+            notify_group(ui, "banner", "横幅提醒", |ui| {
                 let mut done = self.agent.config.notify.done;
-                setting_row_nested(ui, "完成", "会话完成时直接打开 AI 会话页", &mut done);
+                setting_row_nested(ui, "完成", "会话完成时在岛上提醒", &mut done);
                 if done != self.agent.config.notify.done { self.agent.config.notify.done = done; self.agent.config.save(); }
                 ui.separator();
                 let mut interrupted = self.agent.config.notify.interrupted();
                 let before = interrupted;
-                setting_row_nested(ui, "中断", "会话中断时直接打开 AI 会话页", &mut interrupted);
+                setting_row_nested(ui, "中断", "会话中断时在岛上提醒", &mut interrupted);
                 if interrupted != before {
                     self.agent.config.notify.interrupted = Some(interrupted);
                     self.agent.config.save();
                 }
                 ui.separator();
                 let mut failed = self.agent.config.notify.failed;
-                setting_row_nested(ui, "失败", "会话失败时直接打开 AI 会话页", &mut failed);
+                setting_row_nested(ui, "失败", "会话失败时在岛上提醒", &mut failed);
                 if failed != self.agent.config.notify.failed { self.agent.config.notify.failed = failed; self.agent.config.save(); }
             });
         });

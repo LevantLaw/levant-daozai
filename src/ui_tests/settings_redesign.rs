@@ -208,7 +208,7 @@ fn agent_notify_groups_use_nested_rows_like_island_groups(){
         _=>None,
     }).unwrap_or_else(||panic!("缺少「{label}」"));
     let size=|label:&str|text(label).galley.job.sections.first().map(|s|s.format.font_id.size).unwrap_or(0.0);
-    for (group,row) in [("展开提醒","用户选择"),("展开提醒","完成")] {
+    for (group,row) in [("展开提醒","用户选择"),("横幅提醒","完成")] {
         assert!(size(row)<size(group),"「{group}」子项标题应更小：{} vs {}",size(row),size(group));
         assert!(text(row).visual_bounding_rect().left()>text(group).visual_bounding_rect().left()+8.0,"「{group}」子项应缩进");
     }
@@ -258,7 +258,7 @@ fn reminder_page_keeps_policy_and_ai_page_owns_event_hooks(){
         assert!(!reminders.iter().any(|text|text==label),"提醒页不应包含功能模块设置「{label}」");
     }
     let agent=settings_text(15);
-    for label in ["Hooks","提醒事件","展开提醒","用户选择","审批","完成","中断","失败","提示音","开始","提交","错误"] {
+    for label in ["Hooks","提醒事件","展开提醒","横幅提醒","用户选择","审批","完成","中断","失败","提示音","开始","提交","错误"] {
         assert!(agent.iter().any(|text|text==label),"AI 会话页缺少「{label}」");
     }
     for label in ["横幅停留","提醒方式","重复提醒","显示","会话数"] {
