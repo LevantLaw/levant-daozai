@@ -263,13 +263,13 @@ GPU 查询本身需要时间，60 秒窗口实际得到约 37 个有效样本；
 
 | 位置 | 职责 |
 |---|---|
-| `src/pet.rs` | `Pet.clock`、`anim_until`、`step`、`advance`、`draw`；空闲冻结和过渡窗口 |
-| `src/app.rs` | `update_pet`；`transitioning` / `ambient` / `pet_moving` 判定；`repaint_after` |
+| `src/island/pet.rs` | `Pet.clock`、`anim_until`、`step`、`advance`、`draw`；空闲冻结和过渡窗口 |
+| `src/island/app.rs` | `update_pet`；`transitioning` / `ambient` / `pet_moving` 判定；`repaint_after` |
 | `src/main.rs` | `schedule_repaint`；兼容渲染读回的请求与停止 |
-| `src/layered.rs` | `AMBIENT_READBACK`、`readback_delay`；读回限速 |
-| `src/agent_ui.rs` | `agent_tick`；AI 等待 120ms、其余 1s 的定时策略 |
-| `src/resident_settings.rs` | 设置页预览使用 `pet.clock`，与岛上姿势一致 |
-| `src/ui_tests.rs` | `idle_mascot_stays_static_until_hovered` 等空闲/悬停测试 |
+| `src/os/layered.rs` | `AMBIENT_READBACK`、`readback_delay`；读回限速 |
+| `src/ai_session/page.rs` | `agent_tick`；AI 等待 120ms、其余 1s 的定时策略 |
+| `src/island/resident_settings.rs` | 设置页预览使用 `pet.clock`，与岛上姿势一致 |
+| `src/ui_tests/focus_health.rs` | `idle_mascot_stays_static_until_hovered` 等空闲/悬停测试 |
 | `docs/prd/PRD-001-ai-sessions.md` | AI 会话的产品背景和交互约束 |
 
 ## 11. 参考
